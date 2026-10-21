@@ -590,6 +590,7 @@ void PickController::reorderSelection(bool (sound_mind::core::OperationLog::*reo
         return;
     }
     if ((project_->operationLog().*reorder)(*pickedOperationId_)) {
+        paintController_->notifyOperationCommitted(tr("Restacked object"));  // undoable since v0.1.43.1.
         paintController_->rebuildLayerContent(pickedLayer_);
         emit contentChanged(pickedLayer_);
     }

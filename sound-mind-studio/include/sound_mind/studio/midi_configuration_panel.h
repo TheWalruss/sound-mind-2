@@ -14,6 +14,9 @@ class QTableWidget;
 
 namespace sound_mind::studio {
 
+class ProjectHistory;
+
+
 /**
  * @brief A dockable panel mapping General MIDI programs to saved Tool
  *        Presets, with per-program duration/pitch modifiers -
@@ -62,6 +65,14 @@ public:
     /// @param parent The owning widget, per Qt's normal parent-ownership
     ///        convention; may be `nullptr`.
     explicit MidiConfigurationPanel(QWidget* parent = nullptr);
+
+    /**
+     * @brief Sets the History this panel's own project edits are committed
+     *        to (`v0.1.43.1`), so they're undoable and recorded.
+     * @param history Non-owning; may be `nullptr` (nothing recorded). Must
+     *        outlive this panel.
+     */
+    void setHistory(ProjectHistory* history) noexcept { history_ = history; }
 
     /**
      * @brief Sets which project this panel reads/writes its own MIDI
@@ -156,6 +167,10 @@ private:
     QPushButton* addMappingButton_ = nullptr;
     QTableWidget* table_ = nullptr;
     sound_mind::core::Project* project_ = nullptr;
+    ProjectHistory* history_ = nullptr;
+
+    /// @brief Commits a mapping edit to the history, if there is one.
+    void commitMappingChange();
 };
 
 }  // namespace sound_mind::studio

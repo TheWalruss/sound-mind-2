@@ -64,7 +64,7 @@ add_executable(sound-mind-studio-tests
     test_tone_curve_editor.cpp
     test_tool_configuration_panel.cpp
     test_tool_palette_controller.cpp
-    test_undo_stack.cpp
+    test_project_history.cpp
     test_waveform_preview_widget.cpp
 )
 

@@ -4113,14 +4113,15 @@ void MainWindowTest::undoAndRedoDelegateToThePaintController() {
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
 
-    QVERIFY(window.project()->operationLog().canUndo());
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+    QVERIFY(window.project()->history().canUndo());
     window.undo();
-    QVERIFY(!window.project()->operationLog().canUndo());
-    QVERIFY(window.project()->operationLog().canRedo());
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+    QVERIFY(window.project()->history().canRedo());
 
     window.redo();
-    QVERIFY(window.project()->operationLog().canUndo());
-    QVERIFY(!window.project()->operationLog().canRedo());
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+    QVERIFY(!window.project()->history().canRedo());
 }
 
 void MainWindowTest::undoInterleavesPaintStrokesAndLayerPropertyChangesInChronologicalOrder() {
@@ -4143,26 +4144,26 @@ void MainWindowTest::undoInterleavesPaintStrokesAndLayerPropertyChangesInChronol
     QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
 
     // 2. Change the background layer's own opacity (a property change,
-    // undone via UndoStack directly) - strictly *after* the stroke above.
+    // undone via ProjectHistory directly) - strictly *after* the stroke above.
     window.setLayerOpacity(backgroundId, 0.25f);
     QCOMPARE(window.project()->layers().front().opacity(), 0.25f);
 
     // Undo must reverse the *opacity change* first - it happened more
     // recently than the paint stroke, regardless of which of the two
-    // independent mechanisms (OperationLog vs UndoStack) actually
+    // independent mechanisms (OperationLog vs ProjectHistory) actually
     // recorded it.
     window.undo();
     QCOMPARE(window.project()->layers().front().opacity(), originalOpacity);
-    QVERIFY(window.project()->operationLog().canUndo());  // The stroke itself is still active.
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});  // The stroke itself is still there.
 
     // A second undo now reverses the stroke.
     window.undo();
-    QVERIFY(!window.project()->operationLog().canUndo());
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
 
     // Redo must restore both, in the same original order: stroke first,
     // then opacity.
     window.redo();
-    QVERIFY(window.project()->operationLog().canUndo());
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
     QCOMPARE(window.project()->layers().front().opacity(), originalOpacity);
 
     window.redo();

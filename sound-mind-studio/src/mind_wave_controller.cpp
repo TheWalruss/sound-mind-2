@@ -17,7 +17,7 @@
 #include "sound_mind/studio/mind_waves_panel.h"
 #include "sound_mind/studio/qt_image_conversion.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
-#include "sound_mind/studio/undo_stack.h"
+#include "sound_mind/studio/project_history.h"
 
 namespace {
 
@@ -70,14 +70,22 @@ QString nextDefaultName(const std::vector<NamedMindWave>& entries) {
 MindWaveController::MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel,
                                         FilterConfigurationPanel* filterConfigurationPanel,
                                         ToolConfigurationPanel* toolConfigurationPanel, CanvasWidget* canvas,
-                                        UndoStack* undoStack, QObject* parent)
+                                        ProjectHistory* history, QObject* parent)
     : QObject(parent),
       mindWavesPanel_(mindWavesPanel),
       layersPanel_(layersPanel),
       filterConfigurationPanel_(filterConfigurationPanel),
       toolConfigurationPanel_(toolConfigurationPanel),
       canvas_(canvas),
-      undoStack_(undoStack) {
+      history_(history) {
+    if (history_ != nullptr) {
+        connect(history_, &ProjectHistory::changed, this, [this](const sound_mind::core::HistoryChange& change) {
+            if (change.resources.contains("mindWaves") || change.resources.contains("resonanceProfiles")) {
+                emit mindWavesChanged();
+                refreshMindWavesPanel();
+            }
+        });
+    }
     connect(mindWavesPanel_, &MindWavesPanel::previewToggled, this, &MindWaveController::updateMindWavePreview);
     connect(mindWavesPanel_, &MindWavesPanel::selectionChanged, this, &MindWaveController::updateMindWavePreview);
     connect(mindWavesPanel_, &MindWavesPanel::mindWaveChanged, this,
@@ -88,6 +96,9 @@ MindWaveController::MindWaveController(MindWavesPanel* mindWavesPanel, LayersPan
 
 void MindWaveController::setProject(sound_mind::core::Project* project) {
     project_ = project;
+    if (history_ != nullptr) {
+        history_->setProject(project);
+    }
     mindWavesPanel_->setPreviewEnabled(false);
     canvas_->setMindWavePreview(std::nullopt);
 }
@@ -171,6 +182,7 @@ MindWaveId MindWaveController::addMindWave() {
     }
     const QString name = nextDefaultName(project_->mindWaves());
     const MindWaveId id = project_->addMindWave(name.toStdString(), MindWave{});
+    commit(tr("Added MindWave"));
     emit mindWavesChanged();
     refreshMindWavesPanel();
     mindWavesPanel_->selectMindWave(id);
@@ -183,6 +195,7 @@ void MindWaveController::removeMindWave(MindWaveId id) {
     if (project_ == nullptr || !project_->removeMindWave(id)) {
         return;
     }
+    commit(tr("Removed MindWave"));
     emit mindWavesChanged();
     refreshMindWavesPanel();
 }
@@ -196,6 +209,7 @@ bool MindWaveController::renameMindWaveTo(MindWaveId id, const QString& newName)
         return false;
     }
     entry->name = newName.toStdString();
+    commit(tr("Renamed MindWave"));
     emit mindWavesChanged();
     refreshMindWavesPanel();
     return true;
@@ -209,11 +223,8 @@ void MindWaveController::updateMindWave(MindWaveId id, const MindWave& wave) {
     if (entry == nullptr) {
         return;
     }
-    const MindWave oldWave = entry->wave;
     applyMindWaveTo(id, wave);
-    undoStack_->push({/*undo=*/[this, id, oldWave]() { applyMindWaveTo(id, oldWave); },
-                       /*redo=*/[this, id, wave]() { applyMindWaveTo(id, wave); },
-                       /*description=*/tr("Changed MindWave configuration")});
+    commit(tr("Changed MindWave configuration"));
 }
 
 void MindWaveController::applyMindWaveTo(MindWaveId id, const MindWave& wave) {
@@ -236,8 +247,15 @@ void MindWaveController::setDrawnPath(MindWaveId id, const sound_mind::core::Pat
     }
     entry->wave.setType(sound_mind::core::GeneratorType::Drawn);
     entry->wave.setDrawnPath(path);
+    commit(tr("Drew MindWave"));
     emit mindWavesChanged();
     refreshMindWavesPanel();
+}
+
+void MindWaveController::commit(const QString& description) {
+    if (history_ != nullptr && project_ != nullptr) {
+        history_->commit(*project_, description);
+    }
 }
 
 }  // namespace sound_mind::studio

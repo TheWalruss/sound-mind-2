@@ -293,6 +293,11 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     historyPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, historyPanel_);
     connect(historyPanel_, &HistoryPanel::jumpRequested, this, &MainWindow::jumpToHistoryIndex);
+    // The project's History (v0.1.43.1): the panel follows every change to
+    // it; an undo/redo/jump refreshes what the controllers don't.
+    connect(&history_, &ProjectHistory::historyChanged, this, &MainWindow::refreshHistoryPanel);
+    connect(&history_, &ProjectHistory::entryCommitted, this, [this]() { hasUnsavedChanges_ = true; });
+    connect(&history_, &ProjectHistory::changed, this, &MainWindow::handleHistoryChange);
 
     // Composer Mode (v0.Y.48.1 Installment A) - bottom-docked, not
     // right-docked, confirmed with the user (see composerPanel_'s own
@@ -341,6 +346,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(playbackPanel_, &PlaybackPanel::configureDevicesRequested, this, &MainWindow::showConfigureDevicesPanel);
 
     toolConfigurationPanel_ = new ToolConfigurationPanel(this);
+    toolConfigurationPanel_->setHistory(&history_);
     toolConfigurationPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, toolConfigurationPanel_);
 
@@ -349,6 +355,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // exception toolConfigurationPanel_'s own Tool Preset combo already
     // establishes.
     midiConfigurationPanel_ = new MidiConfigurationPanel(this);
+    midiConfigurationPanel_->setHistory(&history_);
     midiConfigurationPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, midiConfigurationPanel_);
     // Refreshes each row's own Tool Preset combo whenever the panel is
@@ -588,7 +595,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // to know about. layerController_ itself isn't constructed until
     // later in this same constructor, but these lambdas only run later
     // still, on a real gesture - safe by the time any of them fire.
-    toolPaletteController_ = new ToolPaletteController(canvas_, toolConfigurationPanel_, &undoStack_, this);
+    toolPaletteController_ = new ToolPaletteController(canvas_, toolConfigurationPanel_, &history_, this);
     // chordGeneratorPanel_'s own constructor already emitted paramsChanged()
     // once, before the connection above existed - this explicit initial
     // sync is the same "the panel's own constructed-with defaults are
@@ -754,7 +761,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
                 // caveat applyFilterConfiguration()'s/updateMindWave()'s
                 // own recordEvent() calls already accept.
                 macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PaintCommitted,
-                                            tr("Painted content"), undoStack_.currentIndex(), layer);
+                                            tr("Painted content"), history_.currentIndex(), layer);
             });
 
     gridPanel_ = new GridPanel(this);
@@ -803,7 +810,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // refresh - extracted as its own class (Refactor & Clean Up,
     // v0.Y.29.1, Installment D); see its own docs.
     layerController_ =
-        new LayerController(canvas_, playbackController_, layersPanel_, filterConfigurationPanel_, &undoStack_, this);
+        new LayerController(canvas_, playbackController_, layersPanel_, filterConfigurationPanel_, &history_, this);
     connect(layerController_, &LayerController::layersChanged, this, [this]() {
         hasUnsavedChanges_ = true;
         noteProjectChangedForAnalysis();
@@ -821,11 +828,11 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // mindWavesPanel_/layersPanel_'s own opacity-binding combo in sync
     // with it (v0.Y.31.1 Installment C2); see its own class docs.
     mindWaveController_ = new MindWaveController(mindWavesPanel_, layersPanel_, filterConfigurationPanel_,
-                                                  toolConfigurationPanel_, canvas_, &undoStack_, this);
+                                                  toolConfigurationPanel_, canvas_, &history_, this);
     connect(mindWaveController_, &MindWaveController::mindWavesChanged, this, [this]() {
         hasUnsavedChanges_ = true;
         // v0.Y.49.1 (Macro Mode) Installment B - updateMindWave() now
-        // pushes a real UndoStack entry, so the History Panel needs to
+        // commits a History entry, so the History Panel needs to
         // reflect it too, the same reasoning layerController_'s own
         // layersChanged() connection already gives.
         refreshHistoryPanel();
@@ -858,8 +865,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // (docs/sound-mind-roadmap.md's v0.Y.57.1 Installment C) - see its own
     // class docs.
     resourceBrowserController_ = new ResourceBrowserController(resourceBrowserPanel_, this);
-    connect(resourceBrowserController_, &ResourceBrowserController::resourcesChanged, this,
-            [this]() { hasUnsavedChanges_ = true; });
+    connect(resourceBrowserController_, &ResourceBrowserController::resourcesChanged, this, [this]() {
+        hasUnsavedChanges_ = true;
+        commitHistory(tr("Changed resources"));
+    });
 
     // "Create New MindWave..." (v0.Y.62.1 Installment G) - one shared
     // callback, injected into every MindWave-binding dropdown's own
@@ -1408,8 +1417,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         const auto selection = [palette]() { return palette->hasSelection(); };
         const auto session = [this]() { return branchCurveSession_.isActive(); };
         editActionConditions_ = {
-            {undoAction, [this]() { return undoStack_.canUndo(); }},
-            {redoAction, [this]() { return undoStack_.canRedo(); }},
+            {undoAction, [this]() { return history_.canUndo(); }},
+            {redoAction, [this]() { return history_.canRedo(); }},
             {deleteAction, [anyPicked]() { return anyPicked(); }},
             {bringToFrontAction, [picked, editing]() { return picked() && !editing(); }},
             {sendToBackAction, [picked, editing]() { return picked() && !editing(); }},
@@ -2255,7 +2264,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // toggled()) when nothing was recording.
     macroRecordAction_->setChecked(false);
     // Every recorded event's own undoStackIndexAfter only means anything
-    // against undoStack_ as it stands right now - about to be clear()ed a
+    // against history_ as it stands right now - about to be clear()ed a
     // few lines below, which would make any already-recorded macro unsafe
     // to jumpTo() against. See MacroRecorder::discardEvents()'s own docs.
     macroRecorder_.discardEvents();
@@ -2270,14 +2279,9 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // real risk, not a theoretical one - see LayersPanel::clearSelection()'s
     // own docs.
     layersPanel_->clearSelection();
-    // A previous project's own undo/redo history is meaningless once it's
-    // gone - its LayerIds/OperationIds could coincidentally collide with
-    // the new project's own, the same risk layersPanel_->clearSelection()
-    // just guarded against above.
-    undoStack_.clear();
-    refreshHistoryPanel();
-
     project_ = std::move(project);
+    // The History belongs to the project (v0.1.43.1) - it came with it.
+    history_.setProject(&*project_);
 
     // (Re)constructed fresh for the new project's own settings - loop
     // length is the project's own duration in samples (canvasWidth
@@ -2713,6 +2717,7 @@ bool MainWindow::finishMidiImport(const std::vector<sound_mind::core::LayerId>& 
     for (const auto layerId : newLayerIds) {
         toolPaletteController_->rebuildLayerContent(layerId);
     }
+    commitHistory(tr("Imported MIDI \"%1\"").arg(QString::fromStdString(path.filename().string())));
 
     canvas_->invalidateCompositeAll();
     playbackController_->invalidate();
@@ -2856,6 +2861,7 @@ void MainWindow::pollImportProgress() {
                 project_->addLayer(std::move(layer));
             }
             importedLayers_.clear();
+            commitHistory(tr("Imported \"%1\"").arg(QString::fromStdString(importPath_.filename().string())));
             canvas_->invalidateCompositeAll();
             playbackController_->invalidate();
             hasUnsavedChanges_ = true;
@@ -3110,9 +3116,9 @@ void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path) {
     // The same staleness guard playMacro() itself makes - see its own
     // docs.
     const std::size_t startIndex = macroRecorder_.startUndoIndex();
-    bool stale = startIndex > undoStack_.count();
+    bool stale = startIndex > history_.count();
     for (const MacroEvent& event : macroRecorder_.events()) {
-        if (event.undoStackIndexAfter > undoStack_.count()) {
+        if (event.undoStackIndexAfter > history_.count()) {
             stale = true;
         }
     }
@@ -3155,19 +3161,19 @@ void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path) {
     }
 
     // Synchronous extraction phase - deliberately not backgrounded (see
-    // exportMacroVideoAsync()'s own docs on why). undoStack_.jumpTo(
+    // exportMacroVideoAsync()'s own docs on why). history_.jumpTo(
     // originalIndex) below restores the live project to exactly where it
     // was, no matter how this phase ends, so this method has zero visible
     // effect on the user's own current editing session.
-    const std::size_t originalIndex = undoStack_.currentIndex();
+    const std::size_t originalIndex = history_.currentIndex();
     std::vector<sound_mind::codec::VideoSegment> segments;
     sound_mind::codec::AudioBuffer concatenatedAudio;
     bool renderedEveryComposite = true;
 
-    undoStack_.jumpTo(startIndex);
+    history_.jumpTo(startIndex);
     for (std::size_t i = 0; i < boundaries.size(); ++i) {
         if (i > 0) {
-            undoStack_.jumpTo(realEvents[i - 1]->undoStackIndexAfter);
+            history_.jumpTo(realEvents[i - 1]->undoStackIndexAfter);
         }
         const auto composite = sound_mind::core::compositeProject(*project_, /*shouldCancel=*/nullptr,
                                                                     /*respectMute=*/true);
@@ -3205,7 +3211,7 @@ void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path) {
             }
         }
     }
-    undoStack_.jumpTo(originalIndex);
+    history_.jumpTo(originalIndex);
 
     if (!renderedEveryComposite || segments.empty()) {
         QMessageBox::critical(this, tr("Export Macro Video Failed"),
@@ -3221,7 +3227,7 @@ void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path) {
     // segments/concatenatedAudio captured by value - independent, owned
     // copies the background thread can safely touch, the same reasoning
     // exportCompositeVideoAsync()'s own docs give (nothing here
-    // touches project_/undoStack_ again once this point is reached).
+    // touches project_/history_ again once this point is reached).
     exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
         [this, path, segments, audio = concatenatedAudio](sound_mind::core::CancellationToken& token) {
             try {
@@ -3325,7 +3331,7 @@ void MainWindow::updateWindowTitle() {
 void MainWindow::cycleLayerVisibilityState(sound_mind::core::LayerId id) {
     layerController_->cycleLayerVisibilityState(id);
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::LayerVisibilityChanged,
-                                tr("Changed layer visibility"), undoStack_.currentIndex(), id);
+                                tr("Changed layer visibility"), history_.currentIndex(), id);
 }
 
 void MainWindow::hideOtherLayers(sound_mind::core::LayerId keepVisible) {
@@ -3462,7 +3468,7 @@ void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfigur
     // just used - is std::nullopt when nothing's selected (the edit only
     // seeded the pending configuration, not any real layer yet).
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::FilterConfigurationChanged,
-                                tr("Changed filter configuration"), undoStack_.currentIndex(),
+                                tr("Changed filter configuration"), history_.currentIndex(),
                                 layersPanel_->selectedLayerId());
     // A no-op unless the Equalizer's own on-canvas preview is currently
     // enabled and the layer just edited actually was the Equalizer - see
@@ -3538,7 +3544,7 @@ void MainWindow::updateMindWave(sound_mind::core::MindWaveId id, const sound_min
     // Fires on every parameter change while editing, the same coarseness
     // applyFilterConfiguration()'s own recordEvent() call above accepts.
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::MindWaveConfigurationChanged,
-                                tr("Changed MindWave configuration"), undoStack_.currentIndex(), std::nullopt, id);
+                                tr("Changed MindWave configuration"), history_.currentIndex(), std::nullopt, id);
 }
 
 void MainWindow::setPanModeEnabled(bool enabled) {
@@ -3826,27 +3832,56 @@ void MainWindow::updateConfiguredDeviceLockState() {
 }
 
 void MainWindow::undo() {
-    undoStack_.undo();
+    history_.undo();
     noteProjectChangedForAnalysis();  // undo can change anything the report measured.
 }
 
 void MainWindow::redo() {
-    undoStack_.redo();
+    history_.redo();
     noteProjectChangedForAnalysis();
 }
 
 void MainWindow::refreshHistoryPanel() {
     QStringList descriptions;
-    descriptions.reserve(static_cast<int>(undoStack_.count()));
-    for (std::size_t i = 0; i < undoStack_.count(); ++i) {
-        descriptions.append(undoStack_.descriptionAt(i));
+    descriptions.reserve(static_cast<int>(history_.count()));
+    for (std::size_t i = 0; i < history_.count(); ++i) {
+        descriptions.append(history_.descriptionAt(i));
     }
-    historyPanel_->setHistory(descriptions, undoStack_.currentIndex());
+    historyPanel_->setHistory(descriptions, history_.currentIndex());
 }
 
 void MainWindow::jumpToHistoryIndex(std::size_t index) {
-    undoStack_.jumpTo(index);
-    refreshHistoryPanel();
+    history_.jumpTo(index);
+    noteProjectChangedForAnalysis();
+}
+
+void MainWindow::commitHistory(const QString& description) {
+    if (project_) {
+        history_.commit(*project_, description);
+    }
+}
+
+void MainWindow::handleHistoryChange(const sound_mind::core::HistoryChange& change) {
+    if (!project_) {
+        return;
+    }
+    hasUnsavedChanges_ = true;
+    if (!change.resources.empty()) {
+        resourceBrowserController_->refreshPanel();
+        refreshConvolutionKernelCombo();
+        refreshFilterPresetCombo();
+        refreshGridPresetCombo();
+        midiConfigurationPanel_->setProject(&*project_);
+        toolConfigurationPanel_->setProject(&*project_);
+        toolConfigurationPanel_->refreshResonanceProfiles();
+    }
+    if (change.layerListChanged || !change.layers.empty() || !change.contentLayers.empty()) {
+        refreshRecordTargets();
+        updateEqualizerPreview();
+        updateMindGrainGuardrails();
+    }
+    refreshComposerPanel();
+    canvas_->update();
 }
 
 void MainWindow::refreshComposerPanel() {
@@ -4181,7 +4216,7 @@ void MainWindow::setMacroRecordingEnabled(bool enabled) {
         return;
     }
     if (enabled) {
-        macroRecorder_.startRecording(undoStack_.currentIndex());
+        macroRecorder_.startRecording(history_.currentIndex());
         statusBar()->showMessage(tr("Recording macro..."));
     } else {
         macroRecorder_.stopRecording();
@@ -4196,23 +4231,23 @@ void MainWindow::playMacro() {
     }
 
     // Every recorded index must still resolve against the current
-    // undoStack_ - see playMacro()'s own docs on why this is defensive
+    // history_ - see playMacro()'s own docs on why this is defensive
     // rather than expected to trigger (discardEvents()'s own setProject()
     // guard already prevents a stale macro from surviving a project
     // switch in the first place).
     const std::size_t startIndex = macroRecorder_.startUndoIndex();
-    if (startIndex > undoStack_.count()) {
+    if (startIndex > history_.count()) {
         statusBar()->showMessage(tr("Can't play this macro - record a new one first."), 5000);
         return;
     }
     for (const MacroEvent& event : macroRecorder_.events()) {
-        if (event.undoStackIndexAfter > undoStack_.count()) {
+        if (event.undoStackIndexAfter > history_.count()) {
             statusBar()->showMessage(tr("Can't play this macro - record a new one first."), 5000);
             return;
         }
     }
 
-    undoStack_.jumpTo(startIndex);
+    history_.jumpTo(startIndex);
     // jumpTo()'s own undo()/redo() callbacks already invalidate
     // playbackController_ for every event type that changes what's
     // audible (LayerController's/MindWaveController's mutators all do) -
@@ -4226,7 +4261,7 @@ void MainWindow::playMacro() {
     macroPlaybackEvents_.clear();
     for (const MacroEvent& event : macroRecorder_.events()) {
         // PlaybackStarted/PlaybackStopped were never pushed to
-        // undoStack_ (see MacroEvent::undoStackIndexAfter's own docs) -
+        // history_ (see MacroEvent::undoStackIndexAfter's own docs) -
         // starting playback right below already represents the former;
         // there is nothing to jump to for either.
         if (event.type == MacroEventType::PlaybackStarted || event.type == MacroEventType::PlaybackStopped) {
@@ -4329,6 +4364,7 @@ void MainWindow::createResonanceFromPickedPathNamed(const std::string& name) {
     const auto& graph = *pickedGraph;
     const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonanceSpectrumSize);
     project_->addResonanceProfile(name, spectrum, graph);
+    commitHistory(tr("Created Resonance \"%1\"").arg(QString::fromStdString(name)));
     // Unlike captureMindShot()/captureMindGrain() (wired through
     // SelectionController's own mindShotCaptured()/mindGrainCaptured()
     // signals, connected once in ToolPaletteController's own constructor),
@@ -4410,6 +4446,7 @@ void MainWindow::createResonanceFromPickedGraphNamed(const std::string& name) {
     const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonanceSpectrumSize);
     project_->addResonanceProfile(name, spectrum, graph);
     keepBranchingCurveAsPath();
+    commitHistory(tr("Created Resonance \"%1\"").arg(QString::fromStdString(name)));
     branchCurveSession_.end();
     // See createResonanceFromPickedPathNamed()'s own identical
     // comment - this capture writes directly to project_ too.
@@ -4508,6 +4545,7 @@ void MainWindow::captureMindShot() {
         oldIt->id = oldId;
         project_->removeMindShot(*newId);
     }
+    commitHistory(tr("Captured Mind Shot \"%1\"").arg(QString::fromStdString(result.name)));
     statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
 }
 
@@ -4518,6 +4556,7 @@ void MainWindow::captureMindShotWithDetails(const std::string& name, double fund
     }
     if (const auto id = toolPaletteController_->captureMindShot(name, fundamentalFrequencyHz, startTimeOffsetSeconds);
         id.has_value()) {
+        commitHistory(tr("Captured Mind Shot \"%1\"").arg(QString::fromStdString(name)));
         statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(name)), 5000);
     }
 }
@@ -4558,6 +4597,7 @@ void MainWindow::captureMindGrain() {
         oldIt->id = oldId;
         project_->removeMindGrain(*newId);
     }
+    commitHistory(tr("Captured Mind Grain \"%1\"").arg(QString::fromStdString(result.name)));
     statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
 }
 
@@ -4569,6 +4609,7 @@ void MainWindow::captureMindGrainWithDetails(const std::string& name, double fun
     if (const auto id =
             toolPaletteController_->captureMindGrain(name, fundamentalFrequencyHz, startTimeOffsetSeconds);
         id.has_value()) {
+        commitHistory(tr("Captured Mind Grain \"%1\"").arg(QString::fromStdString(name)));
         statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(name)), 5000);
     }
 }
@@ -4596,6 +4637,7 @@ void MainWindow::saveConvolutionKernel(int size, std::vector<float> coefficients
     } else {
         project_->addConvolutionKernel(result.name, size, std::move(coefficients), normalize);
     }
+    commitHistory(tr("Saved kernel \"%1\"").arg(QString::fromStdString(result.name)));
     refreshConvolutionKernelCombo();
     hasUnsavedChanges_ = true;
     statusBar()->showMessage(tr("Saved as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
@@ -4627,6 +4669,7 @@ void MainWindow::saveFilterPreset(const sound_mind::core::FilterConfiguration& c
     } else {
         project_->addFilterPreset(result.name, config);
     }
+    commitHistory(tr("Saved filter preset \"%1\"").arg(QString::fromStdString(result.name)));
     refreshFilterPresetCombo();
     filterConfigurationPanel_->setActivePresetName(QString::fromStdString(result.name));
     hasUnsavedChanges_ = true;
@@ -4659,6 +4702,7 @@ void MainWindow::saveGridPreset() {
     } else {
         project_->addGridPreset(result.name, std::move(frequencyGrid), std::move(timingGrid), snapToGridEnabled);
     }
+    commitHistory(tr("Saved grid preset \"%1\"").arg(QString::fromStdString(result.name)));
     refreshGridPresetCombo();
     gridPanel_->setActivePresetName(QString::fromStdString(result.name));
     hasUnsavedChanges_ = true;
@@ -4670,6 +4714,7 @@ void MainWindow::deleteGridPreset(sound_mind::core::GridPresetId id) {
         return;
     }
     project_->removeGridPreset(id);
+    commitHistory(tr("Deleted grid preset"));
     refreshGridPresetCombo();
     hasUnsavedChanges_ = true;
 }
@@ -4762,7 +4807,7 @@ void MainWindow::startPlayback() {
         statusBar()->showMessage(outputWarning, 20000);
     }
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStarted,
-                                tr("Started playback"), undoStack_.currentIndex());
+                                tr("Started playback"), history_.currentIndex());
 }
 
 void MainWindow::pausePlayback() {
@@ -4775,7 +4820,7 @@ void MainWindow::pausePlayback() {
 void MainWindow::stopPlayback() {
     playbackController_->stop();
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStopped,
-                                tr("Stopped playback"), undoStack_.currentIndex());
+                                tr("Stopped playback"), history_.currentIndex());
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
     // Layers Panel's own per-layer loudness indicator switches back to its
@@ -4907,8 +4952,9 @@ void MainWindow::toggleLoopMode() {
         loopLayerId_ = existing->id();
     } else {
         sound_mind::core::Layer layer(0, loopInputName, sound_mind::core::LayerType::Normal);
-        layer.setContent(loopEngine_->emptyImage());
+        layer.setBaseContent(loopEngine_->emptyImage(), nlohmann::json{{"kind", "empty"}});
         loopLayerId_ = project_->addLayer(std::move(layer));
+        commitHistory(tr("Added Loop Input layer"));
     }
     hasUnsavedChanges_ = true;
     layerController_->refreshLayersPanel();
@@ -5027,8 +5073,11 @@ void MainWindow::updateLoopLayer() {
     if (takes != loopTakesShown_) {
         sound_mind::codec::StreamImage image = loopEngine_->currentImage();
         if (image.frameCount > 0) {
-            layer->setContent(std::move(image));
+            // Each take replaces what the Loop layer is built on.
+            layer->setBaseContent(std::move(image), nlohmann::json{{"kind", "loopTake"}, {"take", takes}});
+            project_->operationLog().bakeLayer(layer->id());
             loopTakesShown_ = takes;
+            commitHistory(tr("Loop take %1").arg(takes));
             if (const auto index = project_->layerIndexById(*loopLayerId_)) {
                 canvas_->invalidateCompositeFrom(*index);
             }
@@ -5282,30 +5331,19 @@ bool MainWindow::commitRecording(const sound_mind::codec::AudioBuffer& captured)
         const auto target = recordPanel_->targetLayerId();
         sound_mind::core::Layer* existing = target.has_value() ? layerController_->layerById(*target) : nullptr;
         if (existing != nullptr) {
-            const sound_mind::core::LayerId id = existing->id();
-            const std::optional<sound_mind::codec::StreamImage> previous = existing->content();
-            existing->setContent(content);
-            const auto setContent = [this, id](const std::optional<sound_mind::codec::StreamImage>& image) {
-                sound_mind::core::Layer* layer = layerController_->layerById(id);
-                if (layer != nullptr && image.has_value()) {
-                    layer->setContent(*image);
-                    canvas_->invalidateCompositeAll();
-                    playbackController_->invalidate();
-                    layerController_->refreshLayersPanel(id);
-                }
-            };
-            undoStack_.push({/*undo=*/[setContent, previous]() { setContent(previous); },
-                             /*redo=*/[setContent, content]() { setContent(content); },
-                             /*description=*/tr("Recorded over \"%1\"").arg(QString::fromStdString(existing->name()))});
-            refreshHistoryPanel();
+            // Recording over a layer replaces it, painting included.
+            existing->setBaseContent(std::move(content), nlohmann::json{{"kind", "record"}});
+            project_->operationLog().bakeLayer(existing->id());
+            commitHistory(tr("Recorded over \"%1\"").arg(QString::fromStdString(existing->name())));
             statusBar()->showMessage(
                 tr("Recording replaced \"%1\".").arg(QString::fromStdString(existing->name())), 5000);
         } else {
             sound_mind::core::Layer layer(0, recordPanel_->newLayerName().toStdString(),
                                           sound_mind::core::LayerType::Normal);
-            layer.setContent(std::move(content));
+            layer.setBaseContent(std::move(content), nlohmann::json{{"kind", "record"}});
             layer.setRecorded(true);
             project_->addLayer(std::move(layer));
+            commitHistory(tr("Recorded a new layer"));
             statusBar()->showMessage(tr("Recording added as a new layer."), 5000);
         }
         canvas_->invalidateCompositeAll();
@@ -5460,7 +5498,7 @@ void MainWindow::advanceMacroPlayback(double positionSeconds) {
     bool firedAny = false;
     while (macroPlaybackNextEventIndex_ < macroPlaybackEvents_.size() &&
            macroPlaybackEvents_[macroPlaybackNextEventIndex_].timestampSeconds <= positionSeconds) {
-        undoStack_.jumpTo(macroPlaybackEvents_[macroPlaybackNextEventIndex_].undoStackIndexAfter);
+        history_.jumpTo(macroPlaybackEvents_[macroPlaybackNextEventIndex_].undoStackIndexAfter);
         ++macroPlaybackNextEventIndex_;
         firedAny = true;
     }
@@ -5639,8 +5677,12 @@ void MainWindow::pollPoolProgress() {
             sound_mind::core::Layer* layer =
                 poolLayerId_.has_value() ? layerController_->layerById(*poolLayerId_) : nullptr;
             if (layer != nullptr && pooledContent_.has_value()) {
-                layer->setPoolContent(std::move(pooledContent_->poolImage));
-                layer->setContent(std::move(pooledContent_->streamContent));
+                // The pooled result becomes what the layer is built on, with
+                // everything painted on it baked in.
+                layer->setBaseContent(std::move(pooledContent_->streamContent), nlohmann::json{{"kind", "pool"}},
+                                      std::move(pooledContent_->poolImage));
+                project_->operationLog().bakeLayer(layer->id());
+                commitHistory(tr("Pooled layer \"%1\"").arg(poolLayerName_));
                 canvas_->invalidateCompositeAll();
                 // The layer's content was just replaced with a fresh,
                 // pool-derived Stream copy - the next startPlayback()
@@ -5889,7 +5931,7 @@ void MainWindow::pollCompositeProgress() {
                 syncPlaybackRangeToEngine();
                 playbackController_->play();
                 macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStarted,
-                                            tr("Started playback"), undoStack_.currentIndex());
+                                            tr("Started playback"), history_.currentIndex());
                 statusBar()->clearMessage();
             } else {
                 // Shouldn't happen given startPlayback()'s own pre-check

@@ -60,8 +60,8 @@ std::unique_ptr<PaintOperation> makePaint(OperationLog& log, LayerId layer,
 TEST_CASE("A fresh OperationLog is empty", "[core][operation_log]") {
     const OperationLog log;
     REQUIRE(log.size() == 0);
-    REQUIRE_FALSE(log.canUndo());
-    REQUIRE_FALSE(log.canRedo());
+    REQUIRE(log.stackOrder().empty());
+    REQUIRE(log.nextId() == OperationId{1});
 }
 
 TEST_CASE("reserveId returns unique, increasing ids", "[core][operation_log]") {
@@ -79,61 +79,80 @@ TEST_CASE("append adds an operation and it becomes accessible via at()", "[core]
 
     REQUIRE(log.size() == 1);
     REQUIRE(log.at(0).id() == id);
-}
-
-TEST_CASE("append leaves the log undo-able but not redo-able", "[core][operation_log]") {
-    OperationLog log;
-    log.append(makePaint(log, LayerId{1}));
-    REQUIRE(log.canUndo());
-    REQUIRE_FALSE(log.canRedo());
-}
-
-TEST_CASE("undo hides the most recent operation from activeOperationsTargeting", "[core][operation_log]") {
-    OperationLog log;
-    log.append(makePaint(log, LayerId{1}));
-
-    log.undo();
-
-    REQUIRE(log.activeOperationsTargeting(LayerId{1}).empty());
-    REQUIRE(log.size() == 1);  // still logged, just inactive.
-}
-
-TEST_CASE("redo restores an undone operation", "[core][operation_log]") {
-    OperationLog log;
-    log.append(makePaint(log, LayerId{1}));
-    log.undo();
-
-    log.redo();
-
     REQUIRE(log.activeOperationsTargeting(LayerId{1}).size() == 1);
 }
 
-TEST_CASE("undo is a no-op on an empty log", "[core][operation_log]") {
-    OperationLog log;
-    log.undo();
-    REQUIRE(log.size() == 0);
-    REQUIRE_FALSE(log.canUndo());
-}
-
-TEST_CASE("redo is a no-op when nothing was undone", "[core][operation_log]") {
+TEST_CASE("truncate drops later operations and their stack-order entries", "[core][operation_log]") {
     OperationLog log;
     log.append(makePaint(log, LayerId{1}));
-    log.redo();
-    REQUIRE(log.activeOperationsTargeting(LayerId{1}).size() == 1);
-}
-
-TEST_CASE("appending after an undo discards the redo tail", "[core][operation_log]") {
-    OperationLog log;
     log.append(makePaint(log, LayerId{1}));
-    log.undo();
+    log.append(makePaint(log, LayerId{2}));
 
-    log.append(makePaint(log, LayerId{1}));
+    log.truncate(1);
 
-    // The undone operation is genuinely gone, not just inactive - a fresh
-    // append past an undo() replaces it rather than coexisting with it.
     REQUIRE(log.size() == 1);
-    REQUIRE_FALSE(log.canRedo());
+    REQUIRE(log.stackOrder() == std::vector<OperationId>{1});
     REQUIRE(log.activeOperationsTargeting(LayerId{1}).size() == 1);
+    REQUIRE(log.activeOperationsTargeting(LayerId{2}).empty());
+}
+
+TEST_CASE("truncate to the current size or beyond changes nothing", "[core][operation_log]") {
+    OperationLog log;
+    log.append(makePaint(log, LayerId{1}));
+    log.truncate(1);
+    log.truncate(5);
+    REQUIRE(log.size() == 1);
+    REQUIRE(log.stackOrder().size() == 1);
+}
+
+TEST_CASE("insertIntoStackOrder follows append's rule", "[core][operation_log]") {
+    std::vector<OperationId> order{1, 2, 3};
+    OperationLog::insertIntoStackOrder(order, 4, std::nullopt);
+    REQUIRE(order == std::vector<OperationId>{1, 2, 3, 4});
+    OperationLog::insertIntoStackOrder(order, 5, OperationId{2});
+    REQUIRE(order == std::vector<OperationId>{1, 2, 5, 3, 4});
+    OperationLog::insertIntoStackOrder(order, 6, OperationId{99});  // unknown: on top.
+    REQUIRE(order.back() == OperationId{6});
+}
+
+TEST_CASE("bakeLayer hides everything painted on that layer so far, and only that", "[core][operation_log]") {
+    OperationLog log;
+    log.append(makePaint(log, LayerId{1}));
+    log.append(makePaint(log, LayerId{2}));
+
+    log.bakeLayer(LayerId{1});
+    log.append(makePaint(log, LayerId{1}));  // painted after baking: active.
+
+    REQUIRE(log.bakedThrough(LayerId{1}) == OperationId{2});
+    REQUIRE(log.bakedThrough(LayerId{2}) == OperationId{0});
+    const auto active = log.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 1);
+    REQUIRE(active[0]->id() == OperationId{3});
+    REQUIRE(log.activeOperationsTargeting(LayerId{2}).size() == 1);
+}
+
+TEST_CASE("Bake thresholds round-trip through JSON and can be replaced wholesale", "[core][operation_log]") {
+    OperationLog log;
+    log.append(makePaint(log, LayerId{1}));
+    log.bakeLayer(LayerId{1});
+
+    const OperationLog roundTripped = nlohmann::json(log).get<OperationLog>();
+    REQUIRE(roundTripped.bakedThrough(LayerId{1}) == OperationId{1});
+    REQUIRE(roundTripped.activeOperationsTargeting(LayerId{1}).empty());
+
+    log.setBakedThresholds({});
+    REQUIRE(log.activeOperationsTargeting(LayerId{1}).size() == 1);
+}
+
+TEST_CASE("operationToJson and operationFromJson round-trip a single operation", "[core][operation_log]") {
+    OperationLog log;
+    const auto paint = makePaint(log, LayerId{3}, OperationId{7});
+    const nlohmann::json json = OperationLog::operationToJson(*paint);
+    REQUIRE(json.at("kind") == "paint");
+    const auto parsed = OperationLog::operationFromJson(json);
+    REQUIRE(parsed->id() == paint->id());
+    REQUIRE(parsed->targetLayer() == LayerId{3});
+    REQUIRE(parsed->supersedes() == OperationId{7});
 }
 
 TEST_CASE("activeOperationsTargeting filters to the given layer only", "[core][operation_log]") {
@@ -170,19 +189,6 @@ TEST_CASE("activeOperationsTargeting excludes an operation superseded by a later
     REQUIRE(active.size() == 1);
     REQUIRE(active[0]->supersedes().has_value());
     REQUIRE(active[0]->supersedes().value() == original);
-}
-
-TEST_CASE("undoing a superseding operation makes the original visible again", "[core][operation_log]") {
-    OperationLog log;
-    const OperationId original = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(original, LayerId{1}, makeTestPath(), std::make_unique<ProceduralConfiguration>()));
-    log.append(makePaint(log, LayerId{1}, original));
-
-    log.undo();  // hides the replacement, not the original.
-
-    const auto active = log.activeOperationsTargeting(LayerId{1});
-    REQUIRE(active.size() == 1);
-    REQUIRE(active[0]->id() == original);
 }
 
 TEST_CASE("a superseding append preserves the superseded operation's own position in the stack, "
@@ -302,16 +308,14 @@ TEST_CASE("An OperationLog with real PaintOperations round-trips through JSON", 
     OperationLog log;
     const OperationId original = log.reserveId();
     log.append(std::make_unique<PaintOperation>(original, LayerId{1}, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>()));
-    log.append(makePaint(log, LayerId{2}, original));
-    log.undo();  // the second operation is now inactive.
+    log.append(makePaint(log, LayerId{2}));
 
     const nlohmann::json json = log;
     const OperationLog roundTripped = json.get<OperationLog>();
 
     REQUIRE(roundTripped.size() == 2);
-    REQUIRE(roundTripped.canRedo());
     REQUIRE(roundTripped.activeOperationsTargeting(LayerId{1}).size() == 1);
-    REQUIRE(roundTripped.activeOperationsTargeting(LayerId{2}).empty());
+    REQUIRE(roundTripped.activeOperationsTargeting(LayerId{2}).size() == 1);
 
     // reserveId() must not collide with what was already logged.
     const OperationId fresh = const_cast<OperationLog&>(roundTripped).reserveId();

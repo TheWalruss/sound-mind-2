@@ -9,7 +9,7 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/path_controller.h"
-#include "sound_mind/studio/undo_stack.h"
+#include "sound_mind/studio/project_history.h"
 
 using sound_mind::core::GuidePathOperation;
 using sound_mind::core::Layer;
@@ -20,7 +20,7 @@ using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::studio::PaintController;
 using sound_mind::studio::PathController;
-using sound_mind::studio::UndoStack;
+using sound_mind::studio::ProjectHistory;
 
 namespace {
 
@@ -47,7 +47,7 @@ LayerId addBlankNormalLayer(Project& project) {
     content.leftMagnitudeDb.assign(pixelCount, -96.0f);
     content.rightMagnitudeDb.assign(pixelCount, -96.0f);
     content.sharedPhaseRadians.assign(pixelCount, 0.0f);
-    layer.setContent(content);
+    layer.setBaseContent(content);
     return project.addLayer(std::move(layer));
 }
 
@@ -137,7 +137,7 @@ void PathControllerTest::endPathAfterAPressWithNoDragCommitsNothing() {
 void PathControllerTest::endPathIsUndoableAsOneStep() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);
-    UndoStack undoStack;
+    ProjectHistory undoStack;
     PaintController paintController(&undoStack);
     paintController.setProject(&project);
     PathController controller(&paintController);

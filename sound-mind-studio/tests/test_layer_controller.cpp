@@ -22,7 +22,7 @@
 #include "sound_mind/studio/layer_controller.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/playback_controller.h"
-#include "sound_mind/studio/undo_stack.h"
+#include "sound_mind/studio/project_history.h"
 
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
@@ -35,8 +35,8 @@ using sound_mind::studio::FilterConfigurationPanel;
 using sound_mind::studio::LayerController;
 using sound_mind::studio::LayersPanel;
 using sound_mind::studio::PlaybackController;
-using sound_mind::studio::UndoStack;
-using sound_mind::studio::UndoStack;
+using sound_mind::studio::ProjectHistory;
+using sound_mind::studio::ProjectHistory;
 
 namespace {
 
@@ -58,7 +58,7 @@ struct Fixture {
     PlaybackController playbackController{nullptr, sound_mind::core::AudioDeviceMode::None};
     LayersPanel layersPanel;
     FilterConfigurationPanel filterConfigurationPanel;
-    UndoStack undoStack;
+    ProjectHistory undoStack;
     LayerController controller{&canvas, &playbackController, &layersPanel, &filterConfigurationPanel, &undoStack};
 };
 
@@ -486,7 +486,7 @@ void LayerControllerTest::duplicateLayerCopiesContentAndPropertiesButRefusesALoc
     content.leftMagnitudeDb.assign(pixelCount, -10.0f);
     content.rightMagnitudeDb.assign(pixelCount, -20.0f);
     content.sharedPhaseRadians.assign(pixelCount, 0.0f);
-    normal.setContent(content);
+    normal.setBaseContent(content);
     const LayerId normalId = project.addLayer(std::move(normal));
     fixture.controller.setProject(&project);
     const std::size_t countBefore = project.layers().size();
@@ -552,7 +552,7 @@ void LayerControllerTest::cleanUpLayerPhaseZeroesPhaseInSilentCellsOnlyButRefuse
     // One silent cell, with junk phase that should get zeroed.
     content.leftMagnitudeDb[0] = -96.0f;
     content.rightMagnitudeDb[0] = -96.0f;
-    normal.setContent(content);
+    normal.setBaseContent(content);
     const LayerId normalId = project.addLayer(std::move(normal));
 
     fixture.controller.setProject(&project);
@@ -822,7 +822,7 @@ void LayerControllerTest::applyFilterConfigurationAppliesOnlyToAFilterLayer() {
 
 void LayerControllerTest::applyFilterConfigurationIsUndoableAndRedoable() {
     // v0.Y.49.1 (Macro Mode) Installment B - a prerequisite for replaying
-    // a MacroEventType::FilterConfigurationChanged event via UndoStack::
+    // a MacroEventType::FilterConfigurationChanged event via ProjectHistory::
     // jumpTo(); filter configuration edits weren't undoable at all before
     // this.
     Fixture fixture;
@@ -935,7 +935,7 @@ void LayerControllerTest::refreshLayersPanelShowsAnAveragePeakLoudnessLabelForAL
     content.rightMagnitudeDb.assign(pixelCount, -20.0f);
     content.sharedPhaseRadians.assign(pixelCount, 0.0f);
     Layer normal(0, "Test", LayerType::Normal);
-    normal.setContent(content);
+    normal.setBaseContent(content);
     project.addLayer(std::move(normal));
 
     fixture.controller.setProject(&project);
@@ -959,7 +959,7 @@ void LayerControllerTest::updateLoudnessDisplaysShowsALivePositionValue() {
     content.rightMagnitudeDb.assign(pixelCount, -20.0f);
     content.sharedPhaseRadians.assign(pixelCount, 0.0f);
     Layer normal(0, "Test", LayerType::Normal);
-    normal.setContent(content);
+    normal.setBaseContent(content);
     project.addLayer(std::move(normal));
 
     fixture.controller.setProject(&project);
@@ -987,7 +987,7 @@ void LayerControllerTest::resetLoudnessDisplaysToStoppedValueRestoresTheAverageP
     content.rightMagnitudeDb.assign(pixelCount, -20.0f);
     content.sharedPhaseRadians.assign(pixelCount, 0.0f);
     Layer normal(0, "Test", LayerType::Normal);
-    normal.setContent(content);
+    normal.setBaseContent(content);
     project.addLayer(std::move(normal));
 
     fixture.controller.setProject(&project);

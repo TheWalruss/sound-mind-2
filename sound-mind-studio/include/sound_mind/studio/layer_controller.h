@@ -24,7 +24,7 @@ class CanvasWidget;
 class FilterConfigurationPanel;
 class LayersPanel;
 class PlaybackController;
-class UndoStack;
+class ProjectHistory;
 
 /**
  * @brief Owns layer-stack lookup, mutation, and `LayersPanel`/
@@ -52,16 +52,13 @@ class UndoStack;
  * `MainWindow` holds the current project's `LoopEngine` (and only it needs
  * to, for Loop Mode's own reasons).
  *
- * **Seven property setters are undoable** - `cycleLayerVisibilityState()`,
- * `setLayerOpacity()`, `setLayerBalance()`, `setLayerOpacityMindWave()`,
- * `setLayerTranslation()`, `setLayerRescale()`, `setLayerBlendMode()` each
- * push a matching `UndoCommand` onto the shared
- * `UndoStack` after applying the change, so `MainWindow`'s Edit > Undo/Redo
- * covers them - see `UndoStack`'s own class docs for why this is a
- * separate mechanism from `sound_mind::core::OperationLog`. The other
- * mutations here (rename, delete, add, reorder, `FilterConfiguration`
- * edits) are **not** undoable yet - a deliberately narrower scope than
- * "every layer mutation," confirmed with the user alongside this fix.
+ * **Every mutation here is recorded in the project's History**
+ * (`v0.1.43.1`): each one changes the project, then commits it to the
+ * shared `ProjectHistory` with a description - property setters, rename,
+ * delete, duplicate, add, generate, reorder, phase cleanup and
+ * `FilterConfiguration` edits alike. Undo/redo are generic: the history
+ * restores the recorded state and this controller refreshes everything it
+ * shows (handleHistoryChange()).
  */
 class LayerController : public QObject {
     Q_OBJECT
@@ -79,14 +76,14 @@ public:
      * @param filterConfigurationPanel Non-owning; kept in sync with
      *        whichever Filter/Equalizer layer is currently selected. Must
      *        outlive this controller.
-     * @param undoStack Non-owning; every undoable property setter (see
-     *        the class's own docs) pushes onto it. Must outlive this
-     *        controller.
+     * @param history Non-owning; every mutation commits to it, and its
+     *        undo/redo refreshes this controller. May be `nullptr` (nothing
+     *        is recorded). Must outlive this controller.
      * @param parent The owning object, per Qt's normal parent-ownership
      *        convention; may be `nullptr`.
      */
     LayerController(CanvasWidget* canvas, PlaybackController* playbackController, LayersPanel* layersPanel,
-                     FilterConfigurationPanel* filterConfigurationPanel, UndoStack* undoStack,
+                     FilterConfigurationPanel* filterConfigurationPanel, ProjectHistory* history,
                      QObject* parent = nullptr);
 
     /// @brief Sets which project this controller looks up/mutates layers
@@ -543,16 +540,23 @@ public:
     ///        selection was cleared.
     void handleLayerSelectionChanged(std::optional<sound_mind::core::LayerId> id);
 
+    /**
+     * @brief Refreshes everything this controller shows after an undo,
+     *        redo or History jump changed the project (`v0.1.43.1`):
+     *        thumbnails and loudness of the layers involved, the layers
+     *        panel, the canvas composite, cached playback audio and the
+     *        filter panel. Emits layerRemoved() for each layer the change
+     *        removed, then layersChanged().
+     * @param change What changed.
+     */
+    void handleHistoryChange(const sound_mind::core::HistoryChange& change);
+
     /// @brief Applies `FilterConfigurationPanel`'s own edited
     ///        configuration. If the panel is currently editing a real,
     ///        still-selected Filter/Equalizer layer, writes onto that
     ///        layer directly (repainting the canvas and invalidating
-    ///        cached playback audio, as before) and pushes an undo entry -
-    ///        `v0.Y.49.1` (Macro Mode) Installment B: filter configuration
-    ///        edits weren't undoable at all before this, a real,
-    ///        independently-useful gap this installment closes as the
-    ///        prerequisite for replaying a `MacroEventType::
-    ///        FilterConfigurationChanged` event via `UndoStack::jumpTo()`.
+    ///        cached playback audio, as before) and commits it to the
+    ///        project's History.
     ///        Otherwise (real-world testing pass, 2026-09-20, finding #13)
     ///        updates `pendingFilterConfiguration()` instead, so an edit
     ///        made with nothing (or a non-Filter layer) selected isn't
@@ -707,11 +711,16 @@ private:
     /// @return The formatted indicator text, or empty.
     [[nodiscard]] QString stoppedLoudnessTextFor(const sound_mind::core::Layer& layer);
 
+    /// @brief Commits the project's changes to the history, if there is one.
+    /// @param description What the user did.
+    /// @return The new entry's id, if one was recorded.
+    std::optional<sound_mind::core::HistoryEntryId> commit(const QString& description);
+
     CanvasWidget* canvas_;
     PlaybackController* playbackController_;
     LayersPanel* layersPanel_;
     FilterConfigurationPanel* filterConfigurationPanel_;
-    UndoStack* undoStack_;
+    ProjectHistory* history_;
     sound_mind::core::Project* project_ = nullptr;
 
     /// @brief See pendingFilterConfiguration()'s own docs.
@@ -738,6 +747,10 @@ private:
     ///        canUnhideOtherLayers()'s own docs. `std::nullopt` whenever
     ///        canUnhideOtherLayers() would report `false`.
     std::optional<std::vector<std::tuple<sound_mind::core::LayerId, bool, bool>>> hiddenOthersSnapshot_;
+    /// @brief The History entries that hid the other layers and that
+    ///        unhid them again - see canUnhideOtherLayers().
+    std::optional<sound_mind::core::HistoryEntryId> hideOthersEntry_;
+    std::optional<sound_mind::core::HistoryEntryId> unhideOthersEntry_;
 };
 
 }  // namespace sound_mind::studio

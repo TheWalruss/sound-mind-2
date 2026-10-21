@@ -40,6 +40,7 @@ private slots:
     void endMovePreservesTheMovedOperationsOwnStackPosition();
     void deleteSelectionPreservesStackPositionOfOperationsAboveIt();
     void bringToFrontMovesTheSelectionToTheTopOfItsStack();
+    void restackingIsUndoable();
     void sendToBackMovesTheSelectionToTheBottomOfItsStack();
     void bringForwardSwapsTheSelectionWithTheOneAboveIt();
     void sendBackwardSwapsTheSelectionWithTheOneBelowIt();

@@ -19,7 +19,7 @@
 #include "sound_mind/studio/grid_config.h"
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/pick_controller.h"
-#include "sound_mind/studio/undo_stack.h"
+#include "sound_mind/studio/project_history.h"
 
 using sound_mind::core::Clip;
 using sound_mind::core::FillOperation;
@@ -91,7 +91,7 @@ LayerId addBlankNormalLayer(Project& project) {
     content.leftMagnitudeDb.assign(pixelCount, 0.0f);
     content.rightMagnitudeDb.assign(pixelCount, 0.0f);
     content.sharedPhaseRadians.assign(pixelCount, 0.0f);
-    layer.setContent(content);
+    layer.setBaseContent(content);
     return project.addLayer(std::move(layer));
 }
 
@@ -961,6 +961,28 @@ void PickControllerTest::bringToFrontMovesTheSelectionToTheTopOfItsStack() {
     QCOMPARE(ids, (std::vector<OperationId>{bId, cId, aId}));
 }
 
+// v0.1.43.1 - restacking is a History entry like any other edit.
+void PickControllerTest::restackingIsUndoable() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.01);
+    const OperationId aId = addPaintOperation(project, layerId, 0.1, 300.0, 0.12, 320.0, config);
+    const OperationId bId = addPaintOperation(project, layerId, 0.4, 300.0, 0.42, 320.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.11, 310.0}));  // A.
+    controller.bringToFront();
+    QCOMPARE(project.history().size(), std::size_t{1});
+
+    paintController.undo();
+    std::vector<OperationId> ids;
+    for (const auto* op : project.operationLog().activeOperationsTargeting(layerId)) ids.push_back(op->id());
+    QCOMPARE(ids, (std::vector<OperationId>{aId, bId}));
+}
+
 void PickControllerTest::sendToBackMovesTheSelectionToTheBottomOfItsStack() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);
@@ -1809,7 +1831,7 @@ void PickControllerTest::deletingAMultiSelectionIsOneUndoStep() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);
     addThreeStrokes(project, layerId);
-    sound_mind::studio::UndoStack undoStack;
+    sound_mind::studio::ProjectHistory undoStack;
     PaintController paintController(&undoStack);
     paintController.setProject(&project);
     PickController controller(&paintController);
@@ -1836,7 +1858,7 @@ void PickControllerTest::draggingAMultiSelectionMovesThemAllAsOneUndoStep() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);
     addThreeStrokes(project, layerId);
-    sound_mind::studio::UndoStack undoStack;
+    sound_mind::studio::ProjectHistory undoStack;
     PaintController paintController(&undoStack);
     paintController.setProject(&project);
     PickController controller(&paintController);
@@ -1868,7 +1890,7 @@ void PickControllerTest::copyThenPasteDuplicatesTheObjectsAndSelectsThem() {
     const LayerId layerId = addBlankNormalLayer(project);
     const LayerId otherLayer = addBlankNormalLayer(project);
     addThreeStrokes(project, layerId);
-    sound_mind::studio::UndoStack undoStack;
+    sound_mind::studio::ProjectHistory undoStack;
     PaintController paintController(&undoStack);
     paintController.setProject(&project);
     PickController controller(&paintController);
@@ -1928,7 +1950,7 @@ void PickControllerTest::mergingConsumesGuidePathsKeepsStrokesAndIsOneUndoStep()
     const OperationId guideA = addGuideLine(project, layerId, 0.10, 0.30, 400.0);
     const OperationId guideB = addGuideLine(project, layerId, 0.40, 0.60, 600.0);
     const OperationId stroke = addPaintOperation(project, layerId, 0.70, 800.0, 0.80, 850.0, makeOpaqueTool(0.005));
-    sound_mind::studio::UndoStack undoStack;
+    sound_mind::studio::ProjectHistory undoStack;
     PaintController paintController(&undoStack);
     paintController.setProject(&project);
     PickController controller(&paintController);

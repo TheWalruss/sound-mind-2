@@ -368,11 +368,11 @@ The target the user set: replaying the History rebuilds a project from its origi
 - A layer's content is never re-derived from anything other than replay or its cache.
 - Per the standing pre-Beta decision, older projects aren't migrated.
 
-**Units:** every History payload is in seconds and Hz, never pixels, so that a replay at different codec settings lands in the same place. A few things are still raster-unit data, and the History installments convert them:
+**Units:** every History payload is in seconds and Hz, never pixels, so that a replay at different codec settings lands in the same place. A few things are still raster-unit data, and Remaster converts them:
 
 | Raster-unit data | How it's converted |
 |---|---|
-| Layer translation (`translationColumns`) | Becomes seconds. |
+| Layer translation (`translationColumns`) | Stays in columns; Remaster converts it with the old and new hop length (Decision #263). |
 | Frame/bin mask selections embedded in operations | Resampled on remaster. |
 | Pasted `Clip`s copied from inside the project | Become a reference to their origin (layer and region at copy time), re-copied from the rebuilt origin on replay. |
 | Clips from outside the project | Stay raster data, resampled on remaster. |
@@ -2676,6 +2676,37 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Several named Macros persist with the project.
     - **Not planned (future work):** a timeline editor for Macros, progressive stroke animation, viewport following, and gesture automation. All of these would need gesture timing captured, which these decisions don't.
     - **Replaces:** the Macro parts of Decisions #162-#164 (`MacroRecorder`, `playMacro()`, `exportMacroVideoAsync()`'s `jumpTo()` extraction), and `UndoStack` (Decision #157), once the History installments land.
+263. **History installment A: change capture, layer bases, `ProjectHistory`.** Settled in `v0.1.43.1`, roadmap slot `v0.Y.81.1`.
+    - **Entries are captured, not hand-written commands.** About 70 Studio sites mutate the project directly, and rewriting each as a typed command would have touched all of them twice (do and undo).
+      - Instead `History::commit()` compares the project with its `ProjectState` at the previous commit: each layer's JSON and base revision, the operation ids, stack order and bake thresholds, and every resource library's JSON.
+      - It records the difference: changed layers before/after, layer order, appended operations as JSON, stack order or bake thresholds when they changed other than by appending, and changed libraries.
+      - Undo/redo apply one side (`applySide()`). So every mutation is recorded whatever code made it, and a site that forgets to commit has its change folded into the next entry rather than lost; undo also commits anything pending first.
+      - The next-id counters don't count as a change on their own (a reserved, unused operation id isn't an action).
+    - **Layer bases.** A layer now distinguishes its *base* (what an import, recording, generator, Loop take, pooling or phase cleanup produced) from its rendered content (base plus operations):
+      - `Layer::setBaseContent(content, recipe, pool)` assigns a fresh `baseRevision()`. `setContent()` now means "rendered" and splits the base off first.
+      - The base is persisted (`media/layer_N.base.smstream`, only when it differs from the render).
+      - This replaces `PaintController`'s session-only `baseContent_`, which had a real bug: after reopening a project, the first stroke captured the *painted* content as its base and replayed every earlier stroke on top of it again.
+      - Recording over a layer, Loop takes, pooling and phase cleanup also used to set the content while the session base stayed, so the next stroke silently undid them.
+    - **No image copies for undo.** Copying every base at each commit would double memory.
+      - `setBaseContent()` *moves* the replaced base aside (`Layer::takeDisplacedBase()`), and `Project::removeLayer()` does the same for a removed layer (`takeDisplacedLayerBases()`).
+      - The next commit adopts them as the entry's "before" base; undo/redo move the current one into the other side.
+      - Kept images are capped by a budget (1 GiB, oldest dropped first). A missing base is recovered by a `HistoryBaseResolver`, which installment D implements by replay. Until then such an undo stops cleanly, changing nothing (documented in the user guide).
+    - **Baking.** Pooling, phase cleanup, recording over a layer and Loop takes turn the layer's painting into its new base. `OperationLog::bakeLayer()` records a per-layer threshold; operations at or below it are inactive. This replaces nothing - those operations used to stay active and get re-applied.
+    - **`OperationLog`** lost its own undo/redo high-water mark. History undoes appends with `truncate()` and restores stack order and thresholds itself. It gained per-operation `operationToJson()`/`operationFromJson()` and `insertIntoStackOrder()`, which History uses to tell an append from a reorder.
+    - **`ProjectHistory` (Studio)** replaces `UndoStack`:
+      - `commit(project, description)`, `undo()`, `redo()` and `jumpTo()`.
+      - Content rebuilders (`PaintController` re-renders `HistoryChange::contentLayers`) run before `changed()`. `LayerController`, `MindWaveController` and `MainWindow::handleHistoryChange()` refresh their own views from it, so nothing about undo is specific to an action.
+      - `setProject()` baselines anything done before the history was attached (test setups, and Studio code paths that prepare a project before showing it).
+      - `PaintController` keeps a private history when given none, so it still undoes on its own.
+      - "Unhide Other Layers" availability follows whether its "Hide other layers" entry is applied and the unhide that used it isn't.
+    - **Recipes** are recorded with every base (`"importAudio"` with file, offset and snippet; `"importImage"` with mode and polar parameters; `"generate"` with the whole `GeneratorConfiguration`, now JSON-serializable; `"record"`, `"loopTake"`, `"pool"`, `"phaseCleanup"`, `"duplicate"`, `"empty"`). Installment B makes them executable against copied sources.
+    - **Deviation from Decision #262:** layer translation stays in columns (about 60 call sites). Remaster converts it using the old and new hop length, which is equivalent.
+    - **Tests:**
+      - Core `test_history.cpp`, 18 cases: property, add, remove, base replacement, operations, reorder, bake, resources, uncommitted-then-undo, redo-tail drop, jumpTo, save/reload with resolver, separate base files, budget, applyEntry replay, entry JSON, unused id.
+      - `test_operation_log.cpp`: the undo cases replaced by truncate/bake/stack-order/JSON cases.
+      - Studio `ProjectHistoryTest`, 7 cases.
+      - `PickControllerTest::restackingIsUndoable`.
+      - Existing controller tests now drive `ProjectHistory`; their setup helpers use `setBaseContent()`.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

@@ -16,7 +16,7 @@
 
 namespace sound_mind::studio {
 
-class UndoStack;
+class ProjectHistory;
 
 /**
  * @brief Owns an in-progress freehand stroke and turns it into a real,
@@ -25,7 +25,7 @@ class UndoStack;
  *
  * Purely presentational-adjacent, the same shape as `PlaybackController`:
  * it owns painting *session* state (the stroke currently being drawn,
- * each touched layer's own pre-paint base content) and calls straight
+ * each layer's replay cache) and calls straight
  * into `sound_mind::core` for the actual curve-fitting/DSP/undo-redo
  * logic, but never reaches into `CanvasWidget` directly - `pathChanged()`/
  * `contentChanged()` are what `MainWindow` connects to whatever needs to
@@ -41,26 +41,21 @@ class PaintController : public QObject {
 public:
     /// @brief Constructs a controller with no project set and no stroke
     ///        in progress.
-    /// @param undoStack Non-owning; notifyOperationCommitted() pushes onto
-    ///        it - see that method's own docs. Nullable, unlike most other
-    ///        controllers' own required collaborators: every test in
-    ///        `test_paint_controller.cpp` constructs a `PaintController`
-    ///        with none of its own collaborators at all, and content-
-    ///        operation undo/redo (this class's own undo()/redo(), driving
-    ///        `sound_mind::core::OperationLog` directly) already works
-    ///        correctly with no `UndoStack` present - only the *unified*
-    ///        Edit > Undo/Redo menu needs one wired in. Must outlive this
+    /// @param history Non-owning; notifyOperationCommitted() commits to it,
+    ///        and its undo/redo re-renders the layers they change. Nullable:
+    ///        without one, the controller keeps a private history of its
+    ///        own, so undo()/redo() still work on their own (every test in
+    ///        `test_paint_controller.cpp` relies on that). Must outlive this
     ///        controller if given.
     /// @param parent The owning object, per Qt's normal parent-ownership
     ///        convention; may be `nullptr`.
-    explicit PaintController(UndoStack* undoStack = nullptr, QObject* parent = nullptr);
+    explicit PaintController(ProjectHistory* history = nullptr, QObject* parent = nullptr);
 
     /**
      * @brief Sets which project painting targets.
      *
-     * Clears any in-progress stroke and every layer's own remembered
-     * pre-paint base content (see rebuildLayerContent()'s own docs) -
-     * both are meaningless once the project they refer to is gone.
+     * Clears any in-progress stroke and every layer's replay cache - both
+     * are meaningless once the project they refer to is gone.
      *
      * @param project The project to paint into; may be `nullptr` (nothing
      *        paintable until a real one is set again).
@@ -81,9 +76,8 @@ public:
      * Does *not* force an immediate rebuild of anything - only the *next*
      * `rebuildLayerContent()` call for each layer, whenever that happens
      * for any reason, replays fully rather than reusing a stale cached
-     * result. `baseContent_` (the pre-paint snapshots themselves) is
-     * untouched - nothing about a layer's own pre-paint state changes
-     * just because a MindWave's value did.
+     * result. Each layer's base content is untouched - nothing about it
+     * changes just because a MindWave's value did.
      */
     void invalidateContentCaches();
 
@@ -178,65 +172,45 @@ public:
     [[nodiscard]] const sound_mind::core::Path& currentPreviewPath() const noexcept { return previewPath_; }
 
     /// @brief Whether undo() would currently do anything.
-    /// @return `true` if a project is set and its operation log has an
-    ///         active operation to undo.
+    /// @return `true` if a project is set and its history has something
+    ///         to undo.
     [[nodiscard]] bool canUndo() const noexcept;
 
     /// @brief Whether redo() would currently do anything.
-    /// @return `true` if a project is set and its operation log has an
-    ///         undone operation available to redo.
+    /// @return `true` if a project is set and its history has an undone
+    ///         entry to redo.
     [[nodiscard]] bool canRedo() const noexcept;
 
     /**
-     * @brief Undoes the most recent active operation and rebuilds every
-     *        layer painting has touched so far this session, emitting
-     *        contentChanged() for each - a no-op if canUndo() is `false`.
-     *
-     * Invalidates every layer's own `sound_mind::core::PaintContentCache`
-     * first (`v0.1.8.1`) - deliberately, not an oversight: undo moves the
-     * active-operation boundary in a way that can affect any layer's own
-     * history, and this method's own loop already rebuilds *every*
-     * painted layer regardless of whether undo specifically touched it,
-     * so forcing each of those rebuilds to replay fully (exactly the
-     * pre-`v0.1.8.1` cost) keeps undo's own correctness contract - in
-     * particular, a Mind Grain stroke's source re-sampling on literally
-     * any undo, not just ones that directly touch its own source layer -
-     * bit-for-bit unchanged. This cache's own speed benefit is for the
-     * hot path (painting new strokes), not undo/redo.
+     * @brief Undoes the history's latest entry (`v0.1.43.1`: whatever it
+     *        was, not only content operations); every layer whose content
+     *        it changes is re-rendered, emitting contentChanged() for each.
+     *        A no-op if canUndo() is `false`.
      */
     void undo();
 
-    /// @brief Redoes the most recently undone operation and rebuilds
-    ///        every layer painting has touched so far this session,
-    ///        emitting contentChanged() for each - a no-op if canRedo()
-    ///        is `false`. Invalidates every layer's own `PaintContentCache`
-    ///        first, same reasoning as undo()'s own docs.
+    /// @brief Redoes the history's next undone entry - see undo().
     void redo();
 
     /**
      * @brief Rebuilds one layer's own painted content from scratch and
      *        emits contentChanged() for it.
      *
-     * The first time this is called for a given layer, that layer's
-     * *current* content() is captured as its permanent pre-paint base - or,
-     * if it has none yet (`std::nullopt` - the Background layer, in
-     * particular, which `Project::createNew()` deliberately leaves
-     * content-less), a real, silent, project-sized base is synthesized on
-     * the spot (`sound_mind::core::silentContentFor()`) so every layer is
-     * a genuinely paintable canvas, not just ones that happened to be
-     * imported/recorded into already. Every later rebuild replays on top
-     * of that same base, never the result of a previous replay, so
-     * undo()/redo() stay correct no matter how many times painting
-     * revisits this layer. This base is session-only (not persisted) -
-     * see `docs/sound-mind-architecture.md`'s Decisions Made for why
-     * that's an acceptable, standard limitation (undo history doesn't
-     * survive a save/reload in most creative software either).
+     * Replays the layer's active operations on top of its base content
+     * (`Layer::baseContent()`, `v0.1.43.1`: what an import, recording,
+     * generator, pooling or phase cleanup made it, saved with the project)
+     * - or, if it has none (the Background layer, which
+     * `Project::createNew()` leaves content-less), on a silent,
+     * project-sized base (`sound_mind::core::silentContentFor()`), so every
+     * layer is a paintable canvas. Never on the result of a previous
+     * replay, so undo/redo stay correct however often painting revisits
+     * the layer, and a reopened project keeps painting on the right base.
      *
      * Public since `v0.Y.24.1`'s Pick installment: `PickController`
      * appends its own new (move/modify/delete) operations directly to the
      * project's `OperationLog`, then calls back into this same method -
-     * through this same controller, so the replay uses the identical
-     * cached pre-paint base a plain paint stroke would - rather than
+     * through this same controller, so the replay uses the same base and
+     * cache a plain paint stroke would - rather than
      * duplicating the rebuild logic in a second place.
      *
      * Also supplies `rebuildPaintedContent()`'s own
@@ -280,40 +254,25 @@ public:
     void rebuildLayerContent(sound_mind::core::LayerId layer);
 
     /**
-     * @brief Records a just-appended content operation on the shared
-     *        `UndoStack` (if one was given at construction), so `MainWindow`'s
-     *        unified Edit > Undo/Redo also covers it - a no-op otherwise.
+     * @brief Commits a just-made content change (an appended operation,
+     *        usually) to the project's History with `description`
+     *        (`v0.1.43.1`), so Edit > Undo/Redo, the History panel and
+     *        Macro recording all see it.
      *
-     * The pushed `UndoCommand`'s own undo()/redo() callbacks simply call
-     * back into this same controller's own undo()/redo(), which already
-     * correctly drive `sound_mind::core::OperationLog`'s high-water mark
-     * (that mark is shared project-wide, so this stays correct regardless
-     * of which controller actually appended the entry).
+     * Public: `endStroke()` calls this after its own append, and so do
+     * `PathController::finishPath()`, `PickController::commitReplacement()`,
+     * `SelectionController::fill()`/`cutSelection()`/`pasteInto()` and the
+     * other controllers that append content operations.
      *
-     * Public since Undo/Redo Everywhere (see `docs/sound-mind-architecture.md`):
-     * `endStroke()` calls this after its own append; `PathController::
-     * finishPath()`, `PickController::commitReplacement()`, and
-     * `SelectionController::fill()`/`cutSelection()`/`pasteInto()` each
-     * call it too, right after their own respective `OperationLog::append()`
-     * call - the same "calls back into this same controller, through the
-     * shared pre-paint base cache" precedent `rebuildLayerContent()`'s own
-     * docs already establish for those classes.
-     *
-     * Deliberately **not** called from within undo()/redo() themselves
-     * (which also call rebuildLayerContent()) - only a *fresh* append
-     * should ever record a new command; replaying an already-recorded one
-     * must not record it again.
-     *
-     * @param description A short, human-readable label for the just-
-     *        appended operation (e.g. "Painted stroke") - the History
-     *        Panel's own row text for it (`v0.Y.46.1` Installment D).
+     * @param description A short, human-readable label (e.g. "Painted
+     *        stroke") - the History panel's row text for it.
      */
     void notifyOperationCommitted(const QString& description);
 
     /**
      * @brief notifyOperationCommitted() for `count` log entries appended
-     *        together - records them as a single UndoStack step, so one
-     *        undo/redo rolls back/replays all of them.
+     *        together - one History entry, so one undo/redo rolls back or
+     *        replays all of them.
      * @param count How many entries were just appended; `0` records nothing.
      * @param description The History Panel's row text for the batch.
      */
@@ -344,7 +303,7 @@ public:
      *
      * Each deletion appends a tombstone that supersedes the operation (see
      * makeDeletionTombstone()), exactly as deleting a single Picked object
-     * does. One UndoStack entry covers the whole batch, so a single undo
+     * does. One History entry covers the whole batch, so a single undo
      * restores all of them. Ids that are unknown or no longer active are
      * skipped; if none are left, nothing is appended or recorded.
      *
@@ -355,8 +314,7 @@ public:
     void deleteOperations(const std::vector<sound_mind::core::OperationId>& ids, const QString& description);
 
     /**
-     * @brief Drops everything cached for `layer` (its pre-paint base and its
-     *        replay cache). Call once a layer has been removed from the
+     * @brief Drops everything cached for `layer` (its replay cache). Call once a layer has been removed from the
      *        project, so the memory is released and nothing stale lingers.
      * @param layer The removed layer's id.
      */
@@ -404,7 +362,8 @@ private:
     void rebuildLayerContentAndCascade(sound_mind::core::LayerId layer,
                                         std::unordered_set<sound_mind::core::LayerId>& visited);
 
-    UndoStack* undoStack_;
+    ProjectHistory* history_;
+    bool ownsHistory_ = false;
     sound_mind::core::Project* project_ = nullptr;
     std::unique_ptr<sound_mind::core::ToolConfiguration> toolConfig_ =
         std::make_unique<sound_mind::core::ProceduralConfiguration>();
@@ -414,7 +373,9 @@ private:
     std::vector<sound_mind::core::TimeFrequencyPoint> strokePoints_;
     sound_mind::core::Path previewPath_;
 
-    std::unordered_map<sound_mind::core::LayerId, sound_mind::codec::StreamImage> baseContent_;
+    /// @brief The base revision each layer's replay cache was built on -
+    ///        a new base invalidates it (`v0.1.43.1`).
+    std::unordered_map<sound_mind::core::LayerId, std::uint64_t> cachedBaseRevision_;
     /// @brief `v0.1.8.1` (`docs/sound-mind-roadmap.md`'s within-a-layer
     ///        operation-replay cache) - see `rebuildLayerContent()`'s/
     ///        `invalidateContentCaches()`'s own docs.

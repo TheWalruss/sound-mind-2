@@ -30,6 +30,9 @@ class Project;
 
 namespace sound_mind::studio {
 
+class ProjectHistory;
+
+
 class PresetIndicatorLabel;
 
 class GradientEditorWidget;
@@ -171,6 +174,14 @@ public:
      * @param config The configuration to display.
      */
     void setToolConfiguration(const sound_mind::core::ToolConfiguration& config);
+
+    /**
+     * @brief Sets the History this panel's own project edits are committed
+     *        to (`v0.1.43.1`), so they're undoable and recorded.
+     * @param history Non-owning; may be `nullptr` (nothing recorded). Must
+     *        outlive this panel.
+     */
+    void setHistory(ProjectHistory* history) noexcept { history_ = history; }
 
     /**
      * @brief Sets which project the Mind Shot picker draws its own entries
@@ -780,6 +791,7 @@ private:
     ///        entries are drawn from - see setProject()'s own docs. Not
     ///        owned; may be `nullptr`.
     sound_mind::core::Project* project_ = nullptr;
+    ProjectHistory* history_ = nullptr;
 
     /// @brief See setActiveLayer()'s own docs. `0` (never a real `LayerId`
     ///        - see `Layer`'s own docs on why ids start at `1`) until the

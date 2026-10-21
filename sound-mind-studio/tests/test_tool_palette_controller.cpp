@@ -47,7 +47,7 @@ LayerId addBlankNormalLayer(Project& project) {
     content.leftMagnitudeDb.assign(pixelCount, 0.0f);
     content.rightMagnitudeDb.assign(pixelCount, 0.0f);
     content.sharedPhaseRadians.assign(pixelCount, 0.0f);
-    layer.setContent(content);
+    layer.setBaseContent(content);
     return project.addLayer(std::move(layer));
 }
 

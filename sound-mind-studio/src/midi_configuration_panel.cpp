@@ -1,5 +1,7 @@
 #include "sound_mind/studio/midi_configuration_panel.h"
 
+#include "sound_mind/studio/project_history.h"
+
 #include <juce_audio_basics/juce_audio_basics.h>
 
 #include <QComboBox>
@@ -107,6 +109,7 @@ void MidiConfigurationPanel::addMapping() {
     sound_mind::core::MidiProgramMapping mapping;
     mapping.programNumber = programNumber;
     project_->setMidiProgramMapping(mapping);
+    commitMappingChange();
 
     appendRow(mapping);
     rebuildAddProgramCombo();
@@ -136,6 +139,7 @@ void MidiConfigurationPanel::handleToolPresetChanged(int programNumber,
     mapping.programNumber = programNumber;
     mapping.toolPresetId = toolPresetId;
     project_->setMidiProgramMapping(mapping);
+    commitMappingChange();
 }
 
 void MidiConfigurationPanel::handleDurationScaleChanged(int programNumber, double value) {
@@ -147,6 +151,7 @@ void MidiConfigurationPanel::handleDurationScaleChanged(int programNumber, doubl
     mapping.programNumber = programNumber;
     mapping.durationScale = value;
     project_->setMidiProgramMapping(mapping);
+    commitMappingChange();
 }
 
 void MidiConfigurationPanel::handlePitchOffsetChanged(int programNumber, double value) {
@@ -158,6 +163,7 @@ void MidiConfigurationPanel::handlePitchOffsetChanged(int programNumber, double 
     mapping.programNumber = programNumber;
     mapping.pitchOffsetSemitones = value;
     project_->setMidiProgramMapping(mapping);
+    commitMappingChange();
 }
 
 void MidiConfigurationPanel::deleteMapping(int programNumber) {
@@ -165,6 +171,7 @@ void MidiConfigurationPanel::deleteMapping(int programNumber) {
         return;
     }
     project_->removeMidiProgramMapping(programNumber);
+    commitMappingChange();
     const int row = rowForProgram(programNumber);
     if (row >= 0) {
         table_->removeRow(row);
@@ -231,6 +238,12 @@ int MidiConfigurationPanel::rowForProgram(int programNumber) const {
         }
     }
     return -1;
+}
+
+void MidiConfigurationPanel::commitMappingChange() {
+    if (history_ != nullptr && project_ != nullptr) {
+        history_->commit(*project_, tr("Changed MIDI mapping"));
+    }
 }
 
 }  // namespace sound_mind::studio

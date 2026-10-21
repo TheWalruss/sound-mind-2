@@ -14,7 +14,7 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/studio/paint_controller.h"
-#include "sound_mind/studio/undo_stack.h"
+#include "sound_mind/studio/project_history.h"
 
 using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::Layer;
@@ -28,7 +28,7 @@ using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 using sound_mind::studio::PaintController;
-using sound_mind::studio::UndoStack;
+using sound_mind::studio::ProjectHistory;
 
 namespace {
 
@@ -60,7 +60,7 @@ LayerId addBlankNormalLayer(Project& project) {
     content.leftMagnitudeDb.assign(pixelCount, 0.0f);
     content.rightMagnitudeDb.assign(pixelCount, 0.0f);
     content.sharedPhaseRadians.assign(pixelCount, 0.0f);
-    layer.setContent(content);
+    layer.setBaseContent(content);
     return project.addLayer(std::move(layer));
 }
 
@@ -375,7 +375,7 @@ void PaintControllerTest::endStrokeWithAMindGrainToolPaintsFromTheSourceLayersCu
     // Give the source layer real, non-zero content to read from.
     auto sourceContent = *project.layerById(lower)->content();
     std::fill(sourceContent.leftMagnitudeDb.begin(), sourceContent.leftMagnitudeDb.end(), -6.0f);
-    project.layerById(lower)->setContent(sourceContent);
+    project.layerById(lower)->setBaseContent(sourceContent);
 
     PaintController controller;
     controller.setProject(&project);
@@ -425,7 +425,7 @@ void PaintControllerTest::rebuildLayerContentRereadsTheSourceLayersCurrentConten
     // own mindWavesChanged handler does for the MindWave case below.
     auto sourceContent = *project.layerById(lower)->content();
     std::fill(sourceContent.leftMagnitudeDb.begin(), sourceContent.leftMagnitudeDb.end(), -9.0f);
-    project.layerById(lower)->setContent(sourceContent);
+    project.layerById(lower)->setBaseContent(sourceContent);
     controller.invalidateContentCaches();
 
     controller.rebuildLayerContent(upper);
@@ -458,7 +458,7 @@ void PaintControllerTest::rebuildLayerContentDoesNotRereadTheSourceLayersCurrent
 
     auto sourceContent = *project.layerById(lower)->content();
     std::fill(sourceContent.leftMagnitudeDb.begin(), sourceContent.leftMagnitudeDb.end(), -9.0f);
-    project.layerById(lower)->setContent(sourceContent);
+    project.layerById(lower)->setBaseContent(sourceContent);
     // No invalidateContentCaches() call this time.
 
     controller.rebuildLayerContent(upper);
@@ -650,7 +650,7 @@ void PaintControllerTest::rebuildLayerContentDoesNotRereadTheTremoloMindWaveLibr
 void PaintControllerTest::deleteOperationsTombstonesEachStrokeAsOneUndoStep() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);
-    UndoStack undoStack;
+    ProjectHistory undoStack;
     PaintController controller(&undoStack);
     controller.setProject(&project);
     controller.setToolConfiguration(makeOpaqueTool());
@@ -716,7 +716,7 @@ sound_mind::core::Path twoNodePath(double startTime, double endTime, double freq
 void PaintControllerTest::strokePathsPaintsEachPathAsOneUndoStep() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);
-    sound_mind::studio::UndoStack undoStack;
+    sound_mind::studio::ProjectHistory undoStack;
     PaintController controller(&undoStack);
     controller.setProject(&project);
     QSignalSpy contentSpy(&controller, &PaintController::contentChanged);

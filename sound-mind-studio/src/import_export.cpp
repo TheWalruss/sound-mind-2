@@ -139,7 +139,11 @@ std::vector<sound_mind::core::Layer> encodeAudioSnippets(const sound_mind::core:
                 snippetCount > 1 ? stem + "_" + formatSnippetIndex(index) : path.filename().string();
 
             sound_mind::core::Layer layer(0, layerName, sound_mind::core::LayerType::Normal);
-            layer.setContent(content);
+            // How to remake it from the file (v0.1.43.1) - see Layer::setBaseContent().
+            layer.setBaseContent(content, nlohmann::json{{"kind", "importAudio"},
+                                                         {"file", QString::fromStdWString(path.filename().wstring()).toStdString()},
+                                                         {"offsetSeconds", offsetSeconds},
+                                                         {"snippetIndex", index}});
             layers.push_back(std::move(layer));
         }
 
@@ -205,7 +209,16 @@ bool importImageFileInto(sound_mind::core::Project& project, const std::filesyst
         const auto content = sound_mind::codec::fromRgbImage(rgbImage, sound_mind::core::streamCodecConfigFor(settings));
 
         sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
-        layer.setContent(content);
+        nlohmann::json recipe{{"kind", "importImage"}, {"file", QString::fromStdWString(path.filename().wstring()).toStdString()}, {"mode", static_cast<int>(mode)}};
+        if (polarParams.has_value()) {
+            recipe["polar"] = {{"originX", polarParams->originX},
+                               {"originY", polarParams->originY},
+                               {"radius", polarParams->radius},
+                               {"arcStartRadians", polarParams->arcStartRadians},
+                               {"arcEndRadians", polarParams->arcEndRadians},
+                               {"outputWidth", polarParams->outputWidth}};
+        }
+        layer.setBaseContent(content, std::move(recipe));
         const sound_mind::core::LayerId newId = project.addLayer(std::move(layer));
         if (outLayerId != nullptr) {
             *outLayerId = newId;

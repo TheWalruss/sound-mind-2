@@ -589,4 +589,55 @@ sound_mind::codec::StreamImage generateContent(const GeneratorConfiguration& con
     }
 }
 
+namespace {
+
+void writeOptionalId(nlohmann::json& json, const char* key, const std::optional<MindWaveId>& id) {
+    if (id.has_value()) {
+        json[key] = *id;
+    }
+}
+
+std::optional<MindWaveId> readOptionalId(const nlohmann::json& json, const char* key) {
+    return json.contains(key) ? std::optional(json.at(key).get<MindWaveId>()) : std::nullopt;
+}
+
+}  // namespace
+
+void to_json(nlohmann::json& json, const NoiseConfiguration& noise) {
+    json = nlohmann::json{{"color", noise.color},
+                          {"levelDb", noise.levelDb},
+                          {"horizontalResolution", noise.horizontalResolution},
+                          {"verticalResolution", noise.verticalResolution},
+                          {"customSpectrum", noise.customSpectrum}};
+    writeOptionalId(json, "horizontalResolutionMindWave", noise.horizontalResolutionMindWave);
+    writeOptionalId(json, "verticalResolutionMindWave", noise.verticalResolutionMindWave);
+    writeOptionalId(json, "customSpectrumMindWave", noise.customSpectrumMindWave);
+}
+
+void from_json(const nlohmann::json& json, NoiseConfiguration& noise) {
+    const NoiseConfiguration defaults;
+    noise.color = json.value("color", defaults.color);
+    noise.levelDb = json.value("levelDb", defaults.levelDb);
+    noise.horizontalResolution = json.value("horizontalResolution", defaults.horizontalResolution);
+    noise.verticalResolution = json.value("verticalResolution", defaults.verticalResolution);
+    noise.customSpectrum = json.contains("customSpectrum") ? json.at("customSpectrum").get<Gradient>()
+                                                           : defaults.customSpectrum;
+    noise.horizontalResolutionMindWave = readOptionalId(json, "horizontalResolutionMindWave");
+    noise.verticalResolutionMindWave = readOptionalId(json, "verticalResolutionMindWave");
+    noise.customSpectrumMindWave = readOptionalId(json, "customSpectrumMindWave");
+}
+
+void to_json(nlohmann::json& json, const GeneratorConfiguration& config) {
+    json = nlohmann::json{
+        {"family", config.family}, {"orderChaos", config.orderChaos}, {"seed", config.seed}, {"noise", config.noise}};
+}
+
+void from_json(const nlohmann::json& json, GeneratorConfiguration& config) {
+    const GeneratorConfiguration defaults;
+    config.family = json.value("family", defaults.family);
+    config.orderChaos = json.value("orderChaos", defaults.orderChaos);
+    config.seed = json.value("seed", defaults.seed);
+    config.noise = json.contains("noise") ? json.at("noise").get<NoiseConfiguration>() : defaults.noise;
+}
+
 }  // namespace sound_mind::core

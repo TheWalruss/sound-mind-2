@@ -32,6 +32,12 @@ constexpr LayerId kEqualizerLayerId = 2;
     return projectFolder(projectFilePath) / "media" / ("layer_" + std::to_string(layerId) + ".smstream");
 }
 
+/// @brief The path a given layer's base content lives at, when it differs
+/// from its rendered content (`v0.1.43.1`, see Layer::baseContent()).
+[[nodiscard]] std::filesystem::path basePathFor(const std::filesystem::path& projectFilePath, LayerId layerId) {
+    return projectFolder(projectFilePath) / "media" / ("layer_" + std::to_string(layerId) + ".base.smstream");
+}
+
 /// @brief The path a given layer's cached Pool render would live at,
 /// within a project's folder.
 [[nodiscard]] std::filesystem::path poolPathFor(const std::filesystem::path& projectFilePath, LayerId layerId) {
@@ -62,6 +68,7 @@ Project Project::createNew(ProjectSettings settings) {
     equalizer.setFilterConfiguration(equalizerConfig);
     project.layers_.push_back(std::move(equalizer));
 
+    project.history_.setBaseline(project);
     return project;
 }
 
@@ -107,16 +114,28 @@ Project Project::load(const std::filesystem::path& path) {
     Project project = json.get<Project>();
 
     for (Layer& layer : project.layers_) {
-        const std::filesystem::path mediaPath = mediaPathFor(path, layer.id());
-        if (std::filesystem::exists(mediaPath)) {
-            layer.setContent(sound_mind::codec::readStreamFile(mediaPath));
-        }
+        std::optional<sound_mind::codec::PoolImage> pool;
         const std::filesystem::path poolPath = poolPathFor(path, layer.id());
         if (std::filesystem::exists(poolPath)) {
-            layer.setPoolContent(sound_mind::codec::readPoolFile(poolPath));
+            pool = sound_mind::codec::readPoolFile(poolPath);
+        }
+        const std::filesystem::path mediaPath = mediaPathFor(path, layer.id());
+        const std::filesystem::path basePath = basePathFor(path, layer.id());
+        const nlohmann::json recipe = layer.baseRecipe();
+        if (std::filesystem::exists(basePath)) {
+            // A painted layer: its base, then its rendered content on top.
+            layer.setBaseContent(sound_mind::codec::readStreamFile(basePath), recipe, std::move(pool));
+            if (std::filesystem::exists(mediaPath)) {
+                layer.setContent(sound_mind::codec::readStreamFile(mediaPath));
+            }
+        } else if (std::filesystem::exists(mediaPath)) {
+            layer.setBaseContent(sound_mind::codec::readStreamFile(mediaPath), recipe, std::move(pool));
+        } else if (pool.has_value()) {
+            layer.setPoolContent(std::move(*pool));
         }
     }
 
+    project.history_.setBaseline(project);
     return project;
 }
 
@@ -133,6 +152,16 @@ void Project::save(const std::filesystem::path& path) const {
             const std::filesystem::path mediaPath = mediaPathFor(path, layer.id());
             std::filesystem::create_directories(mediaPath.parent_path());
             sound_mind::codec::writeStreamFile(mediaPath, *layer.content());
+        }
+        // The base, only when something's rendered on top of it (see
+        // Layer::baseContent()); otherwise the media file above is the base.
+        const std::filesystem::path basePath = basePathFor(path, layer.id());
+        const sound_mind::codec::StreamImage* base = layer.baseContent();
+        if (base != nullptr && layer.content().has_value() && base != &*layer.content()) {
+            std::filesystem::create_directories(basePath.parent_path());
+            sound_mind::codec::writeStreamFile(basePath, *base);
+        } else if (std::filesystem::exists(basePath)) {
+            std::filesystem::remove(basePath);
         }
         if (layer.poolContent().has_value()) {
             const std::filesystem::path poolPath = poolPathFor(path, layer.id());
@@ -599,6 +628,10 @@ bool Project::removeLayer(LayerId id) {
     if (it == layers_.end()) {
         return false;
     }
+    // Keep its base for the history - the one it had at the last commit if
+    // it was replaced since (see Layer::takeDisplacedBase()).
+    std::optional<LayerBase> base = it->takeDisplacedBase();
+    displacedLayerBases_.insert_or_assign(id, base.has_value() ? std::move(*base) : it->releaseBase());
     layers_.erase(it);
     return true;
 }
@@ -647,6 +680,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"filterPresets", project.filterPresets_},
         {"gridPresets", project.gridPresets_},
         {"midiProgramMappings", project.midiProgramMappings_},
+        {"history", project.history_},
     };
 }
 
@@ -738,6 +772,8 @@ void from_json(const nlohmann::json& json, Project& project) {
     // Lenient, same reasoning - didn't exist before v0.Y.55.1's own MIDI
     // Configuration panel installment; a project saved before it had no
     // MIDI program mappings to lose.
+    project.history_ = json.contains("history") ? json.at("history").get<History>() : History{};
+
     project.midiProgramMappings_.clear();
     if (json.contains("midiProgramMappings")) {
         for (const auto& mappingJson : json.at("midiProgramMappings")) {

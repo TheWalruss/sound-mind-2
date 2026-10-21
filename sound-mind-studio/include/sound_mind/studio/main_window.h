@@ -47,7 +47,7 @@
 #include "sound_mind/studio/selection_configuration_panel.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 #include "sound_mind/studio/tool_palette_controller.h"
-#include "sound_mind/studio/undo_stack.h"
+#include "sound_mind/studio/project_history.h"
 
 class QAction;
 class QCloseEvent;
@@ -1501,41 +1501,47 @@ public slots:
     [[nodiscard]] int cancelledAnalysisCount() const noexcept { return cancelledAnalyses_; }
 
     /**
-     * @brief Undoes the most recent undoable edit, if any - the actual
-     *        work behind the Edit menu's Undo action.
+     * @brief Undoes the latest History entry, if any - the actual work
+     *        behind the Edit menu's Undo action.
      *
-     * Delegates to `undoStack_` (a `sound_mind::studio::UndoStack`),
-     * covering both content operations (paint strokes, Pick's move/
-     * modify/delete, Fill, Paste) and layer property changes (opacity,
-     * opacityMindWave binding, visibility, translation, rescale - see
-     * `LayerController`'s own docs), in whatever order they actually
-     * happened - a no-op if nothing is undoable (no project open, or
-     * nothing undoable yet since the project's own history - session-
-     * only, see `UndoStack`'s own docs - began).
+     * Delegates to `history_` (`ProjectHistory`, `v0.1.43.1`): every
+     * recorded action is undoable - imports, recordings, layer changes,
+     * painting, resources - in the order it happened, and the history is
+     * saved with the project, so undo works after reopening it too. A
+     * no-op if nothing is undoable.
      */
     void undo();
 
-    /// @brief Redoes the most recently undone edit, if any - the actual
+    /// @brief Redoes the next undone History entry, if any - the actual
     ///        work behind the Edit menu's Redo action. Delegates to
-    ///        `undoStack_`; a no-op if nothing is redoable.
+    ///        `history_`; a no-op if nothing is redoable.
     void redo();
 
     /**
-     * @brief Jumps directly to an arbitrary point in `undoStack_`'s own
-     *        history - the actual work behind `HistoryPanel`'s own
-     *        double-click gesture, `v0.Y.46.1` Installment D ("History
-     *        Panel").
+     * @brief Jumps directly to an arbitrary point in the project's History -
+     *        the actual work behind `HistoryPanel`'s double-click gesture.
      *
-     * Delegates to `UndoStack::jumpTo()` (see its own docs - every
-     * intermediate command's own callback still actually runs, in order),
-     * then refreshes the History Panel to reflect the new position - every
-     * other affected refresh (canvas, Layers Panel, `hasUnsavedChanges()`)
-     * already happens as a side effect of those same callbacks running,
-     * the same as a plain undo()/redo() already triggers them.
+     * Delegates to `ProjectHistory::jumpTo()`, which undoes or redoes each
+     * entry in between; the controllers and handleHistoryChange() refresh
+     * everything affected, and the History panel follows
+     * `ProjectHistory::historyChanged()`.
      *
-     * @param index The target index - see `UndoStack::jumpTo()`'s own docs.
+     * @param index The target position - how many entries stay applied.
      */
     void jumpToHistoryIndex(std::size_t index);
+
+    /// @brief Commits the open project's changes to its History with
+    ///        `description` (`v0.1.43.1`) - a no-op without a project.
+    /// @param description What the user did.
+    void commitHistory(const QString& description);
+
+    /**
+     * @brief Refreshes what the controllers don't after an undo, redo or
+     *        History jump (`v0.1.43.1`): resource combos and panels, the
+     *        record targets, the Equalizer preview, the Composer panel.
+     * @param change What changed.
+     */
+    void handleHistoryChange(const sound_mind::core::HistoryChange& change);
 
     /// @brief Zooms in proportionally - the actual work behind the View >
     ///        Zoom menu's "Zoom In" action (`]`). Delegates to
@@ -1936,7 +1942,7 @@ public slots:
      *
      * A no-op with no project, no recorded events, or if any recorded
      * event's own index no longer resolves against the current
-     * `undoStack_` (stale data left over despite `discardEvents()`'s own
+     * `history_` (stale data left over despite `discardEvents()`'s own
      * project-switch guard - defensive, not expected to trigger in
      * practice).
      */
@@ -2998,10 +3004,10 @@ public:
      * Two phases, deliberately not both backgrounded (confirmed with the
      * user): (1) a **synchronous** extraction phase, right here, on the UI
      * thread - walks the macro's own events exactly like playMacro() does
-     * (`undoStack_.jumpTo()` per event), capturing each segment's own
+     * (`history_.jumpTo()` per event), capturing each segment's own
      * `sound_mind::codec::VideoSegment` (a `toRgbImage()`-rendered
      * composite) and its own slice of decoded audio as independent,
-     * owned copies, then restores `undoStack_` to exactly the index it
+     * owned copies, then restores `history_` to exactly the index it
      * was at before this method was ever called - so this method has zero
      * visible effect on the live project no matter how it ends. (2) the
      * genuinely slow part - `sound_mind::codec::exportSegmentedVideo()`'s
@@ -3021,7 +3027,7 @@ public:
      * Shows `QMessageBox::critical()` immediately, without starting
      * anything, if there's no project, nothing recorded, or the recorded
      * macro's own indices no longer resolve against the current
-     * `undoStack_` (the same staleness guard playMacro() itself makes) -
+     * `history_` (the same staleness guard playMacro() itself makes) -
      * all knowable synchronously, before either phase begins.
      *
      * @param path Destination path.
@@ -3346,9 +3352,9 @@ private:
      */
     void updateEqualizerPreview();
 
-    /// @brief Pushes `undoStack_`'s own current descriptions/position into
+    /// @brief Pushes `history_`'s own current descriptions/position into
     ///        `historyPanel_` - `v0.Y.46.1` Installment D ("History
-    ///        Panel"). Called wherever `undoStack_` might just have
+    ///        Panel"). Called wherever `history_` might just have
     ///        changed: after any `LayerController::layersChanged()` (every
     ///        property mutation already pushes there) and after any
     ///        `ToolPaletteController::contentChanged()` (every content
@@ -3630,7 +3636,7 @@ private:
      *        (Macro Mode) Installment B, `playMacro()`'s own tick,
      *        connected to `PlaybackController::positionChanged()`.
      *
-     * Each fired event calls `undoStack_.jumpTo(event.undoStackIndexAfter)`
+     * Each fired event calls `history_.jumpTo(event.undoStackIndexAfter)`
      * then, since that alone doesn't guarantee `playbackController_` picks
      * up whatever it just changed (see `playMacro()`'s own docs on why
      * `handleContentChangedForPlayback()`'s existing gate doesn't cover
@@ -3749,14 +3755,14 @@ private:
     ///        `layerController_` each get a non-owning pointer to it at
     ///        construction. `clear()`ed in setProject() - see that
     ///        method's own body.
-    UndoStack undoStack_;
+    ProjectHistory history_;
 
     /// @brief The in-progress Branching Curve editor's own state, if any -
     ///        see `BranchCurveSession`'s own docs and
     ///        `startBranchingCurveFromPickedPath()`'s for the workflow.
-    ///        Owned by value, the same reasoning `undoStack_` above
+    ///        Owned by value, the same reasoning `history_` above
     ///        already gives - a plain value type, nothing else needs to
-    ///        own it. Not reset in setProject() - unlike `undoStack_`'s
+    ///        own it. Not reset in setProject() - unlike `history_`'s
     ///        own history, an in-progress branching curve has nothing
     ///        project-specific about its own gathered `Path`s to go stale,
     ///        though switching projects mid-session is an unusual enough
@@ -3764,11 +3770,11 @@ private:
     BranchCurveSession branchCurveSession_;
 
     /// @brief Records a timestamped macro while active - `v0.Y.49.1`
-    ///        (Macro Mode). Owned by value, the same reasoning undoStack_
+    ///        (Macro Mode). Owned by value, the same reasoning history_
     ///        above already gives - nothing else needs to own it.
     ///        discardEvents()'d in setProject() (as of Installment B) -
     ///        every recorded event's own `undoStackIndexAfter` only means
-    ///        anything against `undoStack_` as it stood at record time,
+    ///        anything against `history_` as it stood at record time,
     ///        which a project switch clears out from under it.
     MacroRecorder macroRecorder_;
 

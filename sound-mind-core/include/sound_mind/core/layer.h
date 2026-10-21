@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -64,6 +65,28 @@ NLOHMANN_JSON_SERIALIZE_ENUM(LayerType, {
 [[nodiscard]] constexpr bool isLockedLayerType(LayerType type) noexcept {
     return type == LayerType::Background || type == LayerType::Equalizer;
 }
+
+/**
+ * @brief A layer's base content and how it was made (`v0.1.43.1`) - what
+ *        the project's `History` keeps to undo replacing it.
+ *
+ * Shared, immutable images: a base kept by the history is never copied
+ * again.
+ */
+struct LayerBase {
+    /// The base content; `nullptr` for a layer without content.
+    std::shared_ptr<const sound_mind::codec::StreamImage> stream;
+    /// The matching Pool content, if any.
+    std::shared_ptr<const sound_mind::codec::PoolImage> pool;
+    /// How the base was made - see Layer::setBaseContent().
+    nlohmann::json recipe;
+    /// Its Layer::baseRevision().
+    std::uint64_t revision = 0;
+
+    /// @brief Roughly how much memory the images take.
+    /// @return Bytes.
+    [[nodiscard]] std::size_t byteSize() const noexcept;
+};
 
 /**
  * @brief One entry in a Project's layer stack.
@@ -324,9 +347,106 @@ public:
      */
     [[nodiscard]] const std::optional<sound_mind::codec::StreamImage>& content() const noexcept { return content_; }
 
-    /// @brief Sets this layer's cached Stream-encoded content.
-    /// @param content The new content, replacing anything previously cached.
-    void setContent(sound_mind::codec::StreamImage content) { content_ = std::move(content); }
+    /**
+     * @brief Sets this layer's *rendered* content - its base content with
+     *        its operations replayed on top (`PaintController`, `History`).
+     *
+     * Splits the base off first if content() still doubles as it (see
+     * baseContent()), so the base survives. Media that *replaces* what the
+     * layer is built on - an import, a recording, a generated layer,
+     * pooling - goes through setBaseContent() instead.
+     *
+     * @param content The new rendered content.
+     */
+    void setContent(sound_mind::codec::StreamImage content) {
+        splitBase();
+        content_ = std::move(content);
+    }
+
+    /**
+     * @brief The content this layer's operations are replayed on top of
+     *        (`v0.1.43.1`) - what an import, recording or generator
+     *        produced, or what pooling/phase cleanup baked.
+     *
+     * Kept apart from content() only once something has been rendered on
+     * top of it; until then content() *is* the base, so an unpainted layer
+     * holds one copy, not two.
+     *
+     * @return The base content, or `nullptr` for a layer with none.
+     */
+    [[nodiscard]] const sound_mind::codec::StreamImage* baseContent() const noexcept {
+        return base_ ? base_.get() : (content_ ? &*content_ : nullptr);
+    }
+
+    /**
+     * @brief Replaces what this layer is built on (`v0.1.43.1`): its base
+     *        and rendered content both become `content`, and its Pool
+     *        content becomes `pool`.
+     *
+     * Gives the layer a new baseRevision(), which is how the project's
+     * `History` tells a new base apart from an unchanged one, and keeps the
+     * replaced base for it (takeDisplacedBase()). Operations
+     * already logged on the layer stay as they are - re-render them with
+     * setContent() if any are active.
+     *
+     * @param content The new base content.
+     * @param recipe How it was made, for replaying it from the project's
+     *        sources: a JSON object with at least a `"kind"` (see
+     *        `docs/sound-mind-architecture.md`'s *History, Sources and
+     *        Macros*), or `nullptr` if it can't be remade.
+     * @param pool The matching Pool content, if any; previous Pool content
+     *        is dropped either way.
+     */
+    void setBaseContent(sound_mind::codec::StreamImage content, nlohmann::json recipe = nullptr,
+                        std::optional<sound_mind::codec::PoolImage> pool = std::nullopt);
+
+    /**
+     * @brief Takes this layer's base out, leaving it with no content -
+     *        `History` keeping the base it's about to replace, and
+     *        `Project::removeLayer()` keeping a removed layer's (`v0.1.43.1`).
+     *
+     * Moves rather than copies: the image ends up shared by whoever keeps
+     * the returned value.
+     *
+     * @return The base, its Pool content, recipe and revision; an empty
+     *         `stream` for a layer that had no content.
+     */
+    [[nodiscard]] LayerBase releaseBase();
+
+    /**
+     * @brief Makes `base` this layer's base and rendered content -
+     *        `History` undoing or redoing an entry that changed it.
+     *
+     * Restores the revision too, so the history sees exactly the state it
+     * recorded. The rendered content starts out as the base; re-render it
+     * if operations target the layer.
+     *
+     * @param base The base to restore; an empty `stream` leaves the layer
+     *        without content.
+     */
+    void restoreBase(const LayerBase& base);
+
+    /**
+     * @brief The base this layer had before the first setBaseContent()
+     *        since the last takeDisplacedBase() - how the history gets hold
+     *        of a replaced base without copying it.
+     * @return That base, or `std::nullopt` if the base hasn't been replaced.
+     */
+    [[nodiscard]] std::optional<LayerBase> takeDisplacedBase() {
+        std::optional<LayerBase> displaced = std::move(displaced_);
+        displaced_.reset();
+        return displaced;
+    }
+
+    /// @brief Identifies the current base content: a fresh value on every
+    ///        setBaseContent(), carried by restoreBase(); `0` for a layer
+    ///        whose base was never set. In-memory only.
+    /// @return The revision.
+    [[nodiscard]] std::uint64_t baseRevision() const noexcept { return baseRevision_; }
+
+    /// @brief How the current base content was made - see setBaseContent().
+    /// @return The recipe JSON, or `null` if none was given.
+    [[nodiscard]] const nlohmann::json& baseRecipe() const noexcept { return baseRecipe_; }
 
     /**
      * @brief This layer's cached Pool-encoded content, if it's been
@@ -391,6 +511,14 @@ public:
     /// @param mode The new mode - see blendMode()'s own docs.
     void setBlendMode(BlendMode mode) noexcept { blendMode_ = mode; }
 
+    /**
+     * @brief Copies every property of `other` - everything its JSON holds -
+     *        except its base and content (`History` restoring a layer's
+     *        properties without touching its images).
+     * @param other The layer to copy from; its id is copied too.
+     */
+    void assignProperties(const Layer& other);
+
     friend void to_json(nlohmann::json& json, const Layer& layer);
     friend void from_json(const nlohmann::json& json, Layer& layer);
 
@@ -408,8 +536,22 @@ private:
     double rescaleFactor_ = 1.0;
     std::optional<sound_mind::codec::StreamImage> content_;
     std::optional<sound_mind::codec::PoolImage> poolContent_;
+    /// The base, once something is rendered on top of it - see baseContent().
+    std::shared_ptr<const sound_mind::codec::StreamImage> base_;
+    std::uint64_t baseRevision_ = 0;
+    nlohmann::json baseRecipe_;
+    /// The base the first setBaseContent() since takeDisplacedBase() replaced.
+    std::optional<LayerBase> displaced_;
     FilterConfiguration filterConfiguration_;
     BlendMode blendMode_ = BlendMode::Normal;
+
+    /// @brief Keeps the base apart from content() before content() is
+    ///        overwritten with a render - see baseContent().
+    void splitBase() {
+        if (!base_ && content_) {
+            base_ = std::make_shared<const sound_mind::codec::StreamImage>(*content_);
+        }
+    }
 };
 
 /// @brief Serializes a Layer to its JSON representation.

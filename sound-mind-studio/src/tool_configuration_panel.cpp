@@ -1,6 +1,8 @@
 #include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
+#include "sound_mind/studio/project_history.h"
+
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -1536,6 +1538,9 @@ std::optional<ToolPresetId> ToolConfigurationPanel::saveCurrentAsToolPresetNamed
         return std::nullopt;
     }
     const ToolPresetId id = project_->addToolPreset(name.trimmed().toStdString(), *config_);
+    if (history_ != nullptr) {
+        history_->commit(*project_, tr("Saved tool preset \"%1\"").arg(name.trimmed()));
+    }
     refreshToolPresets();
     const int index = toolPresetCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(id)));
     toolPresetCombo_->setCurrentIndex(index >= 0 ? index : 0);
@@ -1552,6 +1557,9 @@ void ToolConfigurationPanel::deleteCurrentToolPreset() {
         return;  // The "(none saved yet)" placeholder.
     }
     project_->removeToolPreset(static_cast<ToolPresetId>(data.toULongLong()));
+    if (history_ != nullptr) {
+        history_->commit(*project_, tr("Deleted tool preset"));
+    }
     refreshToolPresets();
     presetIndicator_->clearActivePreset();
 }

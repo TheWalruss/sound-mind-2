@@ -120,7 +120,7 @@ void CanvasWidgetTest::rendersALayersContentInsteadOfThePlaceholder() {
     content.sharedPhaseRadians.assign(4, 0.0f);
 
     Layer layer(0, "Imported", LayerType::Normal);
-    layer.setContent(content);
+    layer.setBaseContent(content);
     project.addLayer(std::move(layer));
 
     CanvasWidget widget;
@@ -152,7 +152,7 @@ void CanvasWidgetTest::reusesACachedCompositeUntilInvalidateCompositeFromIsToldA
     redContent.sharedPhaseRadians.assign(4, 0.0f);
 
     Layer layer(0, "Imported", LayerType::Normal);
-    layer.setContent(redContent);
+    layer.setBaseContent(redContent);
     const LayerId layerId = project.addLayer(std::move(layer));
     const auto layerIndex = project.layerIndexById(layerId);
     QVERIFY(layerIndex.has_value());
@@ -170,7 +170,7 @@ void CanvasWidgetTest::reusesACachedCompositeUntilInvalidateCompositeFromIsToldA
     StreamImage greenContent = redContent;
     greenContent.leftMagnitudeDb.assign(4, -96.0f);
     greenContent.rightMagnitudeDb.assign(4, 0.0f);
-    project.layerById(layerId)->setContent(greenContent);
+    project.layerById(layerId)->setBaseContent(greenContent);
 
     const QColor stillStale = widget.grab().toImage().pixelColor(10, 10);
     QCOMPARE(stillStale.red(), before.red());
@@ -195,7 +195,7 @@ void CanvasWidgetTest::invalidateCompositeAllForcesARecomputeEvenWithoutAKnownIn
     redContent.sharedPhaseRadians.assign(4, 0.0f);
 
     Layer layer(0, "Imported", LayerType::Normal);
-    layer.setContent(redContent);
+    layer.setBaseContent(redContent);
     const LayerId layerId = project.addLayer(std::move(layer));
 
     CanvasWidget widget;
@@ -207,7 +207,7 @@ void CanvasWidgetTest::invalidateCompositeAllForcesARecomputeEvenWithoutAKnownIn
     StreamImage greenContent = redContent;
     greenContent.leftMagnitudeDb.assign(4, -96.0f);
     greenContent.rightMagnitudeDb.assign(4, 0.0f);
-    project.layerById(layerId)->setContent(greenContent);
+    project.layerById(layerId)->setBaseContent(greenContent);
 
     widget.invalidateCompositeAll();
     const QColor updated = widget.grab().toImage().pixelColor(10, 10);
@@ -233,7 +233,7 @@ void CanvasWidgetTest::skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt() {
     bottomContent.rightMagnitudeDb.assign(4, -96.0f);
     bottomContent.sharedPhaseRadians.assign(4, 0.0f);
     Layer bottomLayer(0, "Bottom", LayerType::Normal);
-    bottomLayer.setContent(bottomContent);
+    bottomLayer.setBaseContent(bottomContent);
     project.addLayer(std::move(bottomLayer));
 
     // Top (hidden): the inverse recipe - no red, full-scale green - so a
@@ -246,7 +246,7 @@ void CanvasWidgetTest::skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt() {
     topContent.rightMagnitudeDb.assign(4, 0.0f);
     topContent.sharedPhaseRadians.assign(4, 0.0f);
     Layer topLayer(0, "Top", LayerType::Normal);
-    topLayer.setContent(topContent);
+    topLayer.setBaseContent(topContent);
     topLayer.setVisible(false);
     project.addLayer(std::move(topLayer));
 
@@ -278,7 +278,7 @@ void CanvasWidgetTest::reflectsALayersTranslationColumns() {
     content.sharedPhaseRadians.assign(2, 0.0f);
 
     Layer layer(0, "Imported", LayerType::Normal);
-    layer.setContent(content);
+    layer.setBaseContent(content);
     layer.setTranslationColumns(2);  // content now occupies canvas columns [2, 4).
     project.addLayer(std::move(layer));
 
@@ -527,7 +527,7 @@ sound_mind::core::LayerId addLayerWithARealPaintOperation(Project& project) {
     content.leftMagnitudeDb.assign(pixelCount, 0.0f);
     content.rightMagnitudeDb.assign(pixelCount, 0.0f);
     content.sharedPhaseRadians.assign(pixelCount, 0.0f);
-    layer.setContent(content);
+    layer.setBaseContent(content);
     const auto layerId = project.addLayer(std::move(layer));
 
     const auto config = sound_mind::core::streamCodecConfigFor(settings);
@@ -1839,7 +1839,7 @@ void CanvasWidgetTest::addingALayerShowsWithoutAnExplicitInvalidate() {
     QVERIFY(widget.grab().toImage().pixelColor(10, 10).red() != 255);
 
     Layer layer(0, "Imported", LayerType::Normal);
-    layer.setContent(redTwoByTwoContent());
+    layer.setBaseContent(redTwoByTwoContent());
     project.addLayer(std::move(layer));
 
     QCOMPARE(widget.grab().toImage().pixelColor(10, 10).red(), 255);
@@ -1850,7 +1850,7 @@ void CanvasWidgetTest::hidingALayerShowsWithoutAnExplicitInvalidate() {
     settings.canvasWidth = 2;
     Project project = Project::createNew(settings);
     Layer layer(0, "Imported", LayerType::Normal);
-    layer.setContent(redTwoByTwoContent());
+    layer.setBaseContent(redTwoByTwoContent());
     const LayerId layerId = project.addLayer(std::move(layer));
     CanvasWidget widget;
     widget.setProject(&project);
@@ -1870,7 +1870,7 @@ void CanvasWidgetTest::clipIndicatorMarksCellsAboveFullScaleOnlyWhileEnabled() {
     overFullScale.leftMagnitudeDb.assign(4, 6.0f);
     overFullScale.rightMagnitudeDb.assign(4, 6.0f);
     Layer layer(0, "Loud", LayerType::Normal);
-    layer.setContent(overFullScale);
+    layer.setBaseContent(overFullScale);
     project.addLayer(std::move(layer));
     CanvasWidget widget;
     widget.setProject(&project);

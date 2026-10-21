@@ -13,7 +13,7 @@
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/pick_controller.h"
 #include "sound_mind/studio/text_controller.h"
-#include "sound_mind/studio/undo_stack.h"
+#include "sound_mind/studio/project_history.h"
 
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
@@ -24,7 +24,7 @@ using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::studio::PaintController;
 using sound_mind::studio::TextController;
 using sound_mind::studio::TextSettings;
-using sound_mind::studio::UndoStack;
+using sound_mind::studio::ProjectHistory;
 
 namespace {
 
@@ -48,7 +48,7 @@ LayerId addBlankNormalLayer(Project& project) {
     content.leftMagnitudeDb.assign(cells, -96.0f);
     content.rightMagnitudeDb.assign(cells, -96.0f);
     content.sharedPhaseRadians.assign(cells, 0.0f);
-    layer.setContent(content);
+    layer.setBaseContent(content);
     return project.addLayer(std::move(layer));
 }
 
@@ -148,7 +148,7 @@ void TextControllerTest::aClickPlacesABoxTheTextsOwnSizeCentredOnIt() {
 void TextControllerTest::applyWritesTheTextAsOneUndoStepAndClearsTheBox() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);
-    UndoStack undoStack;
+    ProjectHistory undoStack;
     PaintController paintController(&undoStack);
     paintController.setProject(&project);
     TextController controller(&paintController);
@@ -213,7 +213,7 @@ void TextControllerTest::resetDiscardsTheBox() {
 void TextControllerTest::appliedTextKeepsItsSettingsAndCanBeEditedWhenPicked() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);
-    UndoStack undoStack;
+    ProjectHistory undoStack;
     PaintController paintController(&undoStack);
     paintController.setProject(&project);
     TextController controller(&paintController);

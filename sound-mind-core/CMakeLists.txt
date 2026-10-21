@@ -47,6 +47,7 @@ add_library(sound-mind-core
     src/sequence_notation.cpp
     src/layer.cpp
     src/project_settings.cpp
+    src/history.cpp
     src/operation_log.cpp
     src/project.cpp
     src/brush_tip.cpp

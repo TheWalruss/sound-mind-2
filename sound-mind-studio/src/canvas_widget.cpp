@@ -120,7 +120,7 @@ void CanvasWidget::setProject(const sound_mind::core::Project* project) {
     // A previous project's own zoom level means nothing for a different
     // one (a coincidentally-similar canvas size aside) - the same
     // "session-only UI state resets on project switch" precedent
-    // UndoStack::clear()/LayersPanel::clearSelection() already establish.
+    // ProjectHistory::setProject()/LayersPanel::clearSelection() already establish.
     const bool modeChanged = zoomMode_ != ZoomMode::FitToWindow;
     zoomMode_ = ZoomMode::FitToWindow;
     zoomTime_ = 1.0;

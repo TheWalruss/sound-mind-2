@@ -1,5 +1,7 @@
 #include "sound_mind/core/layer.h"
 
+#include <atomic>
+
 namespace sound_mind::core {
 
 void to_json(nlohmann::json& json, const Layer& layer) {
@@ -21,6 +23,9 @@ void to_json(nlohmann::json& json, const Layer& layer) {
     // handleIn/handleOut already establish for an std::optional field.
     if (layer.opacityMindWave_.has_value()) {
         json["opacityMindWaveId"] = *layer.opacityMindWave_;
+    }
+    if (!layer.baseRecipe_.is_null()) {
+        json["baseRecipe"] = layer.baseRecipe_;
     }
 }
 
@@ -68,6 +73,94 @@ void from_json(const nlohmann::json& json, Layer& layer) {
     // above - didn't exist before v0.Y.37.1 (Deferred Blend Modes); a layer
     // saved before this milestone was implicitly always Normal anyway.
     layer.blendMode_ = json.value("blendMode", BlendMode::Normal);
+    layer.baseRecipe_ = json.contains("baseRecipe") ? json.at("baseRecipe") : nlohmann::json();
+}
+
+namespace {
+
+/// Hands out a fresh base revision - see Layer::baseRevision(). Atomic, so
+/// layers built on a background thread (an import, a replay) never share one.
+std::uint64_t nextBaseRevision() {
+    static std::atomic<std::uint64_t> next{1};
+    return next.fetch_add(1, std::memory_order_relaxed);
+}
+
+}  // namespace
+
+void Layer::setBaseContent(sound_mind::codec::StreamImage content, nlohmann::json recipe,
+                           std::optional<sound_mind::codec::PoolImage> pool) {
+    if (!displaced_.has_value()) {
+        displaced_ = releaseBase();
+    }
+    content_ = std::move(content);
+    base_.reset();
+    poolContent_ = std::move(pool);
+    baseRecipe_ = std::move(recipe);
+    baseRevision_ = nextBaseRevision();
+}
+
+LayerBase Layer::releaseBase() {
+    LayerBase released;
+    if (base_) {
+        released.stream = std::move(base_);
+    } else if (content_) {
+        released.stream = std::make_shared<const sound_mind::codec::StreamImage>(std::move(*content_));
+    }
+    if (poolContent_) {
+        released.pool = std::make_shared<const sound_mind::codec::PoolImage>(std::move(*poolContent_));
+    }
+    released.recipe = std::move(baseRecipe_);
+    released.revision = baseRevision_;
+    base_.reset();
+    content_.reset();
+    poolContent_.reset();
+    baseRecipe_ = nlohmann::json();
+    return released;
+}
+
+void Layer::restoreBase(const LayerBase& base) {
+    base_ = base.stream;
+    if (base.stream) {
+        content_ = *base.stream;
+    } else {
+        content_.reset();
+    }
+    if (base.pool) {
+        poolContent_ = *base.pool;
+    } else {
+        poolContent_.reset();
+    }
+    baseRecipe_ = base.recipe;
+    baseRevision_ = base.revision;
+}
+
+void Layer::assignProperties(const Layer& other) {
+    id_ = other.id_;
+    name_ = other.name_;
+    type_ = other.type_;
+    opacity_ = other.opacity_;
+    opacityMindWave_ = other.opacityMindWave_;
+    balance_ = other.balance_;
+    recorded_ = other.recorded_;
+    visible_ = other.visible_;
+    muted_ = other.muted_;
+    translationColumns_ = other.translationColumns_;
+    rescaleFactor_ = other.rescaleFactor_;
+    filterConfiguration_ = other.filterConfiguration_;
+    blendMode_ = other.blendMode_;
+}
+
+std::size_t LayerBase::byteSize() const noexcept {
+    std::size_t bytes = 0;
+    if (stream) {
+        bytes += (stream->leftMagnitudeDb.size() + stream->rightMagnitudeDb.size() +
+                  stream->sharedPhaseRadians.size()) *
+                 sizeof(float);
+    }
+    if (pool) {
+        bytes += (pool->leftMagnitudeDb.size() + pool->rightMagnitudeDb.size()) * sizeof(float) * 2;
+    }
+    return bytes;
 }
 
 }  // namespace sound_mind::core

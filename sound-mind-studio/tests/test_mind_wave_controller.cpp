@@ -17,7 +17,7 @@
 #include "sound_mind/studio/mind_waves_panel.h"
 #include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
-#include "sound_mind/studio/undo_stack.h"
+#include "sound_mind/studio/project_history.h"
 
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
@@ -33,7 +33,7 @@ using sound_mind::studio::MindWaveController;
 using sound_mind::studio::MindWaveEditor;
 using sound_mind::studio::MindWavesPanel;
 using sound_mind::studio::ToolConfigurationPanel;
-using sound_mind::studio::UndoStack;
+using sound_mind::studio::ProjectHistory;
 using sound_mind::studio::NumericField;
 
 namespace {
@@ -57,7 +57,7 @@ struct Fixture {
     FilterConfigurationPanel filterConfigurationPanel;
     ToolConfigurationPanel toolConfigurationPanel;
     CanvasWidget canvas;
-    UndoStack undoStack;
+    ProjectHistory undoStack;
     MindWaveController controller{&mindWavesPanel,     &layersPanel, &filterConfigurationPanel,
                                    &toolConfigurationPanel, &canvas,  &undoStack};
 };
@@ -155,7 +155,7 @@ void MindWaveControllerTest::updateMindWaveWritesBackTheGivenWave() {
 void MindWaveControllerTest::updateMindWaveIsUndoableAndRedoable() {
     // v0.Y.49.1 (Macro Mode) Installment B - a prerequisite for replaying
     // a MacroEventType::MindWaveConfigurationChanged event via
-    // UndoStack::jumpTo(); MindWave edits weren't undoable at all before
+    // ProjectHistory::jumpTo(); MindWave edits weren't undoable at all before
     // this.
     Fixture fixture;
     Project project = Project::createNew(testSettings());

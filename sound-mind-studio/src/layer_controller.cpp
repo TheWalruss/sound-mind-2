@@ -15,7 +15,7 @@
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/qt_image_conversion.h"
-#include "sound_mind/studio/undo_stack.h"
+#include "sound_mind/studio/project_history.h"
 
 namespace {
 
@@ -34,16 +34,51 @@ namespace sound_mind::studio {
 
 LayerController::LayerController(CanvasWidget* canvas, PlaybackController* playbackController,
                                   LayersPanel* layersPanel, FilterConfigurationPanel* filterConfigurationPanel,
-                                  UndoStack* undoStack, QObject* parent)
+                                  ProjectHistory* history, QObject* parent)
     : QObject(parent),
       canvas_(canvas),
       playbackController_(playbackController),
       layersPanel_(layersPanel),
       filterConfigurationPanel_(filterConfigurationPanel),
-      undoStack_(undoStack) {}
+      history_(history) {
+    if (history_ != nullptr) {
+        connect(history_, &ProjectHistory::changed, this, &LayerController::handleHistoryChange);
+    }
+}
+
+std::optional<sound_mind::core::HistoryEntryId> LayerController::commit(const QString& description) {
+    if (history_ != nullptr && project_ != nullptr) {
+        return history_->commit(*project_, description);
+    }
+    return std::nullopt;
+}
+
+void LayerController::handleHistoryChange(const sound_mind::core::HistoryChange& change) {
+    if (project_ == nullptr) {
+        return;
+    }
+    layersPanel_->setUnhideOtherLayersAvailable(canUnhideOtherLayers());
+    for (const auto* ids : {&change.layers, &change.contentLayers}) {
+        for (const sound_mind::core::LayerId id : *ids) {
+            thumbnailCache_.erase(id);
+            loudnessProfileCache_.erase(id);
+            if (project_->layerById(id) == nullptr) {
+                emit layerRemoved(id);
+            }
+        }
+    }
+    emit layersChanged();
+    playbackController_->invalidate();
+    canvas_->invalidateCompositeAll();
+    refreshLayersPanel();
+    handleLayerSelectionChanged(layersPanel_->selectedLayerId());
+}
 
 void LayerController::setProject(sound_mind::core::Project* project) {
     project_ = project;
+    if (history_ != nullptr) {
+        history_->setProject(project);
+    }
     // See pendingFilterConfiguration()'s own docs - a fresh default for
     // whatever new/opened project this now is, not carried over from
     // whatever project (if any) was previously set.
@@ -52,6 +87,8 @@ void LayerController::setProject(sound_mind::core::Project* project) {
     // naming layer ids from the *old* project (if any) is meaningless
     // once that project is gone.
     hiddenOthersSnapshot_.reset();
+    hideOthersEntry_.reset();
+    unhideOthersEntry_.reset();
     layersPanel_->setUnhideOtherLayersAvailable(false);
     // Re-syncs filterConfigurationPanel_ against the *new* project_ -
     // MainWindow's own real caller already clears layersPanel_'s selection
@@ -222,10 +259,7 @@ void LayerController::cycleLayerVisibilityState(sound_mind::core::LayerId id) {
     }
 
     applyVisibilityAndMute(id, newVisible, newMuted);
-    undoStack_->push(
-        {/*undo=*/[this, id, oldVisible, oldMuted]() { applyVisibilityAndMute(id, oldVisible, oldMuted); },
-         /*redo=*/[this, id, newVisible, newMuted]() { applyVisibilityAndMute(id, newVisible, newMuted); },
-         /*description=*/tr("Changed layer visibility")});
+    commit(tr("Changed layer visibility"));
 }
 
 void LayerController::hideOtherLayers(sound_mind::core::LayerId keepVisible) {
@@ -249,28 +283,12 @@ void LayerController::hideOtherLayers(sound_mind::core::LayerId keepVisible) {
     hiddenOthersSnapshot_ = snapshot;
     layersPanel_->setUnhideOtherLayersAvailable(true);
 
-    undoStack_->push(
-        {/*undo=*/
-         [this, snapshot]() {
-             for (const auto& [id, oldVisible, oldMuted] : snapshot) {
-                 applyVisibilityAndMute(id, oldVisible, oldMuted);
-             }
-             hiddenOthersSnapshot_.reset();
-             layersPanel_->setUnhideOtherLayersAvailable(false);
-         },
-         /*redo=*/
-         [this, snapshot]() {
-             for (const auto& [id, oldVisible, oldMuted] : snapshot) {
-                 applyVisibilityAndMute(id, false, oldMuted);
-             }
-             hiddenOthersSnapshot_ = snapshot;
-             layersPanel_->setUnhideOtherLayersAvailable(true);
-         },
-         /*description=*/tr("Hide other layers")});
+    hideOthersEntry_ = commit(tr("Hide other layers"));
+    unhideOthersEntry_.reset();
 }
 
 void LayerController::unhideOtherLayers() {
-    if (!hiddenOthersSnapshot_.has_value()) {
+    if (!canUnhideOtherLayers()) {
         return;
     }
     const auto snapshot = *hiddenOthersSnapshot_;
@@ -278,30 +296,34 @@ void LayerController::unhideOtherLayers() {
     for (const auto& [id, oldVisible, oldMuted] : snapshot) {
         applyVisibilityAndMute(id, oldVisible, oldMuted);
     }
-    hiddenOthersSnapshot_.reset();
     layersPanel_->setUnhideOtherLayersAvailable(false);
 
-    undoStack_->push(
-        {/*undo=*/
-         [this, snapshot]() {
-             for (const auto& [id, oldVisible, oldMuted] : snapshot) {
-                 applyVisibilityAndMute(id, false, oldMuted);
-             }
-             hiddenOthersSnapshot_ = snapshot;
-             layersPanel_->setUnhideOtherLayersAvailable(true);
-         },
-         /*redo=*/
-         [this, snapshot]() {
-             for (const auto& [id, oldVisible, oldMuted] : snapshot) {
-                 applyVisibilityAndMute(id, oldVisible, oldMuted);
-             }
-             hiddenOthersSnapshot_.reset();
-             layersPanel_->setUnhideOtherLayersAvailable(false);
-         },
-         /*description=*/tr("Unhide other layers")});
+    unhideOthersEntry_ = commit(tr("Unhide other layers"));
+    if (!unhideOthersEntry_.has_value()) {
+        hiddenOthersSnapshot_.reset();
+    }
 }
 
-bool LayerController::canUnhideOtherLayers() const noexcept { return hiddenOthersSnapshot_.has_value(); }
+bool LayerController::canUnhideOtherLayers() const noexcept {
+    if (!hiddenOthersSnapshot_.has_value()) {
+        return false;
+    }
+    if (project_ == nullptr || !hideOthersEntry_.has_value()) {
+        return !unhideOthersEntry_.has_value();
+    }
+    // Available while the hide is applied and the unhide that used it
+    // isn't - so undo/redo of either keep it right.
+    const auto applied = [this](sound_mind::core::HistoryEntryId id) {
+        const auto& history = project_->history();
+        for (std::size_t i = 0; i < history.position(); ++i) {
+            if (history.entry(i).id == id) {
+                return true;
+            }
+        }
+        return false;
+    };
+    return applied(*hideOthersEntry_) && !(unhideOthersEntry_.has_value() && applied(*unhideOthersEntry_));
+}
 
 void LayerController::applyOpacity(sound_mind::core::LayerId id, float opacity) {
     sound_mind::core::Layer* layer = layerById(id);
@@ -322,9 +344,7 @@ void LayerController::setLayerOpacity(sound_mind::core::LayerId id, float opacit
     const float oldOpacity = layer->opacity();
     applyOpacity(id, opacity);
     if (oldOpacity != opacity) {
-        undoStack_->push({/*undo=*/[this, id, oldOpacity]() { applyOpacity(id, oldOpacity); },
-                           /*redo=*/[this, id, opacity]() { applyOpacity(id, opacity); },
-                           /*description=*/tr("Changed layer opacity")});
+        commit(tr("Changed layer opacity"));
     }
 }
 
@@ -347,9 +367,7 @@ void LayerController::setLayerBalance(sound_mind::core::LayerId id, float balanc
     const float oldBalance = layer->balance();
     applyBalance(id, balance);
     if (oldBalance != balance) {
-        undoStack_->push({/*undo=*/[this, id, oldBalance]() { applyBalance(id, oldBalance); },
-                           /*redo=*/[this, id, balance]() { applyBalance(id, balance); },
-                           /*description=*/tr("Changed layer balance")});
+        commit(tr("Changed layer balance"));
     }
 }
 
@@ -374,10 +392,7 @@ void LayerController::setLayerOpacityMindWave(sound_mind::core::LayerId id,
     const std::optional<sound_mind::core::MindWaveId> oldMindWaveId = layer->opacityMindWave();
     applyOpacityMindWave(id, mindWaveId);
     if (oldMindWaveId != mindWaveId) {
-        undoStack_->push(
-            {/*undo=*/[this, id, oldMindWaveId]() { applyOpacityMindWave(id, oldMindWaveId); },
-             /*redo=*/[this, id, mindWaveId]() { applyOpacityMindWave(id, mindWaveId); },
-             /*description=*/tr("Changed layer opacity MindWave binding")});
+        commit(tr("Changed layer opacity MindWave binding"));
     }
 }
 
@@ -400,10 +415,7 @@ void LayerController::setLayerTranslation(sound_mind::core::LayerId id, std::int
     const std::int64_t oldTranslationColumns = layer->translationColumns();
     applyTranslation(id, translationColumns);
     if (oldTranslationColumns != translationColumns) {
-        undoStack_->push(
-            {/*undo=*/[this, id, oldTranslationColumns]() { applyTranslation(id, oldTranslationColumns); },
-             /*redo=*/[this, id, translationColumns]() { applyTranslation(id, translationColumns); },
-             /*description=*/tr("Changed layer translation")});
+        commit(tr("Changed layer translation"));
     }
 }
 
@@ -426,9 +438,7 @@ void LayerController::setLayerRescale(sound_mind::core::LayerId id, double resca
     const double oldRescaleFactor = layer->rescaleFactor();
     applyRescale(id, rescaleFactor);
     if (oldRescaleFactor != rescaleFactor) {
-        undoStack_->push({/*undo=*/[this, id, oldRescaleFactor]() { applyRescale(id, oldRescaleFactor); },
-                           /*redo=*/[this, id, rescaleFactor]() { applyRescale(id, rescaleFactor); },
-                           /*description=*/tr("Changed layer rescale")});
+        commit(tr("Changed layer rescale"));
     }
 }
 
@@ -451,9 +461,7 @@ void LayerController::setLayerBlendMode(sound_mind::core::LayerId id, sound_mind
     const sound_mind::core::BlendMode oldMode = layer->blendMode();
     applyBlendMode(id, mode);
     if (oldMode != mode) {
-        undoStack_->push({/*undo=*/[this, id, oldMode]() { applyBlendMode(id, oldMode); },
-                           /*redo=*/[this, id, mode]() { applyBlendMode(id, mode); },
-                           /*description=*/tr("Changed layer blend mode")});
+        commit(tr("Changed layer blend mode"));
     }
 }
 
@@ -466,6 +474,7 @@ bool LayerController::renameLayerTo(sound_mind::core::LayerId id, const QString&
         return false;
     }
     layer->setName(project_->uniqueLayerName(newName.toStdString(), id));
+    commit(tr("Renamed layer"));
     emit layersChanged();
     refreshLayersPanel();
     return true;
@@ -509,6 +518,7 @@ void LayerController::deleteLayer(sound_mind::core::LayerId id) {
     }
 
     if (project_->removeLayer(id)) {
+        commit(tr("Deleted layer"));
         thumbnailCache_.erase(id);
         loudnessProfileCache_.erase(id);
         emit layerRemoved(id);
@@ -542,8 +552,15 @@ void LayerController::duplicateLayer(sound_mind::core::LayerId id) {
         return;
     }
 
+    // The copy is built on the source's rendered content - what's painted
+    // on the source comes along, since its operations stay on the source.
     sound_mind::core::Layer copy(*source);
+    if (source->content().has_value()) {
+        copy.setBaseContent(*source->content(), nlohmann::json{{"kind", "duplicate"}, {"sourceLayer", id}},
+                            source->poolContent());
+    }
     const sound_mind::core::LayerId newId = project_->addLayer(std::move(copy));
+    commit(tr("Duplicated layer"));
     emit layersChanged();
     playbackController_->invalidate();
     canvas_->invalidateCompositeAll();  // Adding a layer is structural - see that method's own docs.
@@ -563,9 +580,13 @@ void LayerController::cleanUpLayerPhase(sound_mind::core::LayerId id) {
         return;
     }
 
+    // The cleaned-up result becomes the layer's base, with everything
+    // painted on it so far baked in.
     sound_mind::codec::StreamImage content = *layer->content();
     sound_mind::core::applyPhaseCleanup(content);
-    layer->setContent(std::move(content));
+    layer->setBaseContent(std::move(content), nlohmann::json{{"kind", "phaseCleanup"}});
+    project_->operationLog().bakeLayer(id);
+    commit(tr("Cleaned up phase"));
 
     emit layersChanged();
     playbackController_->invalidate();
@@ -684,8 +705,9 @@ void LayerController::addEmptyLayer(sound_mind::codec::StreamImage placeholderCo
     // Loop Input layer gets - so there's real content to paint onto (and
     // to render/play, like any other layer) immediately, rather than
     // nothing at all until the first stroke.
-    layer.setContent(std::move(placeholderContent));
+    layer.setBaseContent(std::move(placeholderContent), nlohmann::json{{"kind", "empty"}});
     const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
+    commit(tr("Added layer"));
     emit layersChanged();
     playbackController_->invalidate();
     canvas_->invalidateCompositeAll();  // Adding a layer is structural - see that method's own docs.
@@ -704,6 +726,7 @@ void LayerController::addFilterLayer() {
     // very first time, or whatever the user already dialed in beforehand.
     layer.setFilterConfiguration(pendingFilterConfiguration_);
     const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
+    commit(tr("Added filter layer"));
     emit layersChanged();
     playbackController_->invalidate();
     canvas_->invalidateCompositeAll();  // Adding a layer is structural - see that method's own docs.
@@ -721,12 +744,16 @@ void LayerController::addGeneratedLayer(const sound_mind::core::GeneratorConfigu
     sound_mind::core::Layer layer(0, tr("New Generated Layer").toStdString(), sound_mind::core::LayerType::Normal);
     // Bound noise parameters (v0.Y.79.1) resolve against this project's MindWaves.
     const sound_mind::core::Project* project = project_;
-    layer.setContent(sound_mind::core::generateContent(
-        config, project_->settings(), [project](sound_mind::core::MindWaveId id) -> const sound_mind::core::MindWave* {
-            const auto* entry = project->mindWaveById(id);
-            return entry != nullptr ? &entry->wave : nullptr;
-        }));
+    layer.setBaseContent(
+        sound_mind::core::generateContent(
+            config, project_->settings(),
+            [project](sound_mind::core::MindWaveId id) -> const sound_mind::core::MindWave* {
+                const auto* entry = project->mindWaveById(id);
+                return entry != nullptr ? &entry->wave : nullptr;
+            }),
+        nlohmann::json{{"kind", "generate"}, {"configuration", config}});
     const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
+    commit(tr("Generated layer"));
     emit layersChanged();
     playbackController_->invalidate();
     canvas_->invalidateCompositeAll();  // Adding a layer is structural - see that method's own docs.
@@ -764,10 +791,7 @@ void LayerController::applyFilterConfiguration(const sound_mind::core::FilterCon
     if (layer != nullptr && sound_mind::core::isFilterLayerType(layer->type())) {
         const sound_mind::core::FilterConfiguration oldConfig = layer->filterConfiguration();
         applyFilterConfigurationTo(*id, config);
-        undoStack_->push(
-            {/*undo=*/[this, layerId = *id, oldConfig]() { applyFilterConfigurationTo(layerId, oldConfig); },
-             /*redo=*/[this, layerId = *id, config]() { applyFilterConfigurationTo(layerId, config); },
-             /*description=*/tr("Changed filter configuration")});
+        commit(tr("Changed filter configuration"));
         return;
     }
     // Finding #13: nothing (or a non-Filter layer) is selected - the edit
@@ -814,6 +838,7 @@ void LayerController::reorderLayers(const std::vector<sound_mind::core::LayerId>
     }
 
     if (project_->reorderLayers(newOrderBottomToTop)) {
+        commit(tr("Reordered layers"));
         emit layersChanged();
         canvas_->invalidateCompositeAll();  // Reordering is structural - see that method's own docs.
     }

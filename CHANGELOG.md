@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.43.1] - 2026-10-21
+
+Roadmap slot `v0.Y.81.1` (History), installment A.
+
+### Added
+
+- **Everything is undoable.** Undo, Redo and the History panel now cover every change to a project, not only painting and a few layer settings: imports, recordings, Loop takes, generated layers, adding/deleting/duplicating/renaming/reordering layers, pooling, phase cleanup, restacking, and every MindWave, Mind Shot, Mind Grain, Resonance, kernel, preset and MIDI mapping change.
+- **The history is saved with the project**, so Undo works after reopening it.
+
+### Fixed
+
+- **Painting on a reopened project no longer paints twice.** A painted layer's original content is now saved alongside its painted result, so new strokes go onto the original rather than on top of the old strokes again.
+- **Recording over a layer, a Loop take, pooling and phase cleanup now stick.** Painting on such a layer afterwards used to bring back what was there before; what they produce is now what the layer is built on, with earlier painting included.
+- **A duplicated layer keeps what was painted on it** when it's painted on again.
+
 ## [0.1.42.2] - 2026-10-21
 
 Roadmap slot `v0.Y.80.3`, follow-up: Microsoft Store packaging.

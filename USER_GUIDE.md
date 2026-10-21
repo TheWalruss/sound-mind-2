@@ -490,8 +490,9 @@ stroke paints into) to reveal its full set of controls:
   Imported audio's own silent stretches often decode with random,
   meaningless phase that shows up as visual noise on the canvas despite
   being completely inaudible; this clears it without touching any cell
-  that actually carries sound. A one-time cleanup, not an ongoing effect
-  - it doesn't undo.
+  that actually carries sound. A one-time cleanup, not an ongoing effect:
+  whatever was painted on the layer becomes part of it. Undo (Ctrl+Z)
+  takes it back.
 - A **Pool** button (⬇), for any selected layer that actually has content
   (including **Background**, unlike duplicate/clean-up-phase above) - see
   [Pooling a Layer](#pooling-a-layer).
@@ -1336,17 +1337,31 @@ Two checkboxes at the top of the panel, both off by default:
   this checkbox.
 
 **Undo** (Ctrl+Z) and **Redo** (Ctrl+Y), in the **Edit** menu, apply to
-paint strokes; to a layer's own opacity, balance, opacity-MindWave
-binding, visibility, translation, rescale, and blend mode (see
-[Working with Layers](#working-with-layers)); to a Filter/Equalizer
-layer's own configuration; and to a MindWave's own edited settings - all
-of these share the same single history, undoing/redoing whichever one
-actually happened most recently, in either order.
+everything you do to a project, in the order you did it:
 
-The **History** panel (toggle it from the toolbar) shows that same shared
-history as a plain list, in the order things actually happened, with your
-current position highlighted. Double-click any entry to jump straight to
-it - the same as clicking Undo or Redo repeatedly, just in one step.
+- importing audio, images and MIDI, recording, Loop takes and generated
+  layers;
+- adding, deleting, duplicating, renaming and reordering layers, and every
+  layer setting (visibility, gain, balance, MindWave binding, position,
+  rescale, blend mode, filter settings);
+- painting, filling, pasting, text, chords, Pick's edits and restacking;
+- pooling and phase cleanup;
+- creating, editing and removing MindWaves, Mind Shots, Mind Grains,
+  Resonances, kernels, presets and MIDI mappings.
+
+Zooming, scrolling, choosing tools and panels, selections and device
+settings aren't part of it.
+
+The **History** panel (toggle it from the toolbar) lists everything in the
+project's history, in order, with your current position highlighted.
+Double-click any entry to jump straight to it - the same as clicking Undo
+or Redo repeatedly, just in one step.
+
+**The history is saved with the project.** After reopening it, Undo still
+steps back through what you did before. A step that brings back an
+earlier version of a layer's audio (undoing a recording over a layer, a
+Loop take or pooling) needs that version, which isn't kept once the
+project is closed - for now such a step stops Undo there.
 
 Only **Procedural**, **Instrument** (harmonic series + inharmonicity only so
 far - no noise, body resonance, or envelope yet), **Mind Shot**
@@ -1458,10 +1473,8 @@ selected, a whole submenu with nothing in it that applies - are **grayed
 out**, in the right-click menus and the **Edit** menu alike. Their keyboard
 shortcuts still work whenever they do apply.
 
-Move/Modify/Delete/a completed path edit are all undoable (Ctrl+Z), the
-same as painting a new stroke. Restacking currently isn't - if you bring
-something to front and change your mind, restack it back rather than
-pressing Ctrl+Z.
+Move/Modify/Delete/a completed path edit and restacking are all undoable
+(Ctrl+Z), the same as painting a new stroke.
 
 Copying a picked object isn't here yet, and path editing doesn't yet
 support inserting/deleting a node by double-clicking, or detaching a
@@ -2506,8 +2519,6 @@ what's designed for it:
   double-clicking a segment or an existing node, or detach a handle from
   its own mirrored pair with Alt+drag - only whole-node delete (Delete
   key) is here today.
-- Restacking (Bring to Front/Send to Back/Bring Forward/Send Backward)
-  isn't undoable (Ctrl+Z) yet - see [Pick](#pick) above.
 - The Alt/Shift/Ctrl axis-restriction mnemonic (see
   [Canvas Navigation](#canvas-navigation) above) only applies to Zoom so
   far - holding a modifier while dragging to move or resize a Pick

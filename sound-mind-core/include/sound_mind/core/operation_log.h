@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstddef>
+#include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -19,36 +21,32 @@ namespace sound_mind::core {
  * single layer's content.
  *
  * Owns every logged `Operation` (non-copyable, matching `Operation`'s own
- * stance - `unique_ptr` is how it's actually held). Two independent
- * mechanisms coexist here, deliberately kept separate (see
- * `docs/sound-mind-architecture.md`'s Decision #34's undo/redo note):
+ * stance - `unique_ptr` is how it's actually held). Every logged operation
+ * is active unless something later replaces it. Undo isn't this class's
+ * concern (as of `v0.1.43.1`): the project's `History` undoes an append
+ * by truncate()-ing the log back to its earlier size, and restores
+ * reordering and baking from its own recorded state (see
+ * `docs/sound-mind-architecture.md`'s *History, Sources and Macros*).
+ * Two mechanisms make an operation inactive:
  *
- * - **undo()/redo()** move a "how much of the log is currently active"
- *   high-water mark back and forth. Simple and linear, not a branching
- *   history: appending a new operation after an undo() *does* discard
- *   whatever redo() tail existed (unlike supersedes() below, which never
- *   removes anything) - the same "a fresh edit abandons the old future"
- *   rule any conventional undo stack follows. This doesn't compromise the
- *   append-only replay guarantee described on Operation::supersedes() -
- *   that guarantee is about never changing what a given *active* prefix
- *   of the log replays to, which still holds; a fresh append past an
- *   undo() is a deliberate choice to diverge from an abandoned future,
- *   not a mutation of one that's still reachable.
  * - **supersedes()** (declared on `Operation` itself) is for a
  *   *deliberate* re-edit of one specific past operation (Composer Mode
  *   retiming it, or Pick modifying a picked object) - appending a new
  *   operation whose `supersedes()` points at the old one, which becomes
- *   permanently inactive regardless of the undo high-water mark. It isn't
- *   how plain undo works; plain undo doesn't need a replacement.
+ *   permanently inactive.
+ * - **Baking** (bakeLayer(), `v0.1.43.1`): pooling or phase-cleaning a
+ *   layer turns everything painted on it so far into its new base content,
+ *   so those operations must never be replayed on top of it again. Every
+ *   operation that targets the layer, with an id up to the baked threshold,
+ *   is skipped.
  *
  * A third, independent mechanism - **stack order** - decides *rendering*
  * order (which of two overlapping active operations on the same layer
  * paints on top), deliberately kept separate from both of the above:
  *
  * - `operations_`'s own append order is a strict, append-only history
- *   record - it exists so undo()/redo()'s high-water mark and
- *   `supersedes()` chains stay simple and correct, and it must never be
- *   reinterpreted as anything else.
+ *   record - it exists so truncate() and `supersedes()` chains stay simple
+ *   and correct, and it must never be reinterpreted as anything else.
  * - `stackOrder_` is a separate, independently-ordered list of every
  *   operation id ever appended, used *only* to decide the order
  *   `activeOperationsTargeting()` returns its own (already-filtered)
@@ -61,9 +59,9 @@ namespace sound_mind::core {
  *   promoting it to the top (a real, reported bug in the very first
  *   version of this mechanism, which just used append order for both
  *   purposes at once - see `docs/sound-mind-architecture.md`'s Decisions
- *   Made). Entries for ids that are no longer active (superseded, or
- *   undone) are simply skipped when read, never pruned - undo()/redo()
- *   needs no awareness of `stackOrder_` at all as a result. A user can
+ *   Made). Entries for ids that are no longer active (superseded or
+ *   baked) are simply skipped when read; truncate() removes the entries of
+ *   the operations it drops. A user can
  *   also deliberately rearrange `stackOrder_` directly -
  *   bringToFront()/sendToBack()/bringForward()/sendBackward() - without
  *   appending anything: reordering isn't an edit to *what* an operation
@@ -84,11 +82,7 @@ public:
      * @brief Appends a newly constructed operation as the new most-recent,
      *        active entry.
      *
-     * If undo() had moved the active high-water mark backward, this
-     * discards every operation past it first - the same "a fresh edit
-     * invalidates the redo tail" rule any conventional undo stack follows.
-     *
-     * Also places the new operation's own id into `stackOrder_` (see the
+     * Places the new operation's own id into `stackOrder_` (see the
      * class's own docs): at the very end if `operation->supersedes()` is
      * `std::nullopt` (a genuinely new object, painted on top of
      * everything else so far); immediately next to its own superseded
@@ -100,8 +94,7 @@ public:
     void append(std::unique_ptr<Operation> operation);
 
     /// @brief How many operations are currently logged, active or not -
-    ///        i.e. every operation ever appended, including ones undo()
-    ///        has hidden.
+    ///        superseded and baked ones included.
     /// @return The total number of logged operations.
     [[nodiscard]] std::size_t size() const noexcept { return operations_.size(); }
 
@@ -113,22 +106,88 @@ public:
      */
     [[nodiscard]] const Operation& at(std::size_t index) const { return *operations_.at(index); }
 
-    /// @brief Whether undo() would currently do anything.
-    /// @return `true` if at least one active operation exists to undo.
-    [[nodiscard]] bool canUndo() const noexcept { return activeCount_ > 0; }
+    /**
+     * @brief Drops every operation past the first `count`, and their
+     *        stack-order entries - how `History` undoes appends
+     *        (`v0.1.43.1`).
+     * @param count How many operations to keep; a no-op if it's not below
+     *        size().
+     */
+    void truncate(std::size_t count);
 
-    /// @brief Whether redo() would currently do anything.
-    /// @return `true` if the high-water mark sits below the log's own
-    ///         total size, i.e. something undone is still available.
-    [[nodiscard]] bool canRedo() const noexcept { return activeCount_ < operations_.size(); }
+    /// @brief The next id reserveId() will hand out.
+    /// @return The id; one past the highest ever reserved.
+    [[nodiscard]] OperationId nextId() const noexcept { return nextId_; }
 
-    /// @brief Moves the active high-water mark back by one, hiding the
-    ///        most recently active operation - a no-op if canUndo() is `false`.
-    void undo() noexcept;
+    /// @brief Resets the next id reserveId() hands out - `History` restoring
+    ///        an earlier state.
+    /// @param id The id to hand out next.
+    void setNextId(OperationId id) noexcept { nextId_ = id; }
 
-    /// @brief Moves the active high-water mark forward by one, restoring
-    ///        the next operation - a no-op if canRedo() is `false`.
-    void redo() noexcept;
+    /// @brief The current rendering order of every logged operation's id -
+    ///        see the class's own docs.
+    /// @return Ids, back to front.
+    [[nodiscard]] const std::vector<OperationId>& stackOrder() const noexcept { return stackOrder_; }
+
+    /// @brief Replaces the rendering order wholesale - `History` restoring
+    ///        an earlier reordering.
+    /// @param order Ids, back to front; should name exactly the logged
+    ///        operations.
+    void setStackOrder(std::vector<OperationId> order) { stackOrder_ = std::move(order); }
+
+    /**
+     * @brief Where append() would place a newly appended operation's id in
+     *        a stack order - the rule append() itself uses, shared so
+     *        `History` can tell an append-only change from a reorder.
+     * @param order The stack order to insert into.
+     * @param id The appended operation's id.
+     * @param supersedes What it supersedes, if anything.
+     */
+    static void insertIntoStackOrder(std::vector<OperationId>& order, OperationId id,
+                                     std::optional<OperationId> supersedes);
+
+    /**
+     * @brief Bakes everything painted on `layer` so far into it: every
+     *        operation targeting it with an id below nextId() becomes
+     *        inactive (`v0.1.43.1`, see the class's own docs).
+     * @param layer The layer whose base content now includes those
+     *        operations' results.
+     */
+    void bakeLayer(LayerId layer) noexcept { bakedThrough_[layer] = nextId_ - 1; }
+
+    /// @brief The highest operation id baked into `layer`, `0` if none.
+    /// @param layer The layer.
+    /// @return The threshold; operations on `layer` with an id at or below
+    ///         it are inactive.
+    [[nodiscard]] OperationId bakedThrough(LayerId layer) const noexcept;
+
+    /// @brief Every layer's bake threshold - `History`'s view of the state.
+    /// @return Layer id to threshold; layers never baked are absent.
+    [[nodiscard]] const std::map<LayerId, OperationId>& bakedThresholds() const noexcept { return bakedThrough_; }
+
+    /// @brief Replaces every bake threshold - `History` restoring an
+    ///        earlier state.
+    /// @param thresholds Layer id to threshold.
+    void setBakedThresholds(std::map<LayerId, OperationId> thresholds) { bakedThrough_ = std::move(thresholds); }
+
+    /**
+     * @brief Serializes one operation, exactly as to_json() writes it
+     *        inside the log - `History` records appended operations this way.
+     * @param operation Any concrete operation type this log can hold.
+     * @return Its JSON, `"kind"` included.
+     * @throws std::invalid_argument for an operation type this log can't
+     *         serialize.
+     */
+    [[nodiscard]] static nlohmann::json operationToJson(const Operation& operation);
+
+    /**
+     * @brief Parses one operation from operationToJson()'s shape.
+     * @param json The operation's JSON.
+     * @return The operation.
+     * @throws std::invalid_argument if `"kind"` isn't a recognized type.
+     * @throws nlohmann::json::exception on missing or malformed fields.
+     */
+    [[nodiscard]] static std::unique_ptr<Operation> operationFromJson(const nlohmann::json& json);
 
     /**
      * @brief The operations relevant to rebuilding one layer's cache, in
@@ -138,8 +197,8 @@ public:
      *        reverse iteration) to decide which overlapping object a
      *        click actually reaches first.
      *
-     * Only operations that are both currently active (not undone) *and*
-     * not superseded by a later active operation are included - matching
+     * Only operations that are neither baked into the layer (bakeLayer())
+     * nor superseded by a later operation are included - matching
      * "Composer Mode Fit"'s own replay rule: "Replay honours only the
      * non-superseded operation at each point in a layer's history." The
      * *order* they're returned in is `stackOrder_`'s own (see the class's
@@ -210,8 +269,8 @@ private:
     bool reorderActiveOperation(OperationId id, ReorderDirection direction);
 
     std::vector<std::unique_ptr<Operation>> operations_;
-    std::size_t activeCount_ = 0;
     OperationId nextId_ = 1;
+    std::map<LayerId, OperationId> bakedThrough_;
 
     /// @brief The current rendering (stack) order of every operation ever
     ///        appended - see the class's own docs for why this is kept
@@ -224,9 +283,9 @@ void to_json(nlohmann::json& json, const OperationLog& log);
 
 /// @brief Parses the log from its JSON representation - either the
 ///        current shape (an object with an `"operations"` array plus
-///        `"activeCount"`/`"nextId"`/an optional `"stackOrder"`) or the
-///        pre-`v0.0.24.1` shape (no `"operations"` key at all, before any
-///        concrete Operation subtype existed - always an empty log).
+///        `"nextId"`, `"stackOrder"` and an optional `"bakedThrough"`) or
+///        the pre-`v0.0.24.1` shape (no `"operations"` key at all, before
+///        any concrete Operation subtype existed - always an empty log).
 /// @throws std::invalid_argument if an entry's own `"kind"` isn't a
 ///         recognized Operation subtype.
 /// @throws nlohmann::json::exception if a required field is missing or

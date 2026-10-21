@@ -1,8 +1,10 @@
 #pragma once
 
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -10,6 +12,7 @@
 #include "sound_mind/core/convolution_kernel.h"
 #include "sound_mind/core/filter_preset.h"
 #include "sound_mind/core/grid_preset.h"
+#include "sound_mind/core/history.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -61,7 +64,7 @@ public:
      * one (a materially larger change, and not needed by this copy
      * constructor's own actual motivating use - see below), this simply
      * defines "copying a Project" as copying everything *except* its own
-     * edit history - settings, layers (including each layer's own
+     * edit history (its operation log and its `History`) - settings, layers (including each layer's own
      * `filterConfiguration()`/`opacityMindWave()` bindings), MindWaves,
      * MindShots, MindGrains, and convolution kernels, all copied
      * verbatim, ids and all, since nothing here reassigns any id (unlike
@@ -230,11 +233,45 @@ public:
      * invariant, the same division `Layer::setVisible()`'s docs draw for
      * the Background-stays-visible rule.
      *
+     * Keeps the removed layer's base for the project's `History` (see
+     * takeDisplacedLayerBases()), so the removal can be undone.
+     *
      * @param id The layer to remove.
      * @return `true` if a layer with this id was found and removed;
      *         `false` (no change) if none was.
      */
     bool removeLayer(LayerId id);
+
+    /**
+     * @brief The bases of layers removeLayer() removed since the last call
+     *        - how `History` keeps what it needs to undo a removal, without
+     *        copying any image (`v0.1.43.1`).
+     * @return Each removed layer's base, by id.
+     */
+    [[nodiscard]] std::map<LayerId, LayerBase> takeDisplacedLayerBases() {
+        return std::exchange(displacedLayerBases_, {});
+    }
+
+    /// @brief The lowest id addLayer() may hand out next.
+    /// @return The id.
+    [[nodiscard]] LayerId nextLayerId() const noexcept { return nextLayerId_; }
+
+    /// @brief Resets the lowest id addLayer() may hand out next - `History`
+    ///        restoring an earlier state.
+    /// @param id The id.
+    void setNextLayerId(LayerId id) noexcept { nextLayerId_ = id; }
+
+    /**
+     * @brief Everything done to this project, and its undo/redo position
+     *        (`v0.1.43.1`) - see `History`. Saved with the project; not
+     *        copied by the copy constructor.
+     * @return The history.
+     */
+    [[nodiscard]] History& history() noexcept { return history_; }
+
+    /// @brief Read-only access to history().
+    /// @return The history.
+    [[nodiscard]] const History& history() const noexcept { return history_; }
 
     /**
      * @brief Reorders the layer stack.
@@ -937,6 +974,13 @@ public:
      */
     bool removeMidiProgramMapping(int programNumber);
 
+    /// @brief Replaces every MIDI program mapping - `History` restoring an
+    ///        earlier state.
+    /// @param mappings The mappings.
+    void setMidiProgramMappings(std::vector<MidiProgramMapping> mappings) {
+        midiProgramMappings_ = std::move(mappings);
+    }
+
     /**
      * @brief Finds this project's own mapping for the given program, if
      *        one exists.
@@ -966,6 +1010,8 @@ private:
     std::vector<NamedFilterPreset> filterPresets_;
     std::vector<NamedGridPreset> gridPresets_;
     std::vector<MidiProgramMapping> midiProgramMappings_;
+    History history_;
+    std::map<LayerId, LayerBase> displacedLayerBases_;
 };
 
 /// @brief Serializes a Project to its JSON representation.

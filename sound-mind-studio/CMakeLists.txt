@@ -93,7 +93,7 @@ add_library(sound-mind-studio-lib
     src/tone_curve_editor.cpp
     src/tool_configuration_panel.cpp
     src/tool_palette_controller.cpp
-    src/undo_stack.cpp
+    src/project_history.cpp
     src/waveform_preview_widget.cpp
     include/sound_mind/studio/about_dialog.h
     include/sound_mind/studio/command_line.h
@@ -159,7 +159,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/tone_curve_editor.h
     include/sound_mind/studio/tool_configuration_panel.h
     include/sound_mind/studio/tool_palette_controller.h
-    include/sound_mind/studio/undo_stack.h
+    include/sound_mind/studio/project_history.h
     include/sound_mind/studio/waveform_preview_widget.h
     assets/app.qrc
 )

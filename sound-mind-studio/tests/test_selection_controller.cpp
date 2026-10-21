@@ -66,7 +66,7 @@ LayerId addBlankNormalLayer(Project& project) {
     content.leftMagnitudeDb.assign(pixelCount, 0.0f);
     content.rightMagnitudeDb.assign(pixelCount, 0.0f);
     content.sharedPhaseRadians.assign(pixelCount, 0.0f);
-    layer.setContent(content);
+    layer.setBaseContent(content);
     return project.addLayer(std::move(layer));
 }
 
@@ -85,7 +85,7 @@ void setPixel(Project& project, LayerId layerId, int frame, int bin, float dbVal
     const std::size_t index = pixelIndex(content, frame, bin);
     content.leftMagnitudeDb[index] = dbValue;
     content.rightMagnitudeDb[index] = dbValue;
-    layer->setContent(std::move(content));
+    layer->setBaseContent(std::move(content));
 }
 
 /// @brief Reads one pixel's own left-channel dB value back off a layer's

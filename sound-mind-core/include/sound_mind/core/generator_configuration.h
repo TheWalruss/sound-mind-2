@@ -117,4 +117,29 @@ struct GeneratorConfiguration {
     NoiseConfiguration noise;
 };
 
+// clang-format off
+NLOHMANN_JSON_SERIALIZE_ENUM(GeneratorFamily, {
+    {GeneratorFamily::Lattice, "lattice"},
+    {GeneratorFamily::Fractal, "fractal"},
+    {GeneratorFamily::Streaming, "streaming"},
+    {GeneratorFamily::Noise, "noise"},
+})
+// clang-format on
+
+/// @brief Serializes a noise configuration (`v0.1.43.1` - a generated
+///        layer's History recipe carries its whole configuration).
+void to_json(nlohmann::json& json, const NoiseConfiguration& noise);
+
+/// @brief Parses a noise configuration; absent fields keep their defaults.
+/// @throws nlohmann::json::exception on malformed data.
+void from_json(const nlohmann::json& json, NoiseConfiguration& noise);
+
+/// @brief Serializes a generator configuration (`v0.1.43.1`).
+void to_json(nlohmann::json& json, const GeneratorConfiguration& config);
+
+/// @brief Parses a generator configuration; absent fields keep their
+///        defaults.
+/// @throws nlohmann::json::exception on malformed data.
+void from_json(const nlohmann::json& json, GeneratorConfiguration& config);
+
 }  // namespace sound_mind::core

@@ -13,7 +13,7 @@ class FilterConfigurationPanel;
 class LayersPanel;
 class MindWavesPanel;
 class ToolConfigurationPanel;
-class UndoStack;
+class ProjectHistory;
 
 /**
  * @brief Owns the current project's MindWave library - add/remove/rename/
@@ -71,17 +71,16 @@ public:
      *        `filterConfigurationPanel`. Must outlive this controller.
      * @param canvas Non-owning; receives the live Preview overlay (see the
      *        class's own docs). Must outlive this controller.
-     * @param undoStack Non-owning; `updateMindWave()` pushes an undo entry
-     *        onto it (`v0.Y.49.1`, Macro Mode Installment B - the
-     *        prerequisite for replaying a `MacroEventType::
-     *        MindWaveConfigurationChanged` event via `UndoStack::
-     *        jumpTo()`). Must outlive this controller.
+     * @param history Non-owning; every library change (add, remove,
+     *        rename, edit, draw) commits to it, and its undo/redo refreshes
+     *        the panels (`v0.1.43.1`). May be `nullptr`. Must outlive this
+     *        controller.
      * @param parent The owning object, per Qt's normal parent-ownership
      *        convention; may be `nullptr`.
      */
     MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel,
                         FilterConfigurationPanel* filterConfigurationPanel,
-                        ToolConfigurationPanel* toolConfigurationPanel, CanvasWidget* canvas, UndoStack* undoStack,
+                        ToolConfigurationPanel* toolConfigurationPanel, CanvasWidget* canvas, ProjectHistory* history,
                         QObject* parent = nullptr);
 
     /// @brief Sets which project this controller looks up/mutates
@@ -258,7 +257,11 @@ private:
     FilterConfigurationPanel* filterConfigurationPanel_;
     ToolConfigurationPanel* toolConfigurationPanel_;
     CanvasWidget* canvas_;
-    UndoStack* undoStack_;
+    ProjectHistory* history_;
+
+    /// @brief Commits the project's changes to the history, if any.
+    /// @param description What the user did.
+    void commit(const QString& description);
     sound_mind::core::Project* project_ = nullptr;
 };
 

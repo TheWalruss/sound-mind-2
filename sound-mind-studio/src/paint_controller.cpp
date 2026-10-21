@@ -11,19 +11,35 @@
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/project_settings.h"
-#include "sound_mind/studio/undo_stack.h"
+#include "sound_mind/studio/project_history.h"
 
 namespace sound_mind::studio {
 
-PaintController::PaintController(UndoStack* undoStack, QObject* parent) : QObject(parent), undoStack_(undoStack) {}
+PaintController::PaintController(ProjectHistory* history, QObject* parent)
+    : QObject(parent), history_(history != nullptr ? history : new ProjectHistory(this)), ownsHistory_(history == nullptr) {
+    // Undo/redo restore the operations and bases; this re-renders every
+    // layer whose content that changed, before anything refreshes.
+    history_->addContentRebuilder([this](const sound_mind::core::HistoryChange& change) {
+        for (const sound_mind::core::LayerId layer : change.layers) {
+            if (project_ == nullptr || project_->layerById(layer) == nullptr) {
+                forgetLayer(layer);
+            }
+        }
+        for (const sound_mind::core::LayerId layer : change.contentLayers) {
+            contentCache_[layer].invalidateAll();
+            rebuildLayerContent(layer);
+        }
+    });
+}
 
 void PaintController::setProject(sound_mind::core::Project* project) {
     project_ = project;
     strokeInProgress_ = false;
     strokePoints_.clear();
     previewPath_ = sound_mind::core::Path{};
-    baseContent_.clear();
     contentCache_.clear();
+    cachedBaseRevision_.clear();
+    history_->setProject(project);
 }
 
 void PaintController::invalidateContentCaches() {
@@ -140,56 +156,32 @@ void PaintController::cancelStroke() {
     emit pathChanged();
 }
 
-bool PaintController::canUndo() const noexcept { return project_ != nullptr && project_->operationLog().canUndo(); }
+bool PaintController::canUndo() const noexcept { return project_ != nullptr && history_->canUndo(); }
 
-bool PaintController::canRedo() const noexcept { return project_ != nullptr && project_->operationLog().canRedo(); }
+bool PaintController::canRedo() const noexcept { return project_ != nullptr && history_->canRedo(); }
 
 void PaintController::undo() {
-    if (!canUndo()) {
-        return;
-    }
-    project_->operationLog().undo();
-    invalidateContentCaches();
-    for (const auto& [layerId, base] : baseContent_) {
-        rebuildLayerContent(layerId);
+    if (project_ != nullptr) {
+        history_->undo();
     }
 }
 
 void PaintController::redo() {
-    if (!canRedo()) {
-        return;
-    }
-    project_->operationLog().redo();
-    invalidateContentCaches();
-    for (const auto& [layerId, base] : baseContent_) {
-        rebuildLayerContent(layerId);
+    if (project_ != nullptr) {
+        history_->redo();
     }
 }
 
 void PaintController::notifyOperationCommitted(const QString& description) {
-    if (undoStack_ == nullptr) {
-        return;
+    if (project_ != nullptr) {
+        history_->commit(*project_, description);
     }
-    undoStack_->push({/*undo=*/[this]() { undo(); }, /*redo=*/[this]() { redo(); }, /*description=*/description});
 }
 
 void PaintController::notifyOperationsCommitted(std::size_t count, const QString& description) {
-    if (undoStack_ == nullptr || count == 0) {
-        return;
+    if (count > 0) {
+        notifyOperationCommitted(description);
     }
-    undoStack_->push({/*undo=*/
-                      [this, count]() {
-                          for (std::size_t i = 0; i < count; ++i) {
-                              undo();
-                          }
-                      },
-                      /*redo=*/
-                      [this, count]() {
-                          for (std::size_t i = 0; i < count; ++i) {
-                              redo();
-                          }
-                      },
-                      /*description=*/description});
 }
 
 std::size_t PaintController::strokePaths(sound_mind::core::LayerId layer,
@@ -288,8 +280,8 @@ void PaintController::deleteOperations(const std::vector<sound_mind::core::Opera
 }
 
 void PaintController::forgetLayer(sound_mind::core::LayerId layer) {
-    baseContent_.erase(layer);
     contentCache_.erase(layer);
+    cachedBaseRevision_.erase(layer);
 }
 
 void PaintController::rebuildLayerContent(sound_mind::core::LayerId layer) {
@@ -309,25 +301,21 @@ void PaintController::rebuildLayerContentAndCascade(sound_mind::core::LayerId la
         return;
     }
 
-    // Capture this layer's pre-paint base exactly once - see this
-    // method's own docs. A layer with no content yet (the Background
-    // layer, in particular - Project::createNew() deliberately leaves it
-    // content-less, see docs/sound-mind-architecture.md's Decisions Made)
-    // gets a real, silent, project-sized base synthesized on the spot
-    // instead of being unpaintable: every layer is a real canvas the
-    // moment something is actually painted onto it, whether or not it
-    // already had content from an import/recording.
-    if (!baseContent_.contains(layer)) {
-        const sound_mind::codec::StreamImage base = target->content().has_value()
-                                                          ? *target->content()
-                                                          : sound_mind::core::silentContentFor(project_->settings());
-        baseContent_.emplace(layer, base);
+    // The layer's own base (v0.1.43.1): what an import, recording,
+    // generator, pooling or phase cleanup made it - or, for a layer with
+    // no content yet (the Background layer, which Project::createNew()
+    // leaves content-less), silence, so every layer is paintable. A new
+    // base means the replay cache describes something else.
+    if (const auto it = cachedBaseRevision_.find(layer);
+        it == cachedBaseRevision_.end() || it->second != target->baseRevision()) {
+        contentCache_[layer].invalidateAll();
+        cachedBaseRevision_[layer] = target->baseRevision();
     }
+    const sound_mind::codec::StreamImage silent =
+        target->baseContent() == nullptr ? sound_mind::core::silentContentFor(project_->settings())
+                                         : sound_mind::codec::StreamImage{};
+    const sound_mind::codec::StreamImage& base = target->baseContent() != nullptr ? *target->baseContent() : silent;
 
-    // Resolves another layer's own *current* content for a Mind Grain
-    // stamp (see paint_application.h's own LayerContentResolver docs) -
-    // reading straight from the live Project, so a Mind Grain stroke
-    // rebuilt here always sees its source layer as of *this* rebuild.
     const sound_mind::core::Project* project = project_;
     const auto resolveLayerContent =
         [project](sound_mind::core::LayerId id) -> const sound_mind::codec::StreamImage* {
@@ -348,7 +336,7 @@ void PaintController::rebuildLayerContentAndCascade(sound_mind::core::LayerId la
     const auto activeOperations = project_->operationLog().activeOperationsTargeting(layer);
     const sound_mind::core::ProjectSettings settings = project_->settings();
     sound_mind::codec::StreamImage rebuilt = sound_mind::core::rebuildPaintedContentCached(
-        baseContent_.at(layer), activeOperations, sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
+        base, activeOperations, sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
         contentCache_[layer], resolveLayerContent, resolveMindWave, &settings);
     target->setContent(std::move(rebuilt));
 
