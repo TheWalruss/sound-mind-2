@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.43.4] - 2026-10-21
+
+Roadmap slot `v0.Y.81.1` (History), installment D - completes the slot.
+
+### Added
+
+- **File → Remaster...** rebuilds a project as a new one by replaying everything done to it, from its original sources:
+  - at different settings - a finer time step, more frequency bins, a different sample rate or frequency range;
+  - with some sources replaced by other files.
+
+  Strokes, fills, pastes and text land in the same place in time and frequency, and text is redrawn at the new resolution. The original project isn't changed. The remastered project has a complete history of its own, so it can be remastered again.
+- **Missing layer content is reported** when opening a project, with a pointer to Remaster to rebuild it.
+
 ## [0.1.43.3] - 2026-10-21
 
 Roadmap slot `v0.Y.81.1` (History), installment C.

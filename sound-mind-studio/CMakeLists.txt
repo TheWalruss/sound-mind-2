@@ -95,6 +95,8 @@ add_library(sound-mind-studio-lib
     src/tool_configuration_panel.cpp
     src/tool_palette_controller.cpp
     src/project_history.cpp
+    src/remaster.cpp
+    src/remaster_dialog.cpp
     src/waveform_preview_widget.cpp
     include/sound_mind/studio/about_dialog.h
     include/sound_mind/studio/command_line.h
@@ -161,6 +163,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/tool_configuration_panel.h
     include/sound_mind/studio/tool_palette_controller.h
     include/sound_mind/studio/project_history.h
+    include/sound_mind/studio/remaster_dialog.h
     include/sound_mind/studio/waveform_preview_widget.h
     assets/app.qrc
 )

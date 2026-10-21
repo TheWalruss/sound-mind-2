@@ -2756,6 +2756,26 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **Tests:**
       - core `test_history_replay.cpp`, 8 cases: completeness flag and its persistence; deterministic creation; a full replay reproducing layers, rendering, operations and resources; kept versus remade bases; a layer without content needing no recipe; an unremakeable recipe failing with the entry's name and the reason, changing nothing; progress and cancellation; transforms.
       - Studio: `BaseRecipesTest::undoAfterReopeningRemakesAReplacedBase` (save, reopen, undo fails without a resolver, succeeds with one, bit-identical to the original import) and `ProjectHistoryTest::aChangeMadeOutsideTheHistoryMarksItIncomplete`.
+266. **History installment D: Remaster.** Settled in `v0.1.43.4`, completing roadmap slot `v0.Y.81.1`.
+    - **`remasterProject()` (Studio, `remaster.h`)** takes a `RemasterInput` (settings, applied entries, source registry and folder, copied out on the UI thread) and a `RemasterRequest` (codec settings, source replacements, output path). It runs on a background thread behind a cancellable `QProgressDialog` (`MainWindow::remasterTo()`). Steps:
+      1. Copy the sources into the new project's folder; each replacement becomes a source of its own, its id remapped in every recipe.
+      2. Adapt each entry: Core `adaptEntryForRemaster()`, the source remap, and text pastes re-rendered from their `TextSource` at the new resolution (`TextController::rasterize()` plus `makeTextPaste()`, keeping id, supersedes and boundary).
+      3. Replay with `useKeptBases = false`, since kept images are at the old settings.
+      4. Give the result the adapted entries as its own history (`History::assignEntries()`), complete, so it can be replayed and remastered again, and save it.
+    - **Grid-unit data, converted by Core `remaster.h`** - everything else is already in seconds and Hz, as Decision #262 required:
+      - `remasterSettings()` keeps the duration, deriving `canvasWidth` from the new time step.
+      - Layer `translationColumns` are scaled by the ratio of frame durations (the Decision #263 deviation, resolved here).
+      - Pasted clips go through `resampleClip()`: nearest cell, keeping the paste's time and frequency, with the same origin rule as `applyPasteOperation()`.
+      - Mask boundaries go through `resampleSelectionJson()`; path boundaries are already in seconds and Hz.
+      - Mind Shot clips go through `resampleClipProportionally()`. A Mind Shot doesn't record its absolute frequencies, so this is exact for time-step and sample-rate changes and approximate for frequency-range or bin-count changes (documented for users).
+    - **Deviation from Decision #262:** in-project pastes are resampled rather than re-copied from their origin layer at replay. Resampling covers pastes from other projects too, and needed no new data in `PasteOperation`.
+    - **UI:**
+      - **File → Remaster...** opens `RemasterDialog`: the wizard's codec fields prefilled from the project, a sources table with Replace..., and an output path. OK is enabled only for a path other than the original. Afterwards the Studio offers to open the result.
+      - A project whose history doesn't start at creation gets an explanation instead.
+      - `MainWindow::warnAboutMissingContent()` runs after opening a project: it lists layers that have a recipe but no content, a missing media file, and points at Remaster. This is the load-time check installment C was meant to carry.
+    - **Tests:**
+      - core `test_remaster.cpp`, 6 cases: duration kept, identity on the same grid, a marked cell keeps its time and frequency on a finer grid, proportional Mind Shot scaling, mask remap with paths untouched, entry adaptation.
+      - Studio `RemasterTest`, 6 cases: **remastering at the same settings reproduces the live project exactly** (layer JSON and content, an import painted on through `PaintController` and a generated layer); a finer time step keeps duration, edits and placement; a replaced source is used instead; the result has its own complete history, survives reopening and remasters back; an incomplete history is refused; the dialog prefills and needs a new output path.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

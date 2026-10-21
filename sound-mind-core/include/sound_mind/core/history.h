@@ -246,6 +246,17 @@ public:
     void markStartsAtCreation() noexcept { startsAtCreation_ = true; }
 
     /**
+     * @brief Makes `entries` this history, all applied, and `project` (which
+     *        they must already describe) its baseline - a project rebuilt by
+     *        replaying them (Remaster, `v0.1.43.4`) keeps them as its own
+     *        history, so it can be replayed again.
+     * @param project The project the entries rebuilt.
+     * @param entries The entries; their session-only base images are dropped.
+     * @param startsAtCreation Whether they start at the project's creation.
+     */
+    void assignEntries(Project& project, std::vector<HistoryEntry> entries, bool startsAtCreation);
+
+    /**
      * @brief Records everything that changed in `project` since the last
      *        commit, undo or redo as one entry.
      *

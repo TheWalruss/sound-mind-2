@@ -50,6 +50,7 @@ add_executable(sound-mind-core-tests
     test_project_settings.cpp
     test_project.cpp
     test_project_sources.cpp
+    test_remaster.cpp
     test_brush_tip.cpp
     test_compositor.cpp
     test_gpu_compute_availability.cpp

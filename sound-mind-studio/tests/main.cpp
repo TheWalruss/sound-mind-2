@@ -94,6 +94,7 @@
 #include "test_tool_configuration_panel.h"
 #include "test_tool_palette_controller.h"
 #include "test_project_history.h"
+#include "test_remaster.h"
 #include "test_waveform_preview_widget.h"
 
 namespace {
@@ -171,6 +172,7 @@ const std::array kTestClasses{
     SM_TEST_CLASS_ENTRY(ResourceBrowserPanelTest),
     SM_TEST_CLASS_ENTRY(ResourceBrowserControllerTest),
     SM_TEST_CLASS_ENTRY(ProjectHistoryTest),
+    SM_TEST_CLASS_ENTRY(RemasterTest),
     SM_TEST_CLASS_ENTRY(AboutDialogTest),
     SM_TEST_CLASS_ENTRY(CommandLineTest),
 };

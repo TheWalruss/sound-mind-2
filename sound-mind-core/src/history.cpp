@@ -538,6 +538,23 @@ std::optional<HistoryChange> History::applyEntry(Project& project, HistoryEntry&
     return change;
 }
 
+void History::assignEntries(Project& project, std::vector<HistoryEntry> entries, bool startsAtCreation) {
+    for (HistoryEntry& entry : entries) {
+        for (HistoryLayerChange& change : entry.layers) {
+            change.baseBefore.reset();
+            change.baseAfter.reset();
+        }
+    }
+    entries_ = std::move(entries);
+    position_ = entries_.size();
+    nextEntryId_ = 1;
+    for (const HistoryEntry& entry : entries_) {
+        nextEntryId_ = std::max(nextEntryId_, entry.id + 1);
+    }
+    startsAtCreation_ = startsAtCreation;
+    setBaseline(project);
+}
+
 void History::setBaseBudgetBytes(std::size_t bytes) {
     baseBudgetBytes_ = bytes;
     enforceBaseBudget();

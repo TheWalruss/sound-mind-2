@@ -48,6 +48,7 @@
 #include "sound_mind/studio/tool_configuration_panel.h"
 #include "sound_mind/studio/tool_palette_controller.h"
 #include "sound_mind/studio/project_history.h"
+#include "sound_mind/studio/remaster.h"
 
 class QAction;
 class QCloseEvent;
@@ -1546,6 +1547,30 @@ public slots:
     /// @param captured The recorded audio.
     /// @return `{"kind": "record", "source": id}` (no source if saving failed).
     nlohmann::json recordingRecipe(const sound_mind::codec::AudioBuffer& captured);
+
+    /**
+     * @brief File → Remaster... (`v0.1.43.4`): asks for new settings and
+     *        replacement sources in a `RemasterDialog`, rebuilds the project
+     *        as a new one (remasterTo()), then offers to open it. Explains
+     *        instead for a project whose history doesn't start at its
+     *        creation.
+     */
+    void remaster();
+
+    /**
+     * @brief Rebuilds the open project as a new one, per `request`, on a
+     *        background thread behind a cancellable progress dialog - the
+     *        work behind remaster(), callable directly (tests).
+     * @param request What to change, and where to save.
+     * @param errorMessage Receives the reason on failure; may be `nullptr`.
+     * @return `true` if the new project was built and saved.
+     */
+    bool remasterTo(const sound_mind::studio::RemasterRequest& request, QString* errorMessage = nullptr);
+
+    /// @brief After opening a project, warns if any layer made from a
+    ///        recipe has no content (its media file is missing), pointing
+    ///        at Remaster to rebuild it (`v0.1.43.4`).
+    void warnAboutMissingContent();
 
     /// @brief Commits the open project's changes to its History with
     ///        `description` (`v0.1.43.1`) - a no-op without a project.

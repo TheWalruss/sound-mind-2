@@ -136,8 +136,8 @@ Once a project is open, the title bar shows the project's name next to
 - **Macro dropdown** (top-right of the menu bar, next to Input/Output) -
   **Record Macro**, **Play Macro**, and **Export Macro Video...** - see
   [What's Not Here Yet](#whats-not-here-yet) below.
-- **File menu** - New/Open/Save/Save As, Import Audio/Image, Export
-  Audio/Video.
+- **File menu** - New/Open/Save/Save As, Remaster (see
+  [Remastering](#remastering)), Import Audio/Image, Export Audio/Video.
 - **View menu** - Zoom controls (see [Canvas Navigation](#canvas-navigation)
   below), a **Hardware Acceleration** checkbox: turn GPU compute off to
   compare speed/results against the CPU path, or if you suspect it's
@@ -2099,6 +2099,33 @@ holds:
 
 Closing the window, opening a different project, or starting a new one
 while you have unsaved changes prompts you to save first.
+
+### Remastering
+
+**File → Remaster...** rebuilds the open project as a **new** project by
+replaying everything you did to it, from its own sources. The open project
+isn't changed. In the dialog:
+
+- **Sample Rate, Timestep, Bin Count, Min/Max Frequency** start at the
+  project's own settings. Change them to rebuild at a higher (or just
+  different) resolution. The duration stays the same. Strokes, fills,
+  pastes and text land at the same times and frequencies; text is redrawn
+  at the new resolution, and pasted pieces are resampled.
+- **Sources** lists every file, recording and Loop take the project was
+  made from. **Replace...** swaps one for another file: everything that
+  used it is rebuilt from the new one, and the edits placed in time stay
+  where they were.
+- **Save as** - where to save the new project.
+
+Pressing **Remaster** without changing anything rebuilds the project as it
+is, which is how to recover layer content whose files went missing (the
+Studio says so when you open such a project). When it's done, the Studio
+offers to open the new project.
+
+Remastering needs the project's complete history, so it isn't available
+for projects made with a version before 0.1.43.1. A Mind Shot is resampled
+in proportion when the frequency range or bin count changes, which only
+approximates its original pitch.
 
 A project can also be opened from outside the Studio: start
 `sound-mind-studio.exe` with the `.smproj` file's path (for example by

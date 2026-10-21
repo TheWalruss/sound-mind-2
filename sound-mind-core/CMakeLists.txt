@@ -52,6 +52,7 @@ add_library(sound-mind-core
     src/operation_log.cpp
     src/project.cpp
     src/project_sources.cpp
+    src/remaster.cpp
     src/brush_tip.cpp
     src/compositor.cpp
     src/audio_device_list.cpp

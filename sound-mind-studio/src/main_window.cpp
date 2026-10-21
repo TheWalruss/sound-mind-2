@@ -1,5 +1,6 @@
 #include "sound_mind/studio/main_window.h"
 
+#include <atomic>
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -14,6 +15,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <QThread>
+#include <QProgressDialog>
 #include <QApplication>
 #include <QAction>
 #include <QActionGroup>
@@ -49,9 +52,12 @@
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/codec/stream_incremental_encoder.h"
+#include "sound_mind/core/background_task.h"
 #include "sound_mind/core/filter_preview.h"
 #include "sound_mind/core/loudness_meter.h"
 #include "sound_mind/core/pitch_detection.h"
+#include "sound_mind/studio/remaster.h"
+#include "sound_mind/studio/remaster_dialog.h"
 #include "sound_mind/studio/base_recipes.h"
 #include "sound_mind/studio/text_controller.h"
 #include "sound_mind/codec/video_export.h"
@@ -1153,6 +1159,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* saveAsAction = fileMenu->addAction(tr("Save Project &As..."));
     saveAsAction->setShortcut(QKeySequence::SaveAs);
     connect(saveAsAction, &QAction::triggered, this, &MainWindow::saveProjectAs);
+
+    QAction* remasterAction = fileMenu->addAction(tr("&Remaster..."));
+    remasterAction->setObjectName(QStringLiteral("remasterAction"));
+    connect(remasterAction, &QAction::triggered, this, &MainWindow::remaster);
 
     fileMenu->addSeparator();
 
@@ -2496,6 +2506,7 @@ bool MainWindow::openProjectAt(const std::filesystem::path& path, QString* error
         updateWindowTitle();
         recentProjects_.add(path);
         landingPage_->setRecentProjects(recentProjects_.list());
+        warnAboutMissingContent();
         return true;
     } catch (const std::exception& e) {
         if (errorMessage != nullptr) {
@@ -3901,6 +3912,101 @@ void MainWindow::refreshHistoryPanel() {
 void MainWindow::jumpToHistoryIndex(std::size_t index) {
     history_.jumpTo(index);
     noteProjectChangedForAnalysis();
+}
+
+void MainWindow::warnAboutMissingContent() {
+    if (!project_) {
+        return;
+    }
+    QStringList missing;
+    for (const sound_mind::core::Layer& layer : project_->layers()) {
+        // A recipe says it was made from something; no content means its
+        // media file didn't load.
+        if (!layer.baseRecipe().is_null() && !layer.content().has_value()) {
+            missing.append(QString::fromStdString(layer.name()));
+        }
+    }
+    if (missing.isEmpty()) {
+        return;
+    }
+    QString message = tr("The content of these layers is missing from the project folder:\n\n%1")
+                          .arg(missing.join(QStringLiteral("\n")));
+    if (project_->history().startsAtCreation()) {
+        message += tr("\n\nFile → Remaster... can rebuild it from the project's history and sources (keep the "
+                      "settings as they are).");
+    }
+    QMessageBox::warning(this, tr("Missing Layer Content"), message);
+}
+
+bool MainWindow::remasterTo(const sound_mind::studio::RemasterRequest& request, QString* errorMessage) {
+    const auto input = project_ ? sound_mind::studio::remasterInputFrom(*project_) : std::nullopt;
+    if (!input.has_value()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("This project's history doesn't go back to its creation (it was made with a version "
+                               "before 0.1.43.1), so it can't be rebuilt from it.");
+        }
+        return false;
+    }
+    std::atomic<std::size_t> done{0};
+    std::size_t total = input->entries.size();
+    QString failure;
+    bool succeeded = false;
+    sound_mind::core::BackgroundTask task([&](sound_mind::core::CancellationToken& token) {
+        const auto result = sound_mind::studio::remasterProject(
+            *input, request, [&token]() { return token.cancellationRequested(); },
+            [&done](std::size_t count, std::size_t) { done = count; }, &failure);
+        succeeded = result.has_value();
+    });
+    QProgressDialog progress(tr("Remastering..."), tr("Cancel"), 0, static_cast<int>(std::max<std::size_t>(total, 1)),
+                             this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(300);
+    task.start();
+    while (task.isRunning()) {
+        progress.setValue(static_cast<int>(done.load()));
+        if (progress.wasCanceled()) {
+            task.requestCancel();
+        }
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        QThread::msleep(20);
+    }
+    task.waitForFinished();
+    progress.setValue(progress.maximum());
+    if (!succeeded && errorMessage != nullptr) {
+        *errorMessage = failure;
+    }
+    return succeeded;
+}
+
+void MainWindow::remaster() {
+    if (!project_ || !currentPath_) {
+        return;
+    }
+    if (!project_->history().startsAtCreation()) {
+        QMessageBox::information(this, tr("Remaster"),
+                                 tr("This project's history doesn't go back to its creation (it was made with a "
+                                    "version before 0.1.43.1), so it can't be rebuilt from it."));
+        return;
+    }
+    sound_mind::studio::RemasterDialog dialog(*project_, *currentPath_, this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    const sound_mind::studio::RemasterRequest request = dialog.request();
+    QString error;
+    if (!remasterTo(request, &error)) {
+        QMessageBox::critical(this, tr("Remaster Failed"), error);
+        return;
+    }
+    const auto answer = QMessageBox::question(
+        this, tr("Remaster"),
+        tr("Saved the remastered project as \"%1\". Open it now?")
+            .arg(QString::fromStdWString(request.outputPath.filename().wstring())));
+    if (answer == QMessageBox::Yes && confirmDiscardUnsavedChanges()) {
+        if (!openProjectAt(request.outputPath, &error)) {
+            QMessageBox::critical(this, tr("Open Project Failed"), error);
+        }
+    }
 }
 
 std::optional<sound_mind::core::SourceId> MainWindow::storeAudioSource(const sound_mind::codec::AudioBuffer& audio,
