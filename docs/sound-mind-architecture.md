@@ -2801,6 +2801,19 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **Tests:**
       - core `test_macro.cpp`, 4 cases: project-file round trip, start entries, prefix retained when editing drops it, playhead track.
       - Studio `MacroRecorderTest`, 10 cases rewritten: start, pending commit, clock running only while playing, changes while paused at the frozen time, seek detection, undo/redo events, stop with duration, starting while playing, double start and discard, manager dialog.
+268. **Macros installment B: `MacroRenderer` and video export.** Settled in `v0.1.44.2`, roadmap slot `v0.Y.82.1`.
+    - **`MacroRenderer` (Core, `macro_renderer.h`):**
+      - `prepare()` replays the Macro's start entries into a `HistoryReplayer` of its own, so the open project is never touched.
+      - Segment boundaries are 0, every change (Entry/Undo/Redo) and the end. Each `next()` applies the changes at its start - complete at once, per the user's "pop in at commit" decision - then composites once (`compositeProject(respectMute = true)`, as exports do) and renders the canvas (`toRgbImage`).
+      - The audio is cut from the decoded composite at `macroPlayheadAt()`'s positions, piece by piece between Play/Pause/Seek events, so seeks, Repeat wraps and Loop passes inside a segment are followed. Positions beyond the project's end are silent.
+      - Changes at the same moment collapse into one segment: one shorter than a sample only applies its changes.
+      - The master limiter runs statefully across segments, without look-ahead, so there's no added latency and no seams.
+      - Undo events use the new `HistoryReplayer::revert()` (Core `History::revertEntry()`, the mirror of `applyEntry()`). With `ReplayOptions::keepSteppedEntries` the replayer keeps every stepped entry with the base its step set aside, so undoing and redoing needs no recipe. A pooled or phase-cleaned base, which can't be remade from the current state, still undoes.
+    - **`codec::StreamedVideoWriter`:** MP4 written incrementally - video for a duration with a playhead callback, and audio chunks through a FIFO into AAC frames. A long Macro holds one canvas in memory, not all of them as `exportSegmentedVideo()` would. `core::exportMacroVideo()` drives it from a renderer; the playhead line follows the recorded playhead, not a linear sweep.
+    - **Studio:**
+      - `MainWindow::macroRendererFor()` builds a renderer on the UI thread with copies of everything: the start entries; `sourceLookupFor()`, a new copy of the source registry that is safe off-thread; and the limiter setting.
+      - `exportMacroVideoAsync(path, id)` runs it on the shared `exportTask_`, with `setShouldCancel()` wiring the task's token, the status-bar progress and Cancel, and the existing outcome reporting.
+    - **Tests:** core `test_macro_renderer.cpp`, 6 cases: one segment per change with silence before an import and sound after it; audio following the playhead through a seek, sample-exact against the composite; undo/redo replayed with the recipe run once; simultaneous changes collapsing; an MP4 written with progress; cancellation.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

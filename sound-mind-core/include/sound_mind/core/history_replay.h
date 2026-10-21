@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -47,6 +48,10 @@ struct ReplayOptions {
     std::function<bool()> shouldCancel;
     /// Told how far along the replay is.
     std::function<void(std::size_t done, std::size_t total)> progress;
+    /// Keep every stepped entry, with the bases its step set aside, so
+    /// stepping it back (a Macro's undo and redo) needs no recipe -
+    /// `v0.1.44.2`. Costs memory for each replaced base.
+    bool keepSteppedEntries = false;
 };
 
 /**
@@ -85,6 +90,15 @@ public:
     bool apply(const HistoryEntry& entry, std::string* error = nullptr);
 
     /**
+     * @brief Reverts one entry - the replay of an undo (`v0.1.44.2`).
+     * @param entry The entry, as recorded (the project is in its "after"
+     *        state).
+     * @param error Receives the reason on failure; may be `nullptr`.
+     * @return `true` if reverted.
+     */
+    bool revert(const HistoryEntry& entry, std::string* error = nullptr);
+
+    /**
      * @brief Applies the first `count` entries of `history`, reporting
      *        progress and honoring cancellation.
      * @param history The history.
@@ -115,10 +129,12 @@ public:
 
 private:
     void render(LayerId layer, std::set<LayerId>& visiting);
+    bool step(const HistoryEntry& entry, bool forward, std::string* error);
 
     Project project_;
     ReplayOptions options_;
     std::set<LayerId> stale_;
+    std::map<HistoryEntryId, HistoryEntry> stepped_;
 };
 
 }  // namespace sound_mind::core

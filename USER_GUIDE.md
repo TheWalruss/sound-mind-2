@@ -2009,9 +2009,16 @@ do to it while it plays. It's kept with the project.
 - **Macro → Manage Macros...** lists the recorded Macros with their
   length and event count, to **Rename...** or **Delete** them.
 
+- **Macro → Export Macro Video...** renders a Macro (you pick which, if
+  there are several) to an MP4: the whole canvas, changing at each moment
+  you changed something - complete at once, however long it took live -
+  with the playhead line where yours was and the audio it played. It's
+  rendered from a copy, so you can keep working; the status bar shows it
+  running, with a Cancel button.
+
 A dragged control (gain, a filter or MindWave setting) is recorded as the
-value you let go at, not the movement. Playing a Macro back and exporting
-it as a video arrive in the next update.
+value you let go at, not the movement. Playing a Macro back in the Studio
+arrives in the next update.
 
 ## Configure Devices
 
@@ -2496,10 +2503,10 @@ It's read-only for now: you can't yet drag a box to retime it, move it to
 a different track, or edit an object's/track's own settings from there -
 those are all still to come.
 
-**Macros** (see [Macros](#macros)): recording works, and recorded
-performances are kept with the project. Playing one back and exporting it
-as a video arrive in the next update; there's no timeline view of a
-Macro's contents.
+**Macros** (see [Macros](#macros)): recording and video export work, and
+recorded performances are kept with the project. Playing one back in the
+Studio arrives in the next update; there's no timeline view of a Macro's
+contents.
 
 
 **Analysis Tools**: the [Analysis](#analysis) panel's loudness meter and

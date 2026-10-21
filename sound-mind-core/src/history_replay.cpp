@@ -7,16 +7,26 @@ namespace sound_mind::core {
 HistoryReplayer::HistoryReplayer(const ProjectSettings& settings, ReplayOptions options)
     : project_(Project::createNew(settings)), options_(std::move(options)) {}
 
-bool HistoryReplayer::apply(const HistoryEntry& original, std::string* error) {
-    HistoryEntry entry = original;
-    if (!options_.useKeptBases) {
-        for (HistoryLayerChange& change : entry.layers) {
-            change.baseBefore.reset();
-            change.baseAfter.reset();
+bool HistoryReplayer::apply(const HistoryEntry& entry, std::string* error) { return step(entry, true, error); }
+
+bool HistoryReplayer::revert(const HistoryEntry& entry, std::string* error) { return step(entry, false, error); }
+
+bool HistoryReplayer::step(const HistoryEntry& original, bool forward, std::string* error) {
+    // An entry stepped before is reused as stepped: applying or reverting
+    // it set aside the base it replaced, which is exactly what stepping it
+    // the other way needs.
+    const auto previous = stepped_.find(original.id);
+    HistoryEntry entry = previous != stepped_.end() ? previous->second : original;
+    if (previous == stepped_.end()) {
+        if (!options_.useKeptBases) {
+            for (HistoryLayerChange& change : entry.layers) {
+                change.baseBefore.reset();
+                change.baseAfter.reset();
+            }
         }
-    }
-    if (options_.transformEntry) {
-        options_.transformEntry(entry);
+        if (options_.transformEntry) {
+            options_.transformEntry(entry);
+        }
     }
 
     std::string failure;
@@ -25,7 +35,7 @@ bool HistoryReplayer::apply(const HistoryEntry& original, std::string* error) {
             if (change.id != layer) {
                 continue;
             }
-            const nlohmann::json recipe = change.after.value("baseRecipe", nlohmann::json());
+            const nlohmann::json recipe = (forward ? change.after : change.before).value("baseRecipe", nlohmann::json());
             if (!options_.runRecipe) {
                 failure = "No way to remake layer content from its recipe.";
                 return std::nullopt;
@@ -39,12 +49,16 @@ bool HistoryReplayer::apply(const HistoryEntry& original, std::string* error) {
         }
         return std::nullopt;
     };
-    const auto change = History::applyEntry(project_, entry, supplyBase);
+    const auto change = forward ? History::applyEntry(project_, entry, supplyBase)
+                                : History::revertEntry(project_, entry, supplyBase);
     if (!change.has_value()) {
         if (error != nullptr) {
             *error = failure.empty() ? "A layer's content couldn't be remade." : failure;
         }
         return false;
+    }
+    if (options_.keepSteppedEntries) {
+        stepped_.insert_or_assign(entry.id, std::move(entry));
     }
     stale_.insert(change->contentLayers.begin(), change->contentLayers.end());
     std::erase_if(stale_, [this](LayerId id) { return project_.layerById(id) == nullptr; });

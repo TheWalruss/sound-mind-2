@@ -248,4 +248,205 @@ void exportSegmentedVideo(const std::filesystem::path& path, const std::vector<V
     checkFfmpeg(av_write_trailer(formatCtx.get()), "could not finalize the MP4 file");
 }
 
+/// @brief Everything an open StreamedVideoWriter holds - the muxer, both
+///        encoders and the converters feeding them.
+struct StreamedVideoWriter::State {
+    /// @brief The MP4 muxer.
+    AVFormatContextOutputPtr formatCtx;
+    /// @brief The video encoder and its stream.
+    VideoEncoder video;
+    /// @brief The audio encoder and its stream.
+    AudioEncoder audio;
+    /// @brief RGB24 to the encoder's pixel format.
+    SwsContextPtr sws;
+    /// @brief Planar float stereo to the encoder's sample format and rate.
+    SwrContextPtr swr;
+    /// @brief Resampled audio waiting to fill whole encoder frames.
+    AVAudioFifoPtr fifo;
+    /// @brief The canvas size, padded to even.
+    std::uint32_t paddedWidth = 0;
+    /// @brief See paddedWidth.
+    std::uint32_t paddedHeight = 0;
+    /// @brief The input audio's sample rate.
+    std::uint32_t sampleRateHz = 0;
+    /// @brief Video frames per second.
+    int frameRate = 30;
+    /// @brief Samples per encoder frame.
+    int audioFrameSize = 1024;
+    /// @brief Video frames written so far.
+    std::int64_t framesWritten = 0;
+    /// @brief Audio samples encoded so far.
+    std::int64_t samplesEncoded = 0;
+    /// @brief Whether finish() ran.
+    bool finished = false;
+
+    /// @brief A fresh audio frame in the encoder's format.
+    /// @param samples Its length.
+    /// @return The frame.
+    AVFramePtr audioFrame(int samples) const {
+        const AVCodecContext& ctx = *audio.codecCtx;
+        AVFramePtr frame(av_frame_alloc());
+        if (!frame) {
+            throw std::runtime_error("could not allocate an AVFrame");
+        }
+        frame->format = ctx.sample_fmt;
+        frame->sample_rate = ctx.sample_rate;
+        checkFfmpeg(av_channel_layout_copy(&frame->ch_layout, &ctx.ch_layout), "could not set the channel layout");
+        frame->nb_samples = samples;
+        checkFfmpeg(av_frame_get_buffer(frame.get(), 0), "could not allocate an audio frame buffer");
+        return frame;
+    }
+
+    /// @brief Encodes whole frames from the FIFO.
+    /// @param all Also encode the remainder, as a last, shorter frame.
+    void drainAudio(bool all) {
+        while (av_audio_fifo_size(fifo.get()) >= audioFrameSize || (all && av_audio_fifo_size(fifo.get()) > 0)) {
+            const int samples = std::min(audioFrameSize, av_audio_fifo_size(fifo.get()));
+            AVFramePtr frame = audioFrame(samples);
+            checkFfmpeg(av_audio_fifo_read(fifo.get(), reinterpret_cast<void* const*>(frame->data), samples),
+                        "could not read from the audio FIFO");
+            frame->pts = samplesEncoded;
+            samplesEncoded += samples;
+            encodeFrameAndWritePackets(*formatCtx, *audio.codecCtx, *audio.stream, frame.get());
+        }
+    }
+
+    /// @brief Resamples input into the FIFO.
+    /// @param input Planar left/right float pointers, or `nullptr` to flush.
+    /// @param frames How many input frames.
+    void resample(const std::uint8_t** input, int frames) {
+        const AVCodecContext& ctx = *audio.codecCtx;
+        const int maxOut = swr_get_out_samples(swr.get(), frames);
+        checkFfmpeg(maxOut, "could not estimate the resampler's output size");
+        if (maxOut <= 0) {
+            return;
+        }
+        PlanarSampleBuffer out(ctx.ch_layout.nb_channels, maxOut, ctx.sample_fmt);
+        const int converted = swr_convert(swr.get(), out.data(), maxOut, input, frames);
+        checkFfmpeg(converted, "resampling failed");
+        if (converted > 0) {
+            checkFfmpeg(av_audio_fifo_write(fifo.get(), reinterpret_cast<void* const*>(out.data()), converted),
+                        "could not write to the audio FIFO");
+        }
+    }
+};
+
+StreamedVideoWriter::StreamedVideoWriter(const std::filesystem::path& path, std::uint32_t width, std::uint32_t height,
+                                         std::uint32_t sampleRateHz, int frameRate)
+    : state_(std::make_unique<State>()) {
+    if (width == 0 || height == 0 || frameRate <= 0 || sampleRateHz == 0) {
+        throw std::runtime_error("cannot write a video with an empty canvas, frame rate or sample rate");
+    }
+    State& st = *state_;
+    st.paddedWidth = roundUpToEven(width);
+    st.paddedHeight = roundUpToEven(height);
+    st.sampleRateHz = sampleRateHz;
+    st.frameRate = frameRate;
+
+    AVFormatContext* formatCtxRaw = nullptr;
+    checkFfmpeg(avformat_alloc_output_context2(&formatCtxRaw, nullptr, "mp4", path.string().c_str()),
+                "could not determine an output format for this path");
+    st.formatCtx.reset(formatCtxRaw);
+    st.video = createVideoEncoder(*st.formatCtx, st.paddedWidth, st.paddedHeight, frameRate);
+    AudioBuffer rateOnly;
+    rateOnly.sampleRateHz = sampleRateHz;
+    st.audio = createAudioEncoder(*st.formatCtx, AV_CODEC_ID_AAC, rateOnly, /*bitRate=*/192000);
+    checkFfmpeg(avio_open(&st.formatCtx->pb, path.string().c_str(), AVIO_FLAG_WRITE),
+                "could not open output file for writing: " + path.string());
+    checkFfmpeg(avformat_write_header(st.formatCtx.get(), nullptr), "could not write the MP4 file header");
+
+    st.sws.reset(sws_getContext(static_cast<int>(st.paddedWidth), static_cast<int>(st.paddedHeight), AV_PIX_FMT_RGB24,
+                                static_cast<int>(st.paddedWidth), static_cast<int>(st.paddedHeight),
+                                st.video.pixelFormat, SWS_BILINEAR, nullptr, nullptr, nullptr));
+    if (!st.sws) {
+        throw std::runtime_error("could not create an RGB24->YUV converter");
+    }
+    const AVCodecContext& audioCtx = *st.audio.codecCtx;
+    AVChannelLayout inLayout = AV_CHANNEL_LAYOUT_STEREO;
+    SwrContext* swrRaw = nullptr;
+    checkFfmpeg(swr_alloc_set_opts2(&swrRaw, &audioCtx.ch_layout, audioCtx.sample_fmt, audioCtx.sample_rate, &inLayout,
+                                    AV_SAMPLE_FMT_FLTP, static_cast<int>(sampleRateHz), 0, nullptr),
+                "could not configure the resampler");
+    st.swr.reset(swrRaw);
+    checkFfmpeg(swr_init(st.swr.get()), "could not initialize the resampler");
+    st.audioFrameSize = audioCtx.frame_size > 0 ? audioCtx.frame_size : 1024;
+    st.fifo.reset(av_audio_fifo_alloc(audioCtx.sample_fmt, audioCtx.ch_layout.nb_channels, st.audioFrameSize));
+    if (!st.fifo) {
+        throw std::runtime_error("could not allocate the audio FIFO");
+    }
+}
+
+StreamedVideoWriter::~StreamedVideoWriter() {
+    try {
+        finish();
+    } catch (...) {  // NOLINT(bugprone-empty-catch) - a destructor must not throw; the file is left incomplete.
+    }
+}
+
+double StreamedVideoWriter::videoSeconds() const noexcept {
+    return static_cast<double>(state_->framesWritten) / state_->frameRate;
+}
+
+void StreamedVideoWriter::addVideo(const RgbImage& canvas, double seconds, const PlayheadAt& playheadAt) {
+    State& st = *state_;
+    if (st.finished || seconds <= 0.0) {
+        return;
+    }
+    const std::vector<std::uint8_t> base = padCanvasToRgb24(canvas, st.paddedWidth, st.paddedHeight);
+    const double end = videoSeconds() + seconds;
+    AVCodecContext& ctx = *st.video.codecCtx;
+    while (static_cast<double>(st.framesWritten) / st.frameRate < end - 1e-9) {
+        std::vector<std::uint8_t> frameRgb24 = base;
+        if (playheadAt) {
+            if (const auto fraction = playheadAt(static_cast<double>(st.framesWritten) / st.frameRate)) {
+                const auto x = static_cast<std::uint32_t>(std::clamp(*fraction, 0.0, 1.0) * st.paddedWidth);
+                drawPlayheadLine(frameRgb24, st.paddedWidth, st.paddedHeight, x);
+            }
+        }
+        AVFramePtr frame(av_frame_alloc());
+        if (!frame) {
+            throw std::runtime_error("could not allocate a video AVFrame");
+        }
+        frame->format = st.video.pixelFormat;
+        frame->width = static_cast<int>(st.paddedWidth);
+        frame->height = static_cast<int>(st.paddedHeight);
+        checkFfmpeg(av_frame_get_buffer(frame.get(), 0), "could not allocate a video frame buffer");
+        const std::uint8_t* srcSlices[1] = {frameRgb24.data()};
+        const int srcStride[1] = {static_cast<int>(st.paddedWidth) * 3};
+        checkFfmpeg(sws_scale(st.sws.get(), srcSlices, srcStride, 0, static_cast<int>(st.paddedHeight), frame->data,
+                              frame->linesize),
+                    "RGB24->YUV conversion failed");
+        frame->pts = st.framesWritten++;
+        encodeFrameAndWritePackets(*st.formatCtx, ctx, *st.video.stream, frame.get());
+    }
+}
+
+void StreamedVideoWriter::addAudio(const AudioBuffer& audio) {
+    State& st = *state_;
+    if (st.finished) {
+        return;
+    }
+    constexpr std::size_t kChunk = 4096;
+    for (std::size_t position = 0; position < audio.frameCount(); position += kChunk) {
+        const auto frames = static_cast<int>(std::min(kChunk, audio.frameCount() - position));
+        const std::uint8_t* input[2] = {reinterpret_cast<const std::uint8_t*>(audio.left.data() + position),
+                                        reinterpret_cast<const std::uint8_t*>(audio.right.data() + position)};
+        st.resample(input, frames);
+        st.drainAudio(/*all=*/false);
+    }
+}
+
+void StreamedVideoWriter::finish() {
+    State& st = *state_;
+    if (st.finished) {
+        return;
+    }
+    st.finished = true;
+    encodeFrameAndWritePackets(*st.formatCtx, *st.video.codecCtx, *st.video.stream, nullptr);
+    st.resample(nullptr, 0);
+    st.drainAudio(/*all=*/true);
+    encodeFrameAndWritePackets(*st.formatCtx, *st.audio.codecCtx, *st.audio.stream, nullptr);
+    checkFfmpeg(av_write_trailer(st.formatCtx.get()), "could not finalize the MP4 file");
+}
+
 }  // namespace sound_mind::codec

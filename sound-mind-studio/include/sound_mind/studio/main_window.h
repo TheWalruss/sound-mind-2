@@ -49,6 +49,7 @@
 #include "sound_mind/studio/tool_palette_controller.h"
 #include "sound_mind/studio/project_history.h"
 #include "sound_mind/studio/remaster.h"
+#include "sound_mind/core/macro_renderer.h"
 
 class QAction;
 class QCloseEvent;
@@ -3021,11 +3022,28 @@ public:
     void exportCompositeAudioAsync(const std::filesystem::path& path, sound_mind::codec::CompressedAudioFormat format);
 
     /**
-     * @brief Exports a recorded Macro as a video (`docs/sound-mind-design.md`'s
-     *        *Macros*).
+     * @brief Exports a recorded Macro as a video (`v0.1.44.2`,
+     *        `docs/sound-mind-design.md`'s *Macros*): a `MacroRenderer`
+     *        rebuilds the performance on a project of its own and
+     *        `core::exportMacroVideo()` writes it segment by segment, on
+     *        `exportTask_` (cancellable, sharing the other exports' progress
+     *        and cancel button). The open project is never touched.
      * @param path Destination path.
+     * @param id The Macro.
      */
-    void exportMacroVideoAsync(const std::filesystem::path& path);
+    void exportMacroVideoAsync(const std::filesystem::path& path, sound_mind::core::MacroId id);
+
+    /**
+     * @brief A renderer for a recorded Macro, set up on the UI thread with
+     *        copies of everything it needs (start entries, the source
+     *        lookup, the limiter setting), so it can run on a background
+     *        thread.
+     * @param id The Macro.
+     * @param errorMessage Receives the reason on failure; may be `nullptr`.
+     * @return The renderer (not yet prepared), or `nullptr`.
+     */
+    std::unique_ptr<sound_mind::core::MacroRenderer> macroRendererFor(sound_mind::core::MacroId id,
+                                                                     QString* errorMessage = nullptr);
 
     /// @brief Whether an exportCompositeVideoAsync()/
     /// exportCompositeAudioAsync()/exportMacroVideoAsync() export - any

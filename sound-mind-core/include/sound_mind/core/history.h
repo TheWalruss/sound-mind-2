@@ -341,6 +341,20 @@ public:
         const std::function<std::optional<LayerBase>(LayerId)>& base = {});
 
     /**
+     * @brief Applies `entry`'s "before" side - undoing it in a replay (a
+     *        Macro that recorded an undo, `v0.1.44.2`). The mirror of
+     *        applyEntry().
+     * @param project The project, in the entry's "after" state.
+     * @param entry The entry.
+     * @param base Supplies the base of each layer whose base the entry
+     *        changed, as it was before, when the entry doesn't hold it.
+     * @return What changed; `std::nullopt` if a base was missing.
+     */
+    static std::optional<HistoryChange> revertEntry(
+        Project& project, HistoryEntry& entry,
+        const std::function<std::optional<LayerBase>(LayerId)>& base = {});
+
+    /**
      * @brief Caps how much memory the entries' kept base images may take;
      *        the oldest are dropped first, and recovered with a resolver if
      *        needed later.

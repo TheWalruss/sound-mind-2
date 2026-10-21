@@ -42,6 +42,7 @@ add_executable(sound-mind-core-tests
     test_history.cpp
     test_history_replay.cpp
     test_macro.cpp
+    test_macro_renderer.cpp
     test_operation_log.cpp
     test_paint_application.cpp
     test_fill_application.cpp

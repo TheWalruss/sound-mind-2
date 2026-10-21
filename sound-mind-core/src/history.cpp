@@ -559,6 +559,29 @@ std::optional<HistoryChange> History::applyEntry(Project& project, HistoryEntry&
     return change;
 }
 
+std::optional<HistoryChange> History::revertEntry(Project& project, HistoryEntry& entry,
+                                                  const std::function<std::optional<LayerBase>(LayerId)>& base) {
+    std::map<LayerId, LayerBase> targetBases;
+    for (const HistoryLayerChange& layerChange : entry.layers) {
+        if (!layerChange.baseChanged || layerChange.before.is_null()) {
+            continue;
+        }
+        if (!layerChange.beforeHasContent) {
+            targetBases.emplace(layerChange.id,
+                                LayerBase{nullptr, nullptr, layerChange.before.value("baseRecipe", nlohmann::json()), 0});
+        } else if (layerChange.baseBefore.has_value()) {
+            targetBases.emplace(layerChange.id, *layerChange.baseBefore);
+        } else if (auto supplied = base ? base(layerChange.id) : std::nullopt) {
+            targetBases.emplace(layerChange.id, std::move(*supplied));
+        } else {
+            return std::nullopt;
+        }
+    }
+    HistoryChange change = applySide(project, entry, /*forward=*/false, targetBases);
+    clearDisplacedBases(project);
+    return change;
+}
+
 void History::assignEntries(Project& project, std::vector<HistoryEntry> entries, bool startsAtCreation) {
     for (HistoryEntry& entry : entries) {
         for (HistoryLayerChange& change : entry.layers) {

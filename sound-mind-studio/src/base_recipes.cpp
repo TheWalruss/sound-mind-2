@@ -162,6 +162,21 @@ std::optional<sound_mind::core::LayerBase> runBaseRecipe(const nlohmann::json& r
     return fail(errorMessage, tr("This layer's content was made in a way that can't be repeated."));
 }
 
+SourcePathLookup sourceLookupFor(const sound_mind::core::Project& project) {
+    return [sources = project.sources(), folder = project.sourcesFolder()](
+               sound_mind::core::SourceId id) -> std::optional<std::filesystem::path> {
+        if (!folder.has_value()) {
+            return std::nullopt;
+        }
+        for (const sound_mind::core::ProjectSource& source : sources) {
+            if (source.id == id) {
+                return *folder / std::filesystem::path(std::u8string(source.fileName.begin(), source.fileName.end()));
+            }
+        }
+        return std::nullopt;
+    };
+}
+
 sound_mind::core::ReplayRecipeRunner replayRecipeRunner(SourcePathLookup sourcePath) {
     return [sourcePath = std::move(sourcePath)](const nlohmann::json& recipe, sound_mind::core::LayerId layer,
                                                 const sound_mind::core::Project& project,

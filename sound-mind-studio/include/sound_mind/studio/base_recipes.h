@@ -70,6 +70,15 @@ using RenderedContentLookup = std::function<const sound_mind::codec::StreamImage
                                                                       QString* errorMessage = nullptr);
 
 /**
+ * @brief A source lookup for `project` that works on its own copy of the
+ *        registry and folder - safe on a background thread while the
+ *        project changes (`v0.1.44.2`).
+ * @param project The project.
+ * @return The lookup.
+ */
+[[nodiscard]] SourcePathLookup sourceLookupFor(const sound_mind::core::Project& project);
+
+/**
  * @brief runBaseRecipe() as a replay's recipe runner (`v0.1.43.3`).
  * @param sourcePath Finds each source's file - the live project's, or
  *        (Remaster) with replacements.

@@ -2986,7 +2986,8 @@ void MainWindow::exportVideo() {
 }
 
 void MainWindow::exportMacroVideo() {
-    if (!chooseMacro(tr("Export Macro Video"))) {
+    const auto id = chooseMacro(tr("Export Macro Video"));
+    if (!id) {
         return;
     }
     const QString fileName =
@@ -2994,7 +2995,32 @@ void MainWindow::exportMacroVideo() {
     if (fileName.isEmpty()) {
         return;
     }
-    exportMacroVideoAsync(std::filesystem::path(fileName.toStdString()));
+    exportMacroVideoAsync(std::filesystem::path(fileName.toStdWString()), *id);
+}
+
+std::unique_ptr<sound_mind::core::MacroRenderer> MainWindow::macroRendererFor(sound_mind::core::MacroId id,
+                                                                               QString* errorMessage) {
+    const sound_mind::core::Macro* macro = project_ ? project_->macroById(id) : nullptr;
+    if (macro == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("That macro no longer exists.");
+        }
+        return nullptr;
+    }
+    auto start = sound_mind::core::macroStartEntries(*project_, *macro);
+    if (!start.has_value()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("This macro was recorded in a project whose history doesn't go back to its creation "
+                               "(made with a version before 0.1.43.1), so it can't be rebuilt.");
+        }
+        return nullptr;
+    }
+    sound_mind::core::MacroRenderOptions options;
+    options.runRecipe = sound_mind::studio::replayRecipeRunner(sound_mind::studio::sourceLookupFor(*project_));
+    options.limiterCeilingDb =
+        limiterEnabled_ ? std::optional<float>(static_cast<float>(limiterCeilingDb_)) : std::nullopt;
+    return std::make_unique<sound_mind::core::MacroRenderer>(macro->settings, std::move(*start), *macro,
+                                                             std::move(options));
 }
 
 bool MainWindow::exportCompositeAudioNow(const std::filesystem::path& path, QString* errorMessage) {
@@ -3127,9 +3153,41 @@ void MainWindow::exportCompositeAudioAsync(const std::filesystem::path& path,
     exportProgressTimer_->start();
 }
 
-void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path) {
-    (void)path;
-    statusBar()->showMessage(tr("Exporting macros as video arrives in the next update."), 5000);
+void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path, sound_mind::core::MacroId id) {
+    if (isExportRunning()) {
+        statusBar()->showMessage(tr("Already exporting - wait for it to finish, or cancel it, first."), 5000);
+        return;
+    }
+    QString error;
+    std::shared_ptr<sound_mind::core::MacroRenderer> renderer = macroRendererFor(id, &error);
+    if (!renderer) {
+        QMessageBox::critical(this, tr("Export Macro Video Failed"), error);
+        return;
+    }
+
+    exportKind_ = ExportKind::MacroVideo;
+    exportPath_ = path;
+    exportOutcome_ = ExportOutcome::Success;
+    exportErrorMessage_.clear();
+    exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+        [this, path, renderer](sound_mind::core::CancellationToken& token) {
+            // Rendered on a project of the renderer's own: the open one is
+            // never touched (v0.1.44.2).
+            renderer->setShouldCancel([&token]() { return token.cancellationRequested(); });
+            std::string failure;
+            const bool written = renderer->prepare(&failure) &&
+                                 sound_mind::core::exportMacroVideo(*renderer, path, /*frameRate=*/30, {}, &failure);
+            if (token.cancellationRequested()) {
+                exportOutcome_ = ExportOutcome::Cancelled;
+            } else if (!written) {
+                exportOutcome_ = ExportOutcome::Failed;
+                exportErrorMessage_ = QString::fromStdString(failure);
+            }
+        });
+    exportTask_->start();
+    statusBar()->showMessage(tr("Exporting macro video..."));
+    exportCancelButton_->show();
+    exportProgressTimer_->start();
 }
 
 bool MainWindow::isExportRunning() const noexcept { return exportTask_ != nullptr && exportTask_->isRunning(); }

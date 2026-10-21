@@ -1,6 +1,9 @@
 #pragma once
 
 #include <filesystem>
+#include <cstdint>
+#include <optional>
+#include <memory>
 #include <functional>
 #include <vector>
 
@@ -110,5 +113,68 @@ void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, cons
 void exportSegmentedVideo(const std::filesystem::path& path, const std::vector<VideoSegment>& segments,
                           const AudioBuffer& audio, int frameRate = 30,
                           const std::function<bool()>& shouldCancel = nullptr);
+
+/**
+ * @brief Writes an MP4 piece by piece (`v0.1.44.2`): canvas images and
+ *        audio are added as they're rendered, so a long Macro video never
+ *        holds more than one canvas in memory - unlike
+ *        exportSegmentedVideo(), which needs every segment and the whole
+ *        audio up front.
+ *
+ * Same formats as exportVideo() (MPEG-4 Part 2 video, AAC audio). Add video
+ * and audio for the same stretch of time alternately (each a segment
+ * long); the muxer interleaves them.
+ *
+ * Not thread-safe; one instance per file.
+ */
+class StreamedVideoWriter {
+public:
+    /// @brief Where the playhead line goes at a moment of the video: a
+    ///        fraction of the width, or `std::nullopt` for none.
+    using PlayheadAt = std::function<std::optional<double>(double videoSeconds)>;
+
+    /**
+     * @brief Opens `path` and writes the header.
+     * @param path Destination path.
+     * @param width Canvas width (padded to even).
+     * @param height Canvas height (padded to even).
+     * @param sampleRateHz The audio's sample rate.
+     * @param frameRate Video frame rate.
+     * @throws std::runtime_error if the file or encoders can't be set up.
+     */
+    StreamedVideoWriter(const std::filesystem::path& path, std::uint32_t width, std::uint32_t height,
+                        std::uint32_t sampleRateHz, int frameRate = 30);
+
+    /// @brief Closes the file, finishing it if finish() wasn't called.
+    ~StreamedVideoWriter();
+
+    StreamedVideoWriter(const StreamedVideoWriter&) = delete;
+    StreamedVideoWriter& operator=(const StreamedVideoWriter&) = delete;
+
+    /**
+     * @brief Adds `seconds` of video showing `canvas` (same size as given
+     *        to the constructor), from where the video so far ends.
+     * @param canvas The image.
+     * @param seconds How long it shows.
+     * @param playheadAt Where the playhead line goes; empty for none.
+     */
+    void addVideo(const RgbImage& canvas, double seconds, const PlayheadAt& playheadAt);
+
+    /// @brief Adds audio after what was added so far.
+    /// @param audio The samples, at the constructor's sample rate.
+    void addAudio(const AudioBuffer& audio);
+
+    /// @brief How long the video added so far is.
+    /// @return Seconds.
+    [[nodiscard]] double videoSeconds() const noexcept;
+
+    /// @brief Flushes both encoders and writes the trailer. Further calls
+    ///        do nothing.
+    void finish();
+
+private:
+    struct State;
+    std::unique_ptr<State> state_;
+};
 
 }  // namespace sound_mind::codec

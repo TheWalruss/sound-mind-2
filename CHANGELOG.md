@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.44.2] - 2026-10-21
+
+Roadmap slot `v0.Y.82.1` (Macros), installment B.
+
+### Added
+
+- **Export Macro Video** is back, rebuilt: it renders the chosen performance to an MP4.
+  - The canvas changes at each moment you changed something, with every change complete at once - a heavy filter change that took a moment live is instant in the video.
+  - The playhead line goes where yours went, through seeks, Repeat jumps and Loop passes, and the audio is what the playhead played.
+  - It's rendered on a copy, so the project you're working on isn't touched, and you can keep working while it exports (cancel from the status bar).
+  - Long performances no longer need the whole video in memory.
+
 ## [0.1.44.1] - 2026-10-21
 
 Roadmap slot `v0.Y.82.1` (Macros, redesigned), installment A.
