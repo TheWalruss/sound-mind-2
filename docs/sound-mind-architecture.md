@@ -339,6 +339,68 @@ The operation log is what makes Pooling, Generators, and Remaster-style rebuilds
 - Bit-for-bit reproducibility is scoped to *(Studio version, target architecture)* — an op log is not a portable, version-independent artifact, and cross-architecture replay is only held to sounding the same, not being byte-identical. This means the log format should record enough version/architecture context to know when a strict bit-for-bit check even applies.
 - The raster cache is purely an optimization: correctness only ever depends on log replay, never on trusting a stale cache. This has a concrete implication for testing — a cache-invalidation bug should be *detectable* by forcing a full replay and diffing against the cached result, which is a natural strategy for regression tests once there's code to test.
 
+## History, Sources and Macros (redesign, 2026-10-21 - Decision #262)
+
+The target the user set: replaying the History rebuilds a project from its original sources, which makes Remastering possible, and a Macro is a timed slice of History plus what the playhead did. This replaces the session-only `UndoStack` (closures over live controllers, Decision #157) and the old `MacroRecorder` (undo-stack indices, Decisions #162-#164).
+
+**Core types (`sound-mind-core`, so replay runs headless and off the UI thread):**
+
+- **`HistoryEntry`:** a stable id, a kind, a typed and JSON-serializable payload with both the forward and the inverse data (old and new values; a deleted layer together with its operations), a description, and a wall-clock time.
+  - `apply(Project&, SourceStore&)` and `revert(Project&)` are pure functions of the payload and the project, with no Studio controller involved.
+  - Content operations (`PaintOperation` and the rest) stay as they are. Their entries add, supersede, restack or delete them in `OperationLog`, whose own undo high-water mark goes away.
+- **`History`:** the ordered entries plus the current position.
+  - `perform()` applies and appends.
+  - `undo()`, `redo()` and `jumpTo()` revert and apply.
+  - A new entry after an undo drops the redo tail, unless a Macro references those entries. Then the Macro keeps its own copy of them.
+- **`SourceStore`:** the project's `sources/` folder, plus a registry in the project file. Each source has:
+  - an id;
+  - its kind: audio, image, MIDI, recording or loop capture;
+  - the original file name, kept for provenance;
+  - a SHA-256 content hash, which deduplicates and names the file.
+
+  Imports copy the file in. Recordings and Loop captures are written as FLAC, since JUCE's FLAC encoder is already linked. A source is kept as long as any entry or Macro references it.
+- **The Studio's role:** controllers build entries and call `History::perform()`. The Studio then refreshes from one change notification that says which layers and resources were affected. Undo and the History panel run on `History`.
+
+**Persistence:**
+
+- The project file holds the History (the source of truth), the source registry, the Macros, and the current state snapshot (today's layers, operations and resources).
+- The snapshot and the `media/`/`pool/` render caches are an optimization. They record the History entry id they reflect. On load, a mismatch, or a missing cache, means a replay.
+- A layer's content is never re-derived from anything other than replay or its cache.
+- Per the standing pre-Beta decision, older projects aren't migrated.
+
+**Units:** every History payload is in seconds and Hz, never pixels, so that a replay at different codec settings lands in the same place. A few things are still raster-unit data, and the History installments convert them:
+
+| Raster-unit data | How it's converted |
+|---|---|
+| Layer translation (`translationColumns`) | Becomes seconds. |
+| Frame/bin mask selections embedded in operations | Resampled on remaster. |
+| Pasted `Clip`s copied from inside the project | Become a reference to their origin (layer and region at copy time), re-copied from the rebuilt origin on replay. |
+| Clips from outside the project | Stay raster data, resampled on remaster. |
+
+Text pastes replay from their `TextSource`. They depend on the font being installed, and a missing font falls back to the default.
+
+**Remaster:** `rebuildProject(history, sources, settingsOverride, sourceReplacements)` replays into a fresh `Project` on a background thread, and the Studio saves the result as a new project.
+
+**Macro:**
+
+- **`Macro`:** a name, the History id it starts from (with a copied prefix if that History is later discarded), and timed events. Each event is either a History entry, or an undo/redo of one, at a Macro time, or a transport event: play from position *x*, pause, seek to *x*, Repeat wrap, Loop pass.
+- **The Macro clock** advances only while Playback or Loop is running. Entries made while it's stopped get the frozen time, in order.
+- **The playhead track:** the position at Macro time *t* is derived from the transport events. That is what the replay plays.
+- **Loop Mode:** each completed pass's capture becomes a source and an entry ("Loop layer from capture *n*") at the pass boundary.
+- **Record:** the capture becomes a source and an entry when recording stops.
+- **`MacroRenderer` (Core, background):**
+  - builds a project copy from the start point, then walks the events;
+  - between consecutive events, composites the project once and renders the canvas image and the audio for the playhead span the segment covers, following wraps and seeks;
+  - emits segments (image, audio, start and duration).
+
+  Two consumers: the video encoder (the existing `exportSegmentedVideo()`, with the playhead taken from the playhead track instead of sweeping linearly) and the Studio's Play Macro. Play Macro renders ahead and starts when a buffer threshold is reached, then plays the segment audio continuously while showing the segment images.
+- **User decisions (2026-10-21):**
+  - changes appear at commit, with no progressive stroke drawing and no viewport following;
+  - dragged controls record only their final value;
+  - Play Macro renders ahead rather than replaying live.
+
+  Recording the stroke and gesture timing isn't needed for these, so it isn't captured.
+
 # Build & Module Layout (proposal)
 
 A first cut at the top-level module split:
@@ -2590,6 +2652,30 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - The microphone consent prompt is a manual test.
     - **`docs/store-submission.md`:** the Partner Center steps (registration, name reservation, identity variables, privacy policy for the microphone, `runFullTrust` justification, private-audience beta) and local testing.
     - **Tests:** `CommandLineTest`, 3 cases - finds the project argument (any case); ignores the program name, other arguments and later projects; keeps non-ASCII paths.
+262. **History, Sources and Macros redesigned from the ground up (design only).** Settled 2026-10-21, before roadmap slots `v0.Y.81.1`/`v0.Y.82.1` are built. See *History, Sources and Macros* above for the design itself.
+    - **The user's brief:** a Macro records an audiovisual performance (playhead-timed project changes, with the clock paused while playback is), to replay in the Studio or export as video. To make that and remastering possible, History records every action with enough metadata, and copies source data in, so that replaying it rebuilds the project from the original sources, possibly at higher fidelity or with different source material.
+    - **What was found in the code (why this is a ground-up redesign):**
+      - `UndoStack` is session-only closures over live controllers, so it can't be saved or replayed on a copy.
+      - Only 14 call sites push undo commands, covering layer properties, filter and MindWave edits, and content operations.
+      - Import, generate, record, Loop, pool, phase cleanup, layer add/delete/duplicate/reorder/rename and every resource change aren't recorded at all.
+      - `OperationLog` (persisted) holds only content operations.
+      - Layers store only their encoded result. Imported files aren't copied in, even though this document's *Project File & Folder* always planned a `sources/` folder.
+      - `MacroEvent` points at undo-stack indices, so a Macro can't outlive the session, and replay mutated the live project, restarting playback audibly at every event.
+      - On the other hand, compositing and paint replay already live in Core, so a headless replay is feasible.
+    - **Decided with the user (questions, 2026-10-21):**
+      - changes pop in at commit, rather than strokes animating or the video following the viewport;
+      - dragged controls record only their final value, not the movement;
+      - Play Macro renders ahead on a project copy and then plays seamlessly, rather than replaying live.
+    - **Decided here, as engineering choices (open to revisiting):**
+      - History lives in Core with serializable forward/inverse payloads, rather than Studio closures.
+      - Undo keeps the familiar linear model (a new change drops the redo tail), with Macros keeping a copy of any History they depend on, rather than a full undo tree.
+      - Sources are hash-named copies, and recordings and Loop captures are FLAC.
+      - The state snapshot and caches stay as a load-time optimization, validated by the History entry id they reflect.
+      - The Macro clock is accumulated transport time, with a separate playhead track, so Repeat and seeks replay correctly.
+      - Undo/redo during recording are performance events.
+      - Several named Macros persist with the project.
+    - **Not planned (future work):** a timeline editor for Macros, progressive stroke animation, viewport following, and gesture automation. All of these would need gesture timing captured, which these decisions don't.
+    - **Replaces:** the Macro parts of Decisions #162-#164 (`MacroRecorder`, `playMacro()`, `exportMacroVideoAsync()`'s `jumpTo()` extraction), and `UndoStack` (Decision #157), once the History installments land.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

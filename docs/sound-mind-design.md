@@ -124,6 +124,28 @@ A project's real content is therefore closer to a scene graph — objects, event
 
 When performing a Pool export, all the operations are applied to the Pool-format media, rather than the lighter Stream media. Pool-mode operations are all fully phase-aware, for optimal audio reconstruction.
 
+## History and Remastering
+
+A project's **History** is the complete record of everything done to it, from the moment it was created. That covers:
+
+- importing media, recording, and generating layers;
+- adding, removing, reordering, renaming and duplicating layers;
+- every layer property (visibility, mute, gain/opacity, balance, position, scale, blend mode, filter settings, MindWave bindings);
+- every paint, fill, paste, text, sequence and filter-to-selection operation, and every later edit, restack or deletion of one;
+- pooling and phase cleanup;
+- creating, changing and removing resources (MindWaves, Mind Shots, Mind Grains, instruments, presets, kernels).
+
+It doesn't cover view and session state: zoom, scroll, the active tool, panel layout, selections that haven't been used for anything, device settings, and analysis.
+
+Each History entry carries enough to redo it from scratch: the parameters, the seed for anything random, and references to the source media it used. **Imported media is copied into the project** (its `sources` folder) when it's imported, and recordings and Loop captures are saved there losslessly. So a project never depends on files outside its own folder, and replaying its History from the start rebuilds it exactly.
+
+History is saved with the project and is what Undo/Redo and the History panel step through. Every entry is undoable, including imports, recordings and layer deletion. As in other editors, making a new change after undoing discards the undone entries, unless a recorded [Macro](#macros) still needs them.
+
+**Remastering** builds a new project by replaying a project's whole History with changes. The original stays untouched. The changes can be:
+
+- **Higher-fidelity (or different) settings:** frequency resolution, time step, sample rate, frequency scale and range. Everything is positioned in seconds and Hz, so every stroke, fill and paste lands in the same place at the new resolution.
+- **Different source material:** replace any imported or recorded source with another file. Every operation that used it now works on the new material, and operations placed in time stay where they were.
+
 ## Layers
 
 Sound Mind Projects are composed of multiple layers, which are composited to a visual whole before decoding to sound. Each layer contains metadata describing the operations applied to it, as well as the latest rendered result.
@@ -534,6 +556,17 @@ Recording captures audio directly from a connected input device into a new layer
 ## Playback
 
 Playback provides standard transport — play, pause, and stop — over the current composite, an output device selection (with the option to rescan), and a volume control. Because Stream mode is built for immediate feedback, playback reflects the project as it currently stands, edits included, without a separate render step.
+
+## Macros
+
+A **Macro** records a performance: the project as it plays, and everything done to it while it plays. Played back in the Studio or exported as a video, it becomes a music video or an audiovisual performance of that session.
+
+- **Recording:** arm **Record Macro**, then start Playback or Loop. The Macro keeps its own clock, which runs only while Playback or Loop is running. Pausing or stopping stops the clock, but any changes made in the meantime are still recorded, in order, at the moment the clock stopped. So a pause to set up the next change doesn't appear in the performance; the changes simply land together when playback resumes. Disarming **Record Macro** ends the recording.
+- **What's recorded:** every History entry made while armed, with its Macro time, plus what the playhead did (start, pause, seeks, Repeat wrap-arounds, Loop passes). Undo and Redo while recording are part of the performance too. A dragged control (gain, opacity, filter or MindWave parameters) records its final value when released, not the movement.
+- **Replay:** a Macro starts from the project as it was when recording began, and applies each change at its recorded time. The audio is what the playhead played at each moment: the project as it stood then, from the position the playhead was at. Each change appears complete at the moment it was made. A stroke pops in when it was committed; it isn't drawn in progressively.
+- **Play Macro** renders the performance in the background on a separate copy of the project, then plays it seamlessly once enough is rendered. A heavy filter change that took a moment live is instant in the replay. The project being edited is never touched.
+- **Export Macro Video** renders the same performance to a video file: the whole canvas with the moving playhead, and the audio as played.
+- **Macros are saved with the project**, named, and several can exist. A Macro stays playable even after the project is edited further, because it keeps whatever History it depends on.
 
 ## Live
 

@@ -1193,8 +1193,8 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.12` (`0.1.40.8`: slider ranges; `0.1.40.13` belongs to `v0.Y.78.1`) | #249-#256 |
 | `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.5` (follow-up `0.1.41.6`: shaders embedded) | #258, #259 |
 | `v0.Y.80.3` | Licensing and beta groundwork (inserted 2026-10-21) | `0.1.42.1` (follow-up `0.1.42.2`: Microsoft Store MSIX) | #260, #261 |
-| `v0.Y.81.1` | Operation history persisted with the project | *(planned: `0.1.43.x`)* | |
-| `v0.Y.82.1` | Macro recording and macro video export | *(planned: `0.1.44.x`)* | |
+| `v0.Y.81.1` | History: every action recorded, sources in the project, Remaster (redesigned 2026-10-21) | *(planned: `0.1.43.x`)* | #262 |
+| `v0.Y.82.1` | Macros: record, play and export a performance (redesigned 2026-10-21) | *(planned: `0.1.44.x`)* | #262 |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
 
 **Standing decision (2026-10-15): disregard file-format and backward-compatibility concerns completely until after Beta.** Old projects don't need to keep loading, so there are no lenient-read shims, migration paths or load-time notices for changes made before Beta. This overrides the usual "ask on file-format compatibility" stance for this period only.
@@ -1392,17 +1392,54 @@ The GPU-offloading candidates assessed on 2026-10-16, taken in the order recomme
 - `.smproj` files open from the command line or by file association.
 - `docs/store-submission.md` covers the Partner Center steps.
 
-#### `v0.Y.81.1` - Operation history persisted with the project (L)
+#### `v0.Y.81.1` - History: every action recorded, sources in the project, Remaster (L) - redesigned 2026-10-21, see architecture Decision #262
 
-- The queued item: a project can be re-rendered from scratch from its saved operation history.
-- Scheduled last so the schema settles once.
+The project can be rebuilt from scratch by replaying its saved History against its own copied-in sources, which also makes Remastering possible. The design is in the architecture document's *History, Sources and Macros*.
+
+- **Installment A: Core `History`, layer and resource actions.**
+  - `HistoryEntry`/`History` with serializable forward/inverse payloads, persisted with the project.
+  - Covers every layer property, layer add/remove/duplicate/reorder/rename, and every resource add/update/remove.
+  - The Studio's undo, redo and History panel move onto it.
+  - Layer translation becomes seconds.
+- **Installment B: sources.**
+  - `SourceStore` (`sources/`, hash-named, deduplicated).
+  - Audio, image and MIDI import become History entries referencing sources.
+  - Recordings and Loop captures saved as FLAC sources.
+  - Generated layers as entries.
+- **Installment C: content operations into History.**
+  - Paint, fill, paste, text, sequence, filter-to-selection and guide paths, plus Pick edits, restacking and deletion.
+  - Pooling, phase cleanup, and Mind Shot/Mind Grain capture.
+  - `OperationLog` loses its own undo.
+  - In-project pastes reference their origin.
+  - Save writes History plus snapshot plus caches; load validates the snapshot against the History head and replays on mismatch.
+- **Installment D: headless replay and Remaster.**
+  - `rebuildProject()` in Core.
+  - A test that a scripted session's replay matches the live result.
+  - **File → Remaster...**: new codec settings and/or replaced sources produce a new project.
 - No migration path for older projects, per the standing decision above.
 
-#### `v0.Y.82.1` - Macro recording and macro video export (M, scope after investigation)
+#### `v0.Y.82.1` - Macros: record, play and export a performance (M) - redesigned 2026-10-21, see architecture Decision #262
 
-- First reproduce and list the concrete problems; the backlog item has no detail yet.
-- Depends on `v0.Y.71.1`'s full-composite export.
-- **Delayed to last before the Beta readiness check** (user decision, 2026-10-16); it was originally `v0.Y.78.1`, and the milestones after it moved up one number.
+Replaces the `v0.1.2.x` Macro implementation. **Depends on `v0.Y.81.1`.**
+
+**User decisions (2026-10-21):**
+- changes appear at commit;
+- dragged controls record only their final value;
+- Play Macro renders ahead and then plays seamlessly.
+
+**Installments:**
+- **Installment A: recording and persistence.**
+  - `Macro` model, with entries referenced by History id and a copied History prefix if it's later discarded.
+  - The Macro clock (runs only during Playback or Loop) and the playhead track (start, pause, seek, Repeat wrap, Loop pass).
+  - Undo/redo during recording count as events.
+  - Named Macros saved with the project, with a list to rename and delete them.
+- **Installment B: `MacroRenderer` and video export.**
+  - Background rendering on a project copy, producing segments of canvas image plus the audio the playhead played.
+  - **Export Macro Video** on it, with the playhead following the recorded track.
+- **Installment C: Play Macro.**
+  - Render ahead, start once buffered, seamless playback showing the rendered canvas.
+  - Cancellable; the live project is untouched.
+- **Not planned:** a Macro timeline editor, progressive stroke drawing, viewport following, and gesture automation (see Decision #262).
 
 #### Then: Beta readiness check
 
