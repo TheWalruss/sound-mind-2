@@ -6,6 +6,23 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.44.1] - 2026-10-21
+
+Roadmap slot `v0.Y.82.1` (Macros, redesigned), installment A.
+
+### Changed
+
+- **Macro recording, redone.** **Record Macro** now records a performance into the project:
+  - every change you make (anything that's undoable), plus Undo and Redo;
+  - what the playhead does: play, pause, seeking, Repeat jumping back, each Loop pass.
+
+  It all runs on the Macro's own clock, which runs only while Playback or Loop does: changes made while paused land at the moment you paused. Recorded Macros are **saved with the project**, and several can exist, named "Macro 1", "Macro 2", and so on. A Macro stays playable after you keep editing, because it keeps what it was recorded from.
+- **Play Macro** and **Export Macro Video** are being rebuilt on the new recording and are unavailable in this version; the old ones edited your project while replaying.
+
+### Added
+
+- **Macro → Manage Macros...** to rename and delete recorded Macros.
+
 ## [0.1.43.4] - 2026-10-21
 
 Roadmap slot `v0.Y.81.1` (History), installment D - completes the slot.

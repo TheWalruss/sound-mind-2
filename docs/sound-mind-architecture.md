@@ -2776,6 +2776,31 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **Tests:**
       - core `test_remaster.cpp`, 6 cases: duration kept, identity on the same grid, a marked cell keeps its time and frequency on a finer grid, proportional Mind Shot scaling, mask remap with paths untouched, entry adaptation.
       - Studio `RemasterTest`, 6 cases: **remastering at the same settings reproduces the live project exactly** (layer JSON and content, an import painted on through `PaintController` and a generated layer); a finer time step keeps duration, edits and placement; a replaced source is used instead; the result has its own complete history, survives reopening and remasters back; an incomplete history is refused; the dialog prefills and needs a new output path.
+267. **Macros installment A: recording and persistence.** Settled in `v0.1.44.1`, roadmap slot `v0.Y.82.1`. It replaces Decisions #162-#164's `MacroRecorder` (undo-stack indices, session-only) and their replay and export, which edited the live project.
+    - **Core `Macro`** (`macro.h`):
+      - name and settings;
+      - `startAfterEntry` (the History entry the performance starts after) and `historyStartsAtCreation`;
+      - `events` (`MacroEvent`: Macro-clock time, kind - Entry/Undo/Redo with an inline copy of the `HistoryEntry`, or Play/Pause/Seek with the playhead position);
+      - `durationSeconds` and `recording`.
+
+      The project keeps them in `Project::macros()`, saved in the project file and not tracked by the History.
+    - **Self-contained:**
+      - Event entries are copies (no session base images), so a Macro doesn't depend on the History keeping them.
+      - The start state is the History prefix through `startAfterEntry`. When `History::commit()` is about to drop undone entries that a Macro starts after, it first copies the prefix into `Macro::retainedPrefix` (`prefixRetained`). `macroStartEntries()` returns whichever applies.
+    - **The playhead track:** `macroPlayheadAt()` derives position and playing from the Play/Pause/Seek events. The playhead moves at normal speed from Play or Seek and stands still from Pause.
+    - **`MacroRecorder` (Studio)**, rewritten:
+      - It follows `ProjectHistory::entryCommitted` and the new `entryUndone`/`entryRedone` signals. `jumpTo()` emits one per entry passed, and undo/redo/jump commit pending changes first through `ProjectHistory`, so they're signalled.
+      - `start()` commits pending changes, so the Macro starts from a recorded state, and adds the Macro to the project at once, marked recording, so the History's prefix retention covers it.
+      - The clock (injectable time source) runs only while the transport does.
+      - `notePlayhead(position, playing)` turns playhead reports into Play/Pause and Seek: a seek is a deviation of more than 0.25 s from where steady playback would be. That one rule covers user seeks, Repeat wraps and Loop passes without hooking each.
+      - MainWindow reports the playhead on every position update, at transport changes, and from a 33 ms timer while recording; Loop Mode reports its own playhead.
+    - **MainWindow:**
+      - The old `recordEvent()` calls are gone (paint, visibility, filter, MindWave, playback start/stop): the History records every change, so the Macro sees all of them, not just four kinds.
+      - The Macro dropdown gains Manage Macros... (`MacroManagerDialog`: rename/delete, not while recording).
+      - Play/Export pick a Macro when there are several. In this version they report "arrives in the next update"; installments B and C rebuild them.
+    - **Tests:**
+      - core `test_macro.cpp`, 4 cases: project-file round trip, start entries, prefix retained when editing drops it, playhead track.
+      - Studio `MacroRecorderTest`, 10 cases rewritten: start, pending commit, clock running only while playing, changes while paused at the frozen time, seek detection, undo/redo events, stop with duration, starting while playing, double start and discard, manager dialog.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

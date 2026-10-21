@@ -59,6 +59,7 @@ add_library(sound-mind-studio-lib
     src/layer_controller.cpp
     src/layers_panel.cpp
     src/loop_panel.cpp
+    src/macro_manager_dialog.cpp
     src/macro_recorder.cpp
     src/main_window.cpp
     src/midi_configuration_panel.cpp
@@ -128,6 +129,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/layer_controller.h
     include/sound_mind/studio/layers_panel.h
     include/sound_mind/studio/loop_panel.h
+    include/sound_mind/studio/macro_manager_dialog.h
     include/sound_mind/studio/macro_recorder.h
     include/sound_mind/studio/main_window.h
     include/sound_mind/studio/midi_configuration_panel.h

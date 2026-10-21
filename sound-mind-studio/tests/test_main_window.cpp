@@ -2693,10 +2693,11 @@ void MainWindowTest::macroButtonSitsNextToInputOutputAtTheTopRightAndListsAllThr
 
     auto* macroMenu = macroButton->menu();
     QVERIFY(macroMenu != nullptr);
-    QCOMPARE(macroMenu->actions().size(), 3);
+    QCOMPARE(macroMenu->actions().size(), 4);
     QVERIFY(macroMenu->actions().at(0)->text().contains(QStringLiteral("Macro")));  // Record &Macro
     QVERIFY(macroMenu->actions().at(1)->text().contains(QStringLiteral("Macro")));  // &Play Macro
     QVERIFY(macroMenu->actions().at(2)->text().contains(QStringLiteral("Macro")));  // Export Macro Video...
+    QVERIFY(macroMenu->actions().at(3)->text().contains(QStringLiteral("Macro")));  // Manage &Macros...
 }
 
 void MainWindowTest::composerPanelsToggleIsInTheViewMenuNotOnTheToolbar() {

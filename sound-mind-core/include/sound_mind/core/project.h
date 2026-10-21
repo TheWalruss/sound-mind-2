@@ -13,6 +13,7 @@
 #include "sound_mind/core/filter_preset.h"
 #include "sound_mind/core/grid_preset.h"
 #include "sound_mind/core/history.h"
+#include "sound_mind/core/macro.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -312,6 +313,28 @@ public:
      * @return The registered source's id.
      */
     SourceId addSource(ProjectSource source);
+
+    /**
+     * @brief The project's recorded Macros (`v0.1.44.1`) - see `Macro`.
+     *        Saved with the project; not tracked by the History (recording
+     *        one isn't an edit to the project).
+     * @return The library, in recording order.
+     */
+    [[nodiscard]] const std::vector<Macro>& macros() const noexcept { return macros_; }
+
+    /// @brief Mutable access to macros().
+    /// @return The library.
+    [[nodiscard]] std::vector<Macro>& macros() noexcept { return macros_; }
+
+    /// @brief Looks a Macro up by id.
+    /// @param id The Macro.
+    /// @return It, or `nullptr`.
+    [[nodiscard]] Macro* macroById(MacroId id) noexcept;
+
+    /// @brief Adds a Macro under a fresh id.
+    /// @param macro The Macro; its `id` is replaced.
+    /// @return The id it got.
+    MacroId addMacro(Macro macro);
 
     /// @brief Looks a source up by id.
     /// @param id The source.
@@ -1063,6 +1086,7 @@ private:
     History history_;
     std::map<LayerId, LayerBase> displacedLayerBases_;
     std::vector<ProjectSource> sources_;
+    std::vector<Macro> macros_;
     /// Mutable: save() moves the project (Save As), sources included.
     mutable std::optional<std::filesystem::path> folder_;
 };

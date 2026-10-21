@@ -430,6 +430,27 @@ std::optional<HistoryEntryId> History::commit(Project& project, std::string desc
         }
     }
 
+    // Undone entries are about to go; a Macro starting after one keeps a
+    // copy of the entries it starts from (v0.1.44.1).
+    for (Macro& macro : project.macros()) {
+        if (macro.prefixRetained || macro.startAfterEntry == 0) {
+            continue;
+        }
+        for (std::size_t i = position_; i < entries_.size(); ++i) {
+            if (entries_[i].id != macro.startAfterEntry) {
+                continue;
+            }
+            macro.retainedPrefix.assign(entries_.begin(), entries_.begin() + static_cast<std::ptrdiff_t>(i) + 1);
+            for (HistoryEntry& kept : macro.retainedPrefix) {
+                for (HistoryLayerChange& change : kept.layers) {
+                    change.baseBefore.reset();
+                    change.baseAfter.reset();
+                }
+            }
+            macro.prefixRetained = true;
+            break;
+        }
+    }
     entries_.resize(position_);
     entry.id = nextEntryId_++;
     const HistoryEntryId id = entry.id;

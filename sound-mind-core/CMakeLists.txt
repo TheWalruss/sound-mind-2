@@ -49,6 +49,7 @@ add_library(sound-mind-core
     src/project_settings.cpp
     src/history.cpp
     src/history_replay.cpp
+    src/macro.cpp
     src/operation_log.cpp
     src/project.cpp
     src/project_sources.cpp

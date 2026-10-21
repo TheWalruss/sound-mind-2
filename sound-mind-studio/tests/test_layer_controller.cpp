@@ -821,10 +821,8 @@ void LayerControllerTest::applyFilterConfigurationAppliesOnlyToAFilterLayer() {
 }
 
 void LayerControllerTest::applyFilterConfigurationIsUndoableAndRedoable() {
-    // v0.Y.49.1 (Macro Mode) Installment B - a prerequisite for replaying
-    // a MacroEventType::FilterConfigurationChanged event via ProjectHistory::
-    // jumpTo(); filter configuration edits weren't undoable at all before
-    // this.
+    // v0.Y.49.1 made filter configuration edits undoable; since v0.1.43.1
+    // they're History entries like any other edit.
     Fixture fixture;
     Project project = Project::createNew(testSettings());
     fixture.controller.setProject(&project);

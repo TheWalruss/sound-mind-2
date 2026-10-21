@@ -153,10 +153,8 @@ void MindWaveControllerTest::updateMindWaveWritesBackTheGivenWave() {
 }
 
 void MindWaveControllerTest::updateMindWaveIsUndoableAndRedoable() {
-    // v0.Y.49.1 (Macro Mode) Installment B - a prerequisite for replaying
-    // a MacroEventType::MindWaveConfigurationChanged event via
-    // ProjectHistory::jumpTo(); MindWave edits weren't undoable at all before
-    // this.
+    // v0.Y.49.1 made MindWave edits undoable; since v0.1.43.1 they're
+    // History entries like any other edit.
     Fixture fixture;
     Project project = Project::createNew(testSettings());
     fixture.controller.setProject(&project);

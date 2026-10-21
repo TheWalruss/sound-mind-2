@@ -6,14 +6,14 @@ class MacroRecorderTest : public QObject {
     Q_OBJECT
 
 private slots:
-    void freshRecorderIsNotRecordingAndHasNoEvents();
-    void startRecordingBeginsRecordingAndClearsPreviousEvents();
-    void recordEventIsANoOpWhileNotRecording();
-    void recordEventAppendsWhileRecording();
-    void stopRecordingStopsButKeepsEventsAvailable();
-    void startRecordingWhileAlreadyRecordingDoesNotClearEvents();
-    void stopRecordingWhileNotRecordingIsANoOp();
-    void recordingStateChangedEmitsOnStartAndStop();
-    void discardEventsClearsEventsAndStartUndoIndex();
-    void discardEventsWhileRecordingAlsoStopsRecording();
+    void startAddsARecordingMacroStartingAfterTheLatestEntry();
+    void startCommitsPendingChangesFirst();
+    void theClockRunsOnlyWhilePlaying();
+    void changesWhilePausedLandAtTheFrozenTime();
+    void aJumpOfThePlayheadIsASeek();
+    void undoAndRedoAreRecordedAsEvents();
+    void stopKeepsTheMacroWithItsDuration();
+    void startingWhilePlayingBeginsWithPlay();
+    void startWhileRecordingIsRefusedAndDiscardForgets();
+    void managerDialogRenamesAndDeletesButNotWhileRecording();
 };

@@ -810,15 +810,8 @@ public slots:
     void exportVideo();
 
     /**
-     * @brief Prompts for a destination file and exports the most recently
-     *        recorded macro as an MP4 video - `v0.Y.49.1` (Macro Mode)
-     *        Installment C. See `exportMacroVideoAsync()`'s own docs for
-     *        the actual export mechanism.
-     *
-     * Does nothing if the file dialog is cancelled. Progress and
-     * completion are reported via the status bar (non-modal), matching
-     * exportVideo()'s own convention - only a genuine failure shows a
-     * modal.
+     * @brief Macro → Export Macro Video...: picks a recorded Macro (if more
+     *        than one) and a destination file, then exportMacroVideoAsync().
      */
     void exportMacroVideo();
 
@@ -1941,54 +1934,42 @@ public slots:
     void updateCanvasFit();
 
     /**
-     * @brief Starts or stops macroRecorder_ - `v0.Y.49.1` (Macro Mode)
-     *        Installment A's own transport toolbar toggle.
-     *
-     * A no-op with no project open. Status-bar-reports the captured event
-     * count once stopped, so a user gets some real confirmation recording
-     * actually captured something - there's no dedicated inspection panel
-     * yet (that's the roadmap's own "additional timeline-editing
-     * interface," deliberately a later installment).
-     *
+     * @brief Macro → Record Macro (`v0.1.44.1`): starts recording a new
+     *        Macro ("Macro N") into the project, or stops the one being
+     *        recorded and reports its length and event count. A no-op with
+     *        no project open. See `MacroRecorder`.
      * @param enabled `true` starts recording; `false` stops it.
      */
     void setMacroRecordingEnabled(bool enabled);
 
     /**
-     * @brief Replays macroRecorder_'s own most recently recorded macro -
-     *        `v0.Y.49.1` (Macro Mode) Installment B.
-     *
-     * Reuses `UndoStack::jumpTo()` (built for the History Panel,
-     * `v0.Y.46.1` Installment D) rather than a separate snapshot/copy
-     * mechanism: jumps the project back to `macroRecorder_.
-     * startUndoIndex()` (the checkpoint taken when recording began), then
-     * starts playback - from there, the `positionChanged()` handler
-     * itself steps forward through each recorded event's own
-     * `undoStackIndexAfter` as playback reaches its `timestampSeconds`.
-     * `PlaybackStarted`/`PlaybackStopped` events are skipped entirely
-     * (neither was ever pushed to `UndoStack`, so neither has a
-     * meaningful index to jump to - starting/stopping playback here
-     * already represents them).
-     *
-     * Each jump re-composites and reloads playback audio immediately (the
-     * same synchronous "restart, don't try to update seamlessly"
-     * technique `handleContentChangedForPlayback()`'s own Delta/Review
-     * scope already uses for a live edit) - a real, audible restart at
-     * each scripted moment, not a seamless cut. Matches the roadmap's own
-     * "what may be a 1-second delay for a heavy filter change during live
-     * recording is seamless in the output video" framing: video export
-     * (still future work) can afford to be seamless because it's
-     * pre-rendered frame by frame; live in-app playback, replaying the
-     * same recorded actions in real time, genuinely can't be, and isn't
-     * expected to be.
-     *
-     * A no-op with no project, no recorded events, or if any recorded
-     * event's own index no longer resolves against the current
-     * `history_` (stale data left over despite `discardEvents()`'s own
-     * project-switch guard - defensive, not expected to trigger in
-     * practice).
+     * @brief Macro → Play Macro: plays a recorded performance back
+     *        (`docs/sound-mind-design.md`'s *Macros*), without changing the
+     *        project - see the Macro installments in the roadmap.
      */
     void playMacro();
+
+    /// @brief Macro → Manage Macros...: rename or delete recorded Macros
+    ///        (`MacroManagerDialog`).
+    void manageMacros();
+
+    /**
+     * @brief Asks which recorded Macro to use, when there's more than one.
+     * @param title The prompt's title.
+     * @return The chosen Macro, or `std::nullopt` (none recorded, or
+     *         cancelled - explaining the former).
+     */
+    std::optional<sound_mind::core::MacroId> chooseMacro(const QString& title);
+
+    /// @brief Where the playhead is and whether the transport runs - Loop
+    ///        Mode's own playhead while it runs, Playback's otherwise.
+    /// @return Position (seconds) and whether playing.
+    [[nodiscard]] std::pair<double, bool> macroPlayhead() const;
+
+    /// @brief Reports the playhead to macroRecorder_ while recording - on
+    ///        every position update, transport change and macroPlayheadTimer_
+    ///        tick.
+    void noteMacroPlayhead();
 
     /**
      * @brief Captures the currently Picked object's own `Path` as the
@@ -3040,38 +3021,8 @@ public:
     void exportCompositeAudioAsync(const std::filesystem::path& path, sound_mind::codec::CompressedAudioFormat format);
 
     /**
-     * @brief Starts an asynchronous video export of the most recently
-     *        recorded macro - `v0.Y.49.1` (Macro Mode) Installment C.
-     *
-     * Two phases, deliberately not both backgrounded (confirmed with the
-     * user): (1) a **synchronous** extraction phase, right here, on the UI
-     * thread - walks the macro's own events exactly like playMacro() does
-     * (`history_.jumpTo()` per event), capturing each segment's own
-     * `sound_mind::codec::VideoSegment` (a `toRgbImage()`-rendered
-     * composite) and its own slice of decoded audio as independent,
-     * owned copies, then restores `history_` to exactly the index it
-     * was at before this method was ever called - so this method has zero
-     * visible effect on the live project no matter how it ends. (2) the
-     * genuinely slow part - `sound_mind::codec::exportSegmentedVideo()`'s
-     * own frame-by-frame encode - runs backgrounded via `exportTask_`,
-     * exactly like exportCompositeVideoAsync()'s own shape, sharing the
-     * same cancel button/progress poll/`ExportKind` distinction.
-     *
-     * Unlike playMacro(), every event (including `PlaybackStarted`/
-     * `PlaybackStopped`) contributes to establishing the exported video's
-     * own timeline: the first recorded event's own `timestampSeconds`
-     * becomes the video's `t = 0`, and the last one's own becomes its
-     * total duration - `PlaybackStarted`/`PlaybackStopped` themselves
-     * still never get their own `VideoSegment` (nothing about the canvas
-     * changes at either), but they still anchor where the timeline starts
-     * and ends.
-     *
-     * Shows `QMessageBox::critical()` immediately, without starting
-     * anything, if there's no project, nothing recorded, or the recorded
-     * macro's own indices no longer resolve against the current
-     * `history_` (the same staleness guard playMacro() itself makes) -
-     * all knowable synchronously, before either phase begins.
-     *
+     * @brief Exports a recorded Macro as a video (`docs/sound-mind-design.md`'s
+     *        *Macros*).
      * @param path Destination path.
      */
     void exportMacroVideoAsync(const std::filesystem::path& path);
@@ -3672,24 +3623,6 @@ private:
      */
     void applyGridSnapping();
 
-    /**
-     * @brief Fires every macroPlaybackEvents_ entry whose own
-     *        `timestampSeconds` has now been reached - `v0.Y.49.1`
-     *        (Macro Mode) Installment B, `playMacro()`'s own tick,
-     *        connected to `PlaybackController::positionChanged()`.
-     *
-     * Each fired event calls `history_.jumpTo(event.undoStackIndexAfter)`
-     * then, since that alone doesn't guarantee `playbackController_` picks
-     * up whatever it just changed (see `playMacro()`'s own docs on why
-     * `handleContentChangedForPlayback()`'s existing gate doesn't cover
-     * every case), re-composites and reloads audio immediately, seeking
-     * back to `positionSeconds` and resuming - a real, audible restart at
-     * each scripted moment. A no-op whenever macroPlaybackActive_ is
-     * `false`, or no event's own timestamp has been reached yet.
-     *
-     * @param positionSeconds The current playback position, in seconds.
-     */
-    void advanceMacroPlayback(double positionSeconds);
 
     /**
      * @brief openUserDocIfBundled(), plus a `QMessageBox::information()`
@@ -3811,33 +3744,14 @@ private:
     ///        thing to do that it isn't specifically tested for either.
     BranchCurveSession branchCurveSession_;
 
-    /// @brief Records a timestamped macro while active - `v0.Y.49.1`
-    ///        (Macro Mode). Owned by value, the same reasoning history_
-    ///        above already gives - nothing else needs to own it.
-    ///        discardEvents()'d in setProject() (as of Installment B) -
-    ///        every recorded event's own `undoStackIndexAfter` only means
-    ///        anything against `history_` as it stood at record time,
-    ///        which a project switch clears out from under it.
-    MacroRecorder macroRecorder_;
+    /// @brief Records Macros (`v0.1.44.1`) - see `MacroRecorder`. Follows
+    ///        history_'s entries, so it's declared after it.
+    MacroRecorder macroRecorder_{&history_};
 
-    /// @brief Every non-playback event from macroRecorder_.events(), in
-    ///        order - built fresh by playMacro() each time it's called
-    ///        (`v0.Y.49.1` Installment B). `PlaybackStarted`/
-    ///        `PlaybackStopped` are filtered out here, not during
-    ///        recording, since MacroRecorder itself has no opinion on
-    ///        which event types are replayable - that's this class's own
-    ///        concern.
-    std::vector<MacroEvent> macroPlaybackEvents_;
-
-    /// @brief The index into macroPlaybackEvents_ of the next event still
-    ///        waiting to fire, while macroPlaybackActive_ is `true`.
-    std::size_t macroPlaybackNextEventIndex_ = 0;
-
-    /// @brief Whether a "Play Macro" replay is currently in progress - see
-    ///        playMacro()'s own docs. Cleared the moment every recorded
-    ///        event has fired, or playback stops for any reason
-    ///        (stopPlayback()).
-    bool macroPlaybackActive_ = false;
+    /// @brief Reports the playhead to macroRecorder_ every ~33 ms while
+    ///        recording - catches transport starts and stops, the natural
+    ///        end of playback, Loop passes and seeks.
+    QTimer* macroPlayheadTimer_ = nullptr;
 
     /// @brief See setEqualizerPreviewEnabled()'s own docs - a sticky,
     /// session-only preference, not reset by setProject() (matching
@@ -4034,6 +3948,9 @@ private:
     /// action - `v0.Y.49.1` (Macro Mode) Installment C. Not checkable,
     /// same reasoning as macroPlayAction_ above.
     QAction* macroExportVideoAction_ = nullptr;
+
+    /// @brief Macro → Manage Macros... - see manageMacros().
+    QAction* macroManageAction_ = nullptr;
 
     /// @brief The dockable panel exposing the current paint tool's own
     /// parameters, including its Tool Preset drop-down - see its own class

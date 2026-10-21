@@ -59,6 +59,7 @@
 #include "sound_mind/studio/remaster.h"
 #include "sound_mind/studio/remaster_dialog.h"
 #include "sound_mind/studio/base_recipes.h"
+#include "sound_mind/studio/macro_manager_dialog.h"
 #include "sound_mind/studio/text_controller.h"
 #include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/compositor.h"
@@ -347,7 +348,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         // further here).
         layerController_->updateLoudnessDisplays(total > 0.0 ? positionSeconds / total : 0.0);
         analysisPanel_->setPlaybackPosition(positionSeconds);
-        advanceMacroPlayback(positionSeconds);
+        noteMacroPlayhead();
     });
     connect(playbackPanel_, &PlaybackPanel::repeatChanged, this, &MainWindow::setPlaybackRepeat);
     connect(playbackPanel_, &PlaybackPanel::scopeChanged, this, &MainWindow::setPlaybackScope);
@@ -760,16 +761,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
                 handleContentChangedForPlayback(layer);
                 refreshHistoryPanel();
                 refreshComposerPanel();
-                // ToolPaletteController::contentChanged() fires for every
-                // kind of content commit (paint, fill, cut, paste, apply
-                // filter to selection, chord stamps, path strokes), not
-                // only genuine painting - a real, acknowledged coarseness
-                // for this recording-only installment, matching the same
-                // "captures more than its own event-type name implies"
-                // caveat applyFilterConfiguration()'s/updateMindWave()'s
-                // own recordEvent() calls already accept.
-                macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PaintCommitted,
-                                            tr("Painted content"), history_.currentIndex(), layer);
             });
 
     gridPanel_ = new GridPanel(this);
@@ -1093,42 +1084,33 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // action-oriented, top-right placement fits better than Configure's
     // panel-toggle one.
     //
-    // Record Macro (v0.Y.49.1, Macro Mode Installment A) - a plain
-    // checkable QAction, not a toggleViewAction(), since macroRecorder_
-    // isn't a dock panel with its own visibility to track (there's no
-    // inspection UI yet at all - see setMacroRecordingEnabled()'s own
-    // docs).
+    // The Macro dropdown (v0.1.44.1, redesigned - architecture Decision
+    // #262): record a performance, manage the recorded ones, play one back
+    // or export it as a video.
     macroRecordAction_ = new QAction(tr("Record &Macro"), this);
     macroRecordAction_->setCheckable(true);
     macroRecordAction_->setToolTip(
-        tr("Records a timestamped log of playback start/stop, layer visibility, painting, filter, and MindWave "
-           "changes - nothing exports it yet"));
+        tr("Records a performance: start Playback or Loop, then change the project while it plays. Everything "
+           "you do is recorded on a clock that only runs while playback does."));
     connect(macroRecordAction_, &QAction::toggled, this, &MainWindow::setMacroRecordingEnabled);
 
-    // Play Macro (v0.Y.49.1 Installment B) - no standard shortcut,
-    // matching macroRecordAction_'s own no-shortcut choice; a no-op with
-    // nothing recorded, the same "always present" choice deleteAction_
-    // makes.
     macroPlayAction_ = new QAction(tr("&Play Macro"), this);
-    macroPlayAction_->setToolTip(
-        tr("Replays the most recently recorded macro - jumps back to the project state right before recording "
-           "began, then re-applies each captured action as playback reaches it"));
+    macroPlayAction_->setToolTip(tr("Plays back a recorded performance, without changing the project"));
     connect(macroPlayAction_, &QAction::triggered, this, &MainWindow::playMacro);
 
-    // Export Macro Video (v0.Y.49.1 Installment C) - no standard
-    // shortcut, matching macroRecordAction_'s/macroPlayAction_'s own
-    // no-shortcut choice; a no-op (shows a modal, per exportMacroVideoAsync()'s
-    // own docs) with nothing recorded.
     macroExportVideoAction_ = new QAction(tr("E&xport Macro Video..."), this);
-    macroExportVideoAction_->setToolTip(
-        tr("Renders the most recently recorded macro as an MP4 video, re-compositing the project at each captured "
-           "moment"));
+    macroExportVideoAction_->setToolTip(tr("Renders a recorded performance as a video"));
     connect(macroExportVideoAction_, &QAction::triggered, this, &MainWindow::exportMacroVideo);
+
+    macroManageAction_ = new QAction(tr("Manage &Macros..."), this);
+    macroManageAction_->setToolTip(tr("Rename or delete recorded performances"));
+    connect(macroManageAction_, &QAction::triggered, this, &MainWindow::manageMacros);
 
     auto* macroMenu = new QMenu(topRightContainer);
     macroMenu->addAction(macroRecordAction_);
     macroMenu->addAction(macroPlayAction_);
     macroMenu->addAction(macroExportVideoAction_);
+    macroMenu->addAction(macroManageAction_);
 
     auto* macroButton = new QToolButton(topRightContainer);
     macroButton->setObjectName(QStringLiteral("macroButton"));
@@ -1816,6 +1798,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // update to read as prompt, without repainting so often it competes
     // noticeably with the background encode/decode worker thread (see
     // LoopEngine's docs) for CPU time.
+    macroPlayheadTimer_ = new QTimer(this);
+    macroPlayheadTimer_->setInterval(33);
+    connect(macroPlayheadTimer_, &QTimer::timeout, this, &MainWindow::noteMacroPlayhead);
+
     loopUpdateTimer_ = new QTimer(this);
     loopUpdateTimer_->setInterval(33);
     connect(loopUpdateTimer_, &QTimer::timeout, this, &MainWindow::updateLoopLayer);
@@ -2274,13 +2260,8 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // event every other reset above already treats as "start clean" - see
     // macroRecordAction_'s own docs. A no-op (does nothing, triggers no
     // toggled()) when nothing was recording.
-    macroRecordAction_->setChecked(false);
-    // Every recorded event's own undoStackIndexAfter only means anything
-    // against history_ as it stands right now - about to be clear()ed a
-    // few lines below, which would make any already-recorded macro unsafe
-    // to jumpTo() against. See MacroRecorder::discardEvents()'s own docs.
-    macroRecorder_.discardEvents();
-    macroPlaybackActive_ = false;
+    macroRecordAction_->setChecked(false);  // stops (and keeps) a recording in progress.
+    macroRecorder_.discard();
     canvas_->setToolMode(CanvasWidget::ToolMode::None);
     canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     canvas_->setPickSelectionBounds(std::nullopt);
@@ -3005,6 +2986,9 @@ void MainWindow::exportVideo() {
 }
 
 void MainWindow::exportMacroVideo() {
+    if (!chooseMacro(tr("Export Macro Video"))) {
+        return;
+    }
     const QString fileName =
         QFileDialog::getSaveFileName(this, tr("Export Macro Video"), QString(), tr(kExportVideoFileFilter));
     if (fileName.isEmpty()) {
@@ -3144,147 +3128,8 @@ void MainWindow::exportCompositeAudioAsync(const std::filesystem::path& path,
 }
 
 void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path) {
-    if (isExportRunning()) {
-        statusBar()->showMessage(tr("Already exporting - wait for it to finish, or cancel it, first."), 5000);
-        return;
-    }
-    if (!project_ || macroRecorder_.events().empty()) {
-        QMessageBox::critical(this, tr("Export Macro Video Failed"), tr("No macro recorded to export."));
-        return;
-    }
-
-    // The same staleness guard playMacro() itself makes - see its own
-    // docs.
-    const std::size_t startIndex = macroRecorder_.startUndoIndex();
-    bool stale = startIndex > history_.count();
-    for (const MacroEvent& event : macroRecorder_.events()) {
-        if (event.undoStackIndexAfter > history_.count()) {
-            stale = true;
-        }
-    }
-    if (stale) {
-        QMessageBox::critical(this, tr("Export Macro Video Failed"), tr("Can't export this macro - record a new one first."));
-        return;
-    }
-
-    // The exported video's own timeline: t=0 is the earliest recorded
-    // event's own timestamp (typically PlaybackStarted), and its total
-    // duration is the span up to the latest one's own (typically
-    // PlaybackStopped) - both are project-timeline positions, not yet
-    // normalized to the video's own t=0.
-    const double firstTimestamp = macroRecorder_.events().front().timestampSeconds;
-    const double lastTimestamp = macroRecorder_.events().back().timestampSeconds;
-    if (lastTimestamp <= firstTimestamp) {
-        QMessageBox::critical(this, tr("Export Macro Video Failed"),
-                               tr("This macro doesn't span any real duration to export."));
-        return;
-    }
-
-    // Every real (canvas-changing) event, in order - the same filtering
-    // playMacro() itself uses for macroPlaybackEvents_ (see its own
-    // docs); PlaybackStarted/PlaybackStopped only anchor the timeline
-    // above, they don't get their own segment.
-    std::vector<const MacroEvent*> realEvents;
-    for (const MacroEvent& event : macroRecorder_.events()) {
-        if (event.type != MacroEventType::PlaybackStarted && event.type != MacroEventType::PlaybackStopped) {
-            realEvents.push_back(&event);
-        }
-    }
-
-    // Every segment's own boundary, in project-timeline (not yet
-    // video-relative) seconds: the initial checkpoint, then each real
-    // event's own timestamp.
-    std::vector<double> boundaries;
-    boundaries.push_back(firstTimestamp);
-    for (const MacroEvent* event : realEvents) {
-        boundaries.push_back(event->timestampSeconds);
-    }
-
-    // Synchronous extraction phase - deliberately not backgrounded (see
-    // exportMacroVideoAsync()'s own docs on why). history_.jumpTo(
-    // originalIndex) below restores the live project to exactly where it
-    // was, no matter how this phase ends, so this method has zero visible
-    // effect on the user's own current editing session.
-    const std::size_t originalIndex = history_.currentIndex();
-    std::vector<sound_mind::codec::VideoSegment> segments;
-    sound_mind::codec::AudioBuffer concatenatedAudio;
-    bool renderedEveryComposite = true;
-
-    history_.jumpTo(startIndex);
-    for (std::size_t i = 0; i < boundaries.size(); ++i) {
-        if (i > 0) {
-            history_.jumpTo(realEvents[i - 1]->undoStackIndexAfter);
-        }
-        const auto composite = sound_mind::core::compositeProject(*project_, /*shouldCancel=*/nullptr,
-                                                                    /*respectMute=*/true);
-        if (!composite.has_value()) {
-            renderedEveryComposite = false;
-            break;
-        }
-
-        sound_mind::codec::VideoSegment segment;
-        segment.canvas = sound_mind::codec::toRgbImage(*composite);
-        segment.startTimeSeconds = boundaries[i] - firstTimestamp;
-        segments.push_back(std::move(segment));
-
-        // This segment's own slice of its (whole-project-duration)
-        // decoded audio - concatenatedAudio ends up exactly
-        // (lastTimestamp - firstTimestamp) seconds long once every
-        // segment's own slice is appended, matching the video's own
-        // computed duration exactly.
-        const sound_mind::codec::AudioBuffer segmentAudio = sound_mind::codec::decode(*composite);
-        const double spanStart = boundaries[i];
-        const double spanEnd = (i + 1 < boundaries.size()) ? boundaries[i + 1] : lastTimestamp;
-        if (segmentAudio.sampleRateHz > 0 && spanEnd > spanStart) {
-            concatenatedAudio.sampleRateHz = segmentAudio.sampleRateHz;
-            const auto startSample =
-                static_cast<std::size_t>(std::llround(spanStart * segmentAudio.sampleRateHz));
-            const auto endSample = std::min(
-                segmentAudio.frameCount(),
-                static_cast<std::size_t>(std::llround(spanEnd * segmentAudio.sampleRateHz)));
-            if (endSample > startSample) {
-                concatenatedAudio.left.insert(concatenatedAudio.left.end(), segmentAudio.left.begin() + startSample,
-                                               segmentAudio.left.begin() + endSample);
-                concatenatedAudio.right.insert(concatenatedAudio.right.end(),
-                                                segmentAudio.right.begin() + startSample,
-                                                segmentAudio.right.begin() + endSample);
-            }
-        }
-    }
-    history_.jumpTo(originalIndex);
-
-    if (!renderedEveryComposite || segments.empty()) {
-        QMessageBox::critical(this, tr("Export Macro Video Failed"),
-                               tr("Could not render this macro's own content."));
-        return;
-    }
-
-    exportKind_ = ExportKind::MacroVideo;
-    exportPath_ = path;
-    exportOutcome_ = ExportOutcome::Success;
-    exportErrorMessage_.clear();
-
-    // segments/concatenatedAudio captured by value - independent, owned
-    // copies the background thread can safely touch, the same reasoning
-    // exportCompositeVideoAsync()'s own docs give (nothing here
-    // touches project_/history_ again once this point is reached).
-    exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, segments, audio = concatenatedAudio](sound_mind::core::CancellationToken& token) {
-            try {
-                sound_mind::codec::exportSegmentedVideo(path, segments, audio, /*frameRate=*/30,
-                                                         [&token]() { return token.cancellationRequested(); });
-            } catch (const sound_mind::codec::ExportCancelled&) {
-                exportOutcome_ = ExportOutcome::Cancelled;
-            } catch (const std::exception& e) {
-                exportOutcome_ = ExportOutcome::Failed;
-                exportErrorMessage_ = QString::fromStdString(e.what());
-            }
-        });
-    exportTask_->start();
-
-    statusBar()->showMessage(tr("Exporting macro video..."));
-    exportCancelButton_->show();
-    exportProgressTimer_->start();
+    (void)path;
+    statusBar()->showMessage(tr("Exporting macros as video arrives in the next update."), 5000);
 }
 
 bool MainWindow::isExportRunning() const noexcept { return exportTask_ != nullptr && exportTask_->isRunning(); }
@@ -3370,8 +3215,6 @@ void MainWindow::updateWindowTitle() {
 
 void MainWindow::cycleLayerVisibilityState(sound_mind::core::LayerId id) {
     layerController_->cycleLayerVisibilityState(id);
-    macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::LayerVisibilityChanged,
-                                tr("Changed layer visibility"), history_.currentIndex(), id);
 }
 
 void MainWindow::hideOtherLayers(sound_mind::core::LayerId keepVisible) {
@@ -3500,16 +3343,6 @@ void MainWindow::handleLayerSelectionChanged(std::optional<sound_mind::core::Lay
 
 void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config) {
     layerController_->applyFilterConfiguration(config);
-    // Fires on every parameter change (e.g. live while dragging a
-    // slider), not just a deliberate "done editing" commit - a real,
-    // acknowledged coarseness for this recording-only installment (see
-    // MacroRecorder's own class docs). layersPanel_->selectedLayerId() -
-    // the same target LayerController::applyFilterConfiguration() itself
-    // just used - is std::nullopt when nothing's selected (the edit only
-    // seeded the pending configuration, not any real layer yet).
-    macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::FilterConfigurationChanged,
-                                tr("Changed filter configuration"), history_.currentIndex(),
-                                layersPanel_->selectedLayerId());
     // A no-op unless the Equalizer's own on-canvas preview is currently
     // enabled and the layer just edited actually was the Equalizer - see
     // updateEqualizerPreview()'s own docs.
@@ -3581,10 +3414,6 @@ void MainWindow::renameMindWave(sound_mind::core::MindWaveId id) {
 
 void MainWindow::updateMindWave(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave) {
     mindWaveController_->updateMindWave(id, wave);
-    // Fires on every parameter change while editing, the same coarseness
-    // applyFilterConfiguration()'s own recordEvent() call above accepts.
-    macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::MindWaveConfigurationChanged,
-                                tr("Changed MindWave configuration"), history_.currentIndex(), std::nullopt, id);
 }
 
 void MainWindow::setPanModeEnabled(bool enabled) {
@@ -4391,63 +4220,95 @@ void MainWindow::setMacroRecordingEnabled(bool enabled) {
         return;
     }
     if (enabled) {
-        macroRecorder_.startRecording(history_.currentIndex());
-        statusBar()->showMessage(tr("Recording macro..."));
-    } else {
-        macroRecorder_.stopRecording();
-        statusBar()->showMessage(
-            tr("Macro recording stopped - %1 event(s) captured.").arg(macroRecorder_.events().size()), 5000);
+        if (macroRecorder_.isRecording()) {
+            return;
+        }
+        const QString name = tr("Macro %1").arg(project_->macros().size() + 1);
+        const auto [position, playing] = macroPlayhead();
+        macroRecorder_.start(*project_, name, position, playing);
+        macroPlayheadTimer_->start();
+        hasUnsavedChanges_ = true;
+        statusBar()->showMessage(tr("Recording \"%1\" - start Playback or Loop; its clock runs while they do.")
+                                     .arg(name));
+    } else if (macroRecorder_.isRecording()) {
+        noteMacroPlayhead();
+        const auto id = *macroRecorder_.recordingMacro();
+        macroRecorder_.stop();
+        macroPlayheadTimer_->stop();
+        hasUnsavedChanges_ = true;
+        if (const sound_mind::core::Macro* macro = project_->macroById(id)) {
+            statusBar()->showMessage(tr("Recorded \"%1\": %2 s, %3 event(s).")
+                                         .arg(QString::fromStdString(macro->name))
+                                         .arg(macro->durationSeconds, 0, 'f', 1)
+                                         .arg(macro->events.size()),
+                                     8000);
+        }
+    }
+}
+
+std::pair<double, bool> MainWindow::macroPlayhead() const {
+    if (isLoopModeRunning() && project_) {
+        const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
+        return {static_cast<double>(loopEngine_->playbackPositionSamples()) / static_cast<double>(config.sampleRateHz),
+                true};
+    }
+    return {currentPlaybackPositionSeconds_, playbackController_->isPlaying()};
+}
+
+void MainWindow::noteMacroPlayhead() {
+    if (macroRecorder_.isRecording()) {
+        const auto [position, playing] = macroPlayhead();
+        macroRecorder_.notePlayhead(position, playing);
+    }
+}
+
+std::optional<sound_mind::core::MacroId> MainWindow::chooseMacro(const QString& title) {
+    if (!project_) {
+        return std::nullopt;
+    }
+    std::vector<sound_mind::core::MacroId> ids;
+    QStringList names;
+    for (const sound_mind::core::Macro& macro : project_->macros()) {
+        if (!macro.recording) {
+            ids.push_back(macro.id);
+            names.append(QString::fromStdString(macro.name));
+        }
+    }
+    if (ids.empty()) {
+        QMessageBox::information(this, title, tr("No performance has been recorded yet - use Macro → Record Macro."));
+        return std::nullopt;
+    }
+    if (ids.size() == 1) {
+        return ids.front();
+    }
+    bool ok = false;
+    const QString picked = QInputDialog::getItem(this, title, tr("Macro:"), names, names.size() - 1, false, &ok);
+    if (!ok) {
+        return std::nullopt;
+    }
+    return ids[static_cast<std::size_t>(names.indexOf(picked))];
+}
+
+void MainWindow::manageMacros() {
+    if (!project_) {
+        return;
+    }
+    MacroManagerDialog dialog(*project_, this);
+    dialog.exec();
+    if (dialog.changed()) {
+        hasUnsavedChanges_ = true;
     }
 }
 
 void MainWindow::playMacro() {
-    if (!project_ || macroRecorder_.events().empty()) {
+    if (!project_) {
         return;
     }
-
-    // Every recorded index must still resolve against the current
-    // history_ - see playMacro()'s own docs on why this is defensive
-    // rather than expected to trigger (discardEvents()'s own setProject()
-    // guard already prevents a stale macro from surviving a project
-    // switch in the first place).
-    const std::size_t startIndex = macroRecorder_.startUndoIndex();
-    if (startIndex > history_.count()) {
-        statusBar()->showMessage(tr("Can't play this macro - record a new one first."), 5000);
+    const auto id = chooseMacro(tr("Play Macro"));
+    if (!id) {
         return;
     }
-    for (const MacroEvent& event : macroRecorder_.events()) {
-        if (event.undoStackIndexAfter > history_.count()) {
-            statusBar()->showMessage(tr("Can't play this macro - record a new one first."), 5000);
-            return;
-        }
-    }
-
-    history_.jumpTo(startIndex);
-    // jumpTo()'s own undo()/redo() callbacks already invalidate
-    // playbackController_ for every event type that changes what's
-    // audible (LayerController's/MindWaveController's mutators all do) -
-    // this covers the one case that doesn't (a pure content-operation
-    // undo/redo via PaintController, which only rebuilds layer content
-    // and doesn't touch playbackController_ itself), so startPlayback()
-    // below always recomposites fresh from the rolled-back state rather
-    // than possibly resuming a stale cached composite.
-    playbackController_->invalidate();
-
-    macroPlaybackEvents_.clear();
-    for (const MacroEvent& event : macroRecorder_.events()) {
-        // PlaybackStarted/PlaybackStopped were never pushed to
-        // history_ (see MacroEvent::undoStackIndexAfter's own docs) -
-        // starting playback right below already represents the former;
-        // there is nothing to jump to for either.
-        if (event.type == MacroEventType::PlaybackStarted || event.type == MacroEventType::PlaybackStopped) {
-            continue;
-        }
-        macroPlaybackEvents_.push_back(event);
-    }
-    macroPlaybackNextEventIndex_ = 0;
-    macroPlaybackActive_ = !macroPlaybackEvents_.empty();
-
-    startPlayback();
+    statusBar()->showMessage(tr("Playing macros back arrives in the next update."), 5000);
 }
 
 void MainWindow::usePickedPathAsMindWaveShape() {
@@ -4981,8 +4842,7 @@ void MainWindow::startPlayback() {
     if (!outputWarning.isEmpty()) {
         statusBar()->showMessage(outputWarning, 20000);
     }
-    macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStarted,
-                                tr("Started playback"), history_.currentIndex());
+    noteMacroPlayhead();
 }
 
 void MainWindow::pausePlayback() {
@@ -4993,18 +4853,13 @@ void MainWindow::pausePlayback() {
 }
 
 void MainWindow::stopPlayback() {
+    noteMacroPlayhead();  // where it stopped, before the position resets.
     playbackController_->stop();
-    macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStopped,
-                                tr("Stopped playback"), history_.currentIndex());
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
     // Layers Panel's own per-layer loudness indicator switches back to its
     // "stopped" value (average/peak over the whole layer) - v0.Y.52.1.
     layerController_->resetLoudnessDisplaysToStoppedValue();
-    // Replaying a macro (v0.Y.49.1 Installment B) is complete once
-    // playback stops, whether that's the user manually stopping or a
-    // natural end-of-track - see playMacro()'s own docs.
-    macroPlaybackActive_ = false;
 }
 
 void MainWindow::seekPlayback(double positionSeconds) {
@@ -5671,46 +5526,6 @@ void MainWindow::syncPlaybackRangeToEngine() {
     playbackController_->setPlaybackRange(repeatEnabled_, repeatRangeEndSeconds_, repeatLoopBackSeconds_);
 }
 
-void MainWindow::advanceMacroPlayback(double positionSeconds) {
-    if (!macroPlaybackActive_) {
-        return;
-    }
-    bool firedAny = false;
-    while (macroPlaybackNextEventIndex_ < macroPlaybackEvents_.size() &&
-           macroPlaybackEvents_[macroPlaybackNextEventIndex_].timestampSeconds <= positionSeconds) {
-        history_.jumpTo(macroPlaybackEvents_[macroPlaybackNextEventIndex_].undoStackIndexAfter);
-        ++macroPlaybackNextEventIndex_;
-        firedAny = true;
-    }
-    if (macroPlaybackNextEventIndex_ >= macroPlaybackEvents_.size()) {
-        macroPlaybackActive_ = false;
-    }
-    if (!firedAny || !project_) {
-        return;
-    }
-    // jumpTo() alone doesn't guarantee playbackController_ reflects
-    // whatever it just changed (see playMacro()'s own docs) - reload and
-    // resume immediately, the same synchronous restart
-    // handleContentChangedForPlayback()'s own Delta/Review scope already
-    // uses for a live edit. seek() below emits positionChanged()
-    // synchronously, re-entering this same method - safe, not unbounded
-    // recursion, since macroPlaybackNextEventIndex_ was already advanced
-    // above, so the re-entrant call's own while loop is a no-op unless a
-    // later event happens to share this exact same timestamp.
-    const auto composite = sound_mind::core::compositeProject(*project_, /*shouldCancel=*/nullptr,
-                                                                /*respectMute=*/true);
-    if (!composite.has_value()) {
-        return;
-    }
-    playbackController_->load(sound_mind::codec::decode(*composite));
-    // load() just reset the engine's own range to "no restriction" (see
-    // PlaybackEngine::loadAudio()'s own docs) - re-push whatever range is
-    // still active in this class's own fields before the seek() below, the
-    // same reasoning as handleContentChangedForPlayback()'s own calls.
-    syncPlaybackRangeToEngine();
-    playbackController_->seek(positionSeconds);
-    playbackController_->play();
-}
 
 void MainWindow::poolLayer(sound_mind::core::LayerId id) { poolLayerAsync(id); }
 
@@ -6112,8 +5927,7 @@ void MainWindow::pollCompositeProgress() {
                 repeatLoopBackSeconds_ = 0.0;
                 syncPlaybackRangeToEngine();
                 playbackController_->play();
-                macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStarted,
-                                            tr("Started playback"), history_.currentIndex());
+                noteMacroPlayhead();
                 statusBar()->clearMessage();
             } else {
                 // Shouldn't happen given startPlayback()'s own pre-check

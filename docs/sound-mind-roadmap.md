@@ -1194,7 +1194,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.5` (follow-up `0.1.41.6`: shaders embedded) | #258, #259 |
 | `v0.Y.80.3` | Licensing and beta groundwork (inserted 2026-10-21) | `0.1.42.1` (follow-up `0.1.42.2`: Microsoft Store MSIX) | #260, #261 |
 | `v0.Y.81.1` | History: every action recorded, sources in the project, Remaster (redesigned 2026-10-21) | `0.1.43.1`-`0.1.43.4` | #262-#266 |
-| `v0.Y.82.1` | Macros: record, play and export a performance (redesigned 2026-10-21) | *(planned: `0.1.44.x`)* | #262 |
+| `v0.Y.82.1` | Macros: record, play and export a performance (redesigned 2026-10-21) | `0.1.44.1`- *(in progress)* | #262, #267 |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
 
 **Standing decision (2026-10-15): disregard file-format and backward-compatibility concerns completely until after Beta.** Old projects don't need to keep loading, so there are no lenient-read shims, migration paths or load-time notices for changes made before Beta. This overrides the usual "ask on file-format compatibility" stance for this period only.
@@ -1429,7 +1429,7 @@ Replaces the `v0.1.2.x` Macro implementation. **Depends on `v0.Y.81.1`.**
 - Play Macro renders ahead and then plays seamlessly.
 
 **Installments:**
-- **Installment A: recording and persistence.**
+- ✅ **Installment A: recording and persistence.** Settled in `v0.1.44.1`, see architecture Decision #267.
   - `Macro` model, with entries referenced by History id and a copied History prefix if it's later discarded.
   - The Macro clock (runs only during Playback or Loop) and the playhead track (start, pause, seek, Repeat wrap, Loop pass).
   - Undo/redo during recording count as events.

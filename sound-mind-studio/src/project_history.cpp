@@ -40,21 +40,45 @@ bool ProjectHistory::undo() {
     if (project_ == nullptr) {
         return false;
     }
-    return finish(project_->history().undo(*project_, resolver_));
+    // Pending changes become an entry first (signalled), so they're what
+    // gets undone.
+    commit(*project_, tr("Edit"));
+    const std::size_t from = project_->history().position();
+    const bool done = finish(project_->history().undo(*project_, resolver_));
+    signalSteps(from);
+    return done;
 }
 
 bool ProjectHistory::redo() {
     if (project_ == nullptr) {
         return false;
     }
-    return finish(project_->history().redo(*project_, resolver_));
+    const std::size_t from = project_->history().position();
+    const bool done = finish(project_->history().redo(*project_, resolver_));
+    signalSteps(from);
+    return done;
 }
 
 bool ProjectHistory::jumpTo(std::size_t index) {
     if (project_ == nullptr) {
         return false;
     }
-    return finish(project_->history().jumpTo(*project_, index, resolver_));
+    commit(*project_, tr("Edit"));
+    const std::size_t from = project_->history().position();
+    const bool done = finish(project_->history().jumpTo(*project_, index, resolver_));
+    signalSteps(from);
+    return done;
+}
+
+void ProjectHistory::signalSteps(std::size_t from) {
+    const auto& history = project_->history();
+    const std::size_t to = history.position();
+    for (std::size_t i = from; i > to; --i) {
+        emit entryUndone(history.entry(i - 1).id);
+    }
+    for (std::size_t i = from; i < to; ++i) {
+        emit entryRedone(history.entry(i).id);
+    }
 }
 
 bool ProjectHistory::finish(const std::optional<sound_mind::core::HistoryChange>& change) {

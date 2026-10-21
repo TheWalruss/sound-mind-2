@@ -132,12 +132,20 @@ signals:
     /// @brief commit() recorded a new entry.
     void entryCommitted(sound_mind::core::HistoryEntryId id);
 
+    /// @brief An entry was undone (by undo() or, one per entry, jumpTo()) -
+    ///        what Macro recording follows (`v0.1.44.1`).
+    void entryUndone(sound_mind::core::HistoryEntryId id);
+
+    /// @brief An entry was redone (by redo() or, one per entry, jumpTo()).
+    void entryRedone(sound_mind::core::HistoryEntryId id);
+
     /// @brief The entries or the position changed in any way (the History
     ///        panel and the Undo/Redo actions refresh on this).
     void historyChanged();
 
 private:
     bool finish(const std::optional<sound_mind::core::HistoryChange>& change);
+    void signalSteps(std::size_t from);
 
     sound_mind::core::Project* project_ = nullptr;
     std::vector<std::function<void(const sound_mind::core::HistoryChange&)>> contentRebuilders_;

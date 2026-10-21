@@ -90,6 +90,7 @@ Project::Project(const Project& other)
       filterPresets_(other.filterPresets_),
       midiProgramMappings_(other.midiProgramMappings_),
       sources_(other.sources_),
+      macros_(other.macros_),
       folder_(other.folder_) {
     // operationLog_ deliberately left default-constructed (empty) - see
     // this constructor's own docs.
@@ -108,6 +109,7 @@ Project& Project::operator=(const Project& other) {
         filterPresets_ = other.filterPresets_;
         midiProgramMappings_ = other.midiProgramMappings_;
         sources_ = other.sources_;
+        macros_ = other.macros_;
         folder_ = other.folder_;
         operationLog_ = OperationLog{};
     }
@@ -170,6 +172,25 @@ SourceId Project::addSource(ProjectSource source) {
     }
     source.id = id;
     sources_.push_back(std::move(source));
+    return id;
+}
+
+Macro* Project::macroById(MacroId id) noexcept {
+    for (Macro& macro : macros_) {
+        if (macro.id == id) {
+            return &macro;
+        }
+    }
+    return nullptr;
+}
+
+MacroId Project::addMacro(Macro macro) {
+    MacroId id = 1;
+    for (const Macro& existing : macros_) {
+        id = std::max(id, existing.id + 1);
+    }
+    macro.id = id;
+    macros_.push_back(std::move(macro));
     return id;
 }
 
@@ -749,6 +770,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"midiProgramMappings", project.midiProgramMappings_},
         {"history", project.history_},
         {"sources", project.sources_},
+        {"macros", project.macros_},
     };
 }
 
@@ -843,6 +865,7 @@ void from_json(const nlohmann::json& json, Project& project) {
     project.history_ = json.contains("history") ? json.at("history").get<History>() : History{};
     project.sources_ =
         json.contains("sources") ? json.at("sources").get<std::vector<ProjectSource>>() : std::vector<ProjectSource>{};
+    project.macros_ = json.contains("macros") ? json.at("macros").get<std::vector<Macro>>() : std::vector<Macro>{};
 
     project.midiProgramMappings_.clear();
     if (json.contains("midiProgramMappings")) {

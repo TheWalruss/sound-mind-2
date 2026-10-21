@@ -27,15 +27,16 @@ in-app behavior is correct and this guide is due an update.
 16. [Playback](#playback)
 17. [Recording](#recording)
 18. [Loop Mode](#loop-mode)
-19. [Configure Devices](#configure-devices)
-20. [Pooling a Layer](#pooling-a-layer)
-21. [Exporting](#exporting)
-22. [Saving and Project Files](#saving-and-project-files)
-23. [Resource Browser](#resource-browser)
-24. [Analysis](#analysis)
-25. [Performance](#performance)
-26. [Licence and Credits](#licence-and-credits)
-27. [What's Not Here Yet](#whats-not-here-yet)
+19. [Macros](#macros)
+20. [Configure Devices](#configure-devices)
+21. [Pooling a Layer](#pooling-a-layer)
+22. [Exporting](#exporting)
+23. [Saving and Project Files](#saving-and-project-files)
+24. [Resource Browser](#resource-browser)
+25. [Analysis](#analysis)
+26. [Performance](#performance)
+27. [Licence and Credits](#licence-and-credits)
+28. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -134,8 +135,8 @@ Once a project is open, the title bar shows the project's name next to
   panel; each is covered in its own section below. Unlike Input/Output,
   any number of these can stay open together.
 - **Macro dropdown** (top-right of the menu bar, next to Input/Output) -
-  **Record Macro**, **Play Macro**, and **Export Macro Video...** - see
-  [What's Not Here Yet](#whats-not-here-yet) below.
+  **Record Macro**, **Play Macro**, **Export Macro Video...** and
+  **Manage Macros...** - see [Macros](#macros) below.
 - **File menu** - New/Open/Save/Save As, Remaster (see
   [Remastering](#remastering)), Import Audio/Image, Export Audio/Video.
 - **View menu** - Zoom controls (see [Canvas Navigation](#canvas-navigation)
@@ -1989,6 +1990,29 @@ Devices](#configure-devices) - open it directly with this panel's own
 you start the loop, not immediately. Both devices are locked (can't be
 changed) while a loop is running.
 
+## Macros
+
+A **Macro** records a performance: the project playing, and everything you
+do to it while it plays. It's kept with the project.
+
+- **Macro → Record Macro** starts recording a new Macro ("Macro 1",
+  "Macro 2", ...). Then start Playback or Loop and work: paint, change
+  layer settings, filters and MindWaves, import, record. Undo and Redo
+  count too.
+- **Its clock only runs while Playback or Loop runs.** Pause, set up your
+  next move, and resume: the changes you made while paused are recorded,
+  in order, at the moment you paused, so the pause doesn't appear in the
+  performance. Seeking, Repeat jumping back, and each new Loop pass are
+  recorded as jumps of the playhead.
+- **Record Macro** again stops recording; the status bar reports its
+  length and how many events it holds.
+- **Macro → Manage Macros...** lists the recorded Macros with their
+  length and event count, to **Rename...** or **Delete** them.
+
+A dragged control (gain, a filter or MindWave setting) is recorded as the
+value you let go at, not the movement. Playing a Macro back and exporting
+it as a video arrive in the next update.
+
 ## Configure Devices
 
 Open **Configure Devices** from the **Configure Devices** button inside
@@ -2472,22 +2496,10 @@ It's read-only for now: you can't yet drag a box to retime it, move it to
 a different track, or edit an object's/track's own settings from there -
 those are all still to come.
 
-**Macro Mode** now covers all three of its original goals, collected
-under the **Macro** dropdown (top-right of the menu bar, next to
-Input/Output). **Record Macro** captures a timestamped log of playback
-start/stop, layer visibility changes, painting, filter configuration
-changes, and MindWave edits - stopping it reports how many events were
-captured, in the status bar. **Play Macro** replays the most recently
-recorded one in the Studio itself: it jumps the project back to how it
-looked right before recording began, then re-applies each captured
-action at the same relative moment it originally happened. Each replayed
-action causes a brief, audible restart of playback rather than a
-seamless transition - that's expected. **Export Macro Video...** instead
-renders the same macro straight to an MP4 file - re-compositing the
-project at each captured moment and cutting to the new result instantly,
-with one continuous audio track underneath and no audible restarts in
-the exported file. There's still no panel to inspect what a recorded
-macro actually contains, and it isn't saved with the project.
+**Macros** (see [Macros](#macros)): recording works, and recorded
+performances are kept with the project. Playing one back and exporting it
+as a video arrive in the next update; there's no timeline view of a
+Macro's contents.
 
 
 **Analysis Tools**: the [Analysis](#analysis) panel's loudness meter and
