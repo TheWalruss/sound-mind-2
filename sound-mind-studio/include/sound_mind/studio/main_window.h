@@ -65,6 +65,8 @@ class QToolButton;
 
 namespace sound_mind::studio {
 
+class MacroPlayer;
+
 class ComposerPanel;
 class CreateProjectWizard;
 class HistoryPanel;
@@ -1944,9 +1946,11 @@ public slots:
     void setMacroRecordingEnabled(bool enabled);
 
     /**
-     * @brief Macro → Play Macro: plays a recorded performance back
-     *        (`docs/sound-mind-design.md`'s *Macros*), without changing the
-     *        project - see the Macro installments in the roadmap.
+     * @brief Macro → Play Macro (`v0.1.44.3`): picks a recorded Macro and
+     *        plays it with macroPlayer_ - rendered ahead on a copy, then
+     *        played seamlessly on the canvas; the project isn't touched.
+     *        While one plays, the action reads "Stop Macro" and stops it;
+     *        the transport's Pause/Play/Stop control it too.
      */
     void playMacro();
 
@@ -3770,6 +3774,9 @@ private:
     ///        recording - catches transport starts and stops, the natural
     ///        end of playback, Loop passes and seeks.
     QTimer* macroPlayheadTimer_ = nullptr;
+
+    /// @brief Plays recorded Macros back - see `MacroPlayer`, playMacro().
+    MacroPlayer* macroPlayer_ = nullptr;
 
     /// @brief See setEqualizerPreviewEnabled()'s own docs - a sticky,
     /// session-only preference, not reset by setProject() (matching

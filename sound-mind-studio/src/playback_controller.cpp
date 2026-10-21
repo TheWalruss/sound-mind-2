@@ -25,6 +25,19 @@ void PlaybackController::load(sound_mind::codec::AudioBuffer audio) {
     emit durationChanged(totalSeconds());
 }
 
+void PlaybackController::beginStream(std::size_t totalSamples, std::uint32_t sampleRateHz) {
+    engine_.stop();
+    timer_->stop();
+    engine_.beginStream(totalSamples, sampleRateHz);
+    loaded_ = true;
+    emit durationChanged(totalSeconds());
+}
+
+double PlaybackController::positionSeconds() const noexcept {
+    const auto sampleRate = engine_.sampleRateHz();
+    return sampleRate > 0 ? static_cast<double>(engine_.positionSamples()) / sampleRate : 0.0;
+}
+
 bool PlaybackController::isLoaded() const noexcept {
     return loaded_;
 }

@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.44.3] - 2026-10-21
+
+Roadmap slot `v0.Y.82.1` (Macros), installment C - completes the slot and the pre-Beta plan's feature work.
+
+### Added
+
+- **Play Macro** is back, rebuilt: it plays a recorded performance in the Studio.
+  - It's prepared in the background and starts after a moment; from then on it plays seamlessly, with no restart at each change, while preparation continues ahead of it.
+  - The canvas shows the performance as it unfolds, with the playhead where yours was.
+  - Your project isn't touched: when it ends or you stop it, the canvas shows your project again.
+  - **Play Macro** turns into **Stop Macro** while one plays, and the transport's Pause, Play and Stop work on it.
+
 ## [0.1.44.2] - 2026-10-21
 
 Roadmap slot `v0.Y.82.1` (Macros), installment B.

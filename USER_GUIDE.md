@@ -2016,9 +2016,17 @@ do to it while it plays. It's kept with the project.
   rendered from a copy, so you can keep working; the status bar shows it
   running, with a Cancel button.
 
+- **Macro → Play Macro** plays a Macro back in the Studio (you pick which,
+  if there are several). It's prepared in the background and starts after
+  a moment, then plays without a break - a change that took a while live
+  is instant - while preparation keeps ahead of it. The canvas shows the
+  performance as it unfolds; your project isn't changed, and the canvas
+  shows it again when the Macro ends. Meanwhile the action reads **Stop
+  Macro**, the transport's **Pause**, **Play** and **Stop** work on it, and
+  the canvas doesn't respond to clicks.
+
 A dragged control (gain, a filter or MindWave setting) is recorded as the
-value you let go at, not the movement. Playing a Macro back in the Studio
-arrives in the next update.
+value you let go at, not the movement.
 
 ## Configure Devices
 
@@ -2503,10 +2511,10 @@ It's read-only for now: you can't yet drag a box to retime it, move it to
 a different track, or edit an object's/track's own settings from there -
 those are all still to come.
 
-**Macros** (see [Macros](#macros)): recording and video export work, and
-recorded performances are kept with the project. Playing one back in the
-Studio arrives in the next update; there's no timeline view of a Macro's
-contents.
+**Macros** (see [Macros](#macros)): there's no timeline view to inspect or
+edit what a Macro recorded, strokes appear whole rather than being drawn
+in, and the video always shows the whole canvas (it doesn't follow your
+zoom or scrolling).
 
 
 **Analysis Tools**: the [Analysis](#analysis) panel's loudness meter and

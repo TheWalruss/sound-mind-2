@@ -60,6 +60,7 @@
 #include "sound_mind/studio/remaster_dialog.h"
 #include "sound_mind/studio/base_recipes.h"
 #include "sound_mind/studio/macro_manager_dialog.h"
+#include "sound_mind/studio/macro_player.h"
 #include "sound_mind/studio/text_controller.h"
 #include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/compositor.h"
@@ -337,6 +338,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     playbackController_ = new PlaybackController(this, audioDeviceMode_);
     connect(playbackController_, &PlaybackController::durationChanged, playbackPanel_, &PlaybackPanel::setDuration);
     connect(playbackController_, &PlaybackController::positionChanged, this, [this](double positionSeconds) {
+        if (macroPlayer_ != nullptr && macroPlayer_->isActive()) {
+            return;  // a performance is playing, not the project - MacroPlayer shows it.
+        }
         playbackPanel_->setPositionSeconds(positionSeconds);
         currentPlaybackPositionSeconds_ = positionSeconds;
         const double total = playbackController_->totalSeconds();
@@ -1798,6 +1802,23 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // update to read as prompt, without repainting so often it competes
     // noticeably with the background encode/decode worker thread (see
     // LoopEngine's docs) for CPU time.
+    // Play Macro (v0.1.44.3): renders a performance ahead and plays it on
+    // the canvas, without touching the project.
+    macroPlayer_ = new MacroPlayer(playbackController_, canvas_, this);
+    connect(macroPlayer_, &MacroPlayer::activeChanged, this, [this](bool active) {
+        macroPlayAction_->setText(active ? tr("Stop &Macro") : tr("&Play Macro"));
+        canvas_->setAttribute(Qt::WA_TransparentForMouseEvents, active);
+    });
+    connect(macroPlayer_, &MacroPlayer::finished, this, [this](const QString& error) {
+        playbackController_->invalidate();  // the next Play composites the project again.
+        playbackPanel_->setDuration(0.0);
+        if (!error.isEmpty()) {
+            QMessageBox::critical(this, tr("Play Macro Failed"), error);
+        } else {
+            statusBar()->showMessage(tr("Macro finished."), 3000);
+        }
+    });
+
     macroPlayheadTimer_ = new QTimer(this);
     macroPlayheadTimer_->setInterval(33);
     connect(macroPlayheadTimer_, &QTimer::timeout, this, &MainWindow::noteMacroPlayhead);
@@ -2262,6 +2283,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // toggled()) when nothing was recording.
     macroRecordAction_->setChecked(false);  // stops (and keeps) a recording in progress.
     macroRecorder_.discard();
+    macroPlayer_->stop();
     canvas_->setToolMode(CanvasWidget::ToolMode::None);
     canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     canvas_->setPickSelectionBounds(std::nullopt);
@@ -4362,11 +4384,23 @@ void MainWindow::playMacro() {
     if (!project_) {
         return;
     }
+    if (macroPlayer_->isActive()) {
+        macroPlayer_->stop();  // the action reads "Stop Macro" meanwhile.
+        return;
+    }
     const auto id = chooseMacro(tr("Play Macro"));
     if (!id) {
         return;
     }
-    statusBar()->showMessage(tr("Playing macros back arrives in the next update."), 5000);
+    QString error;
+    auto renderer = macroRendererFor(*id, &error);
+    if (!renderer) {
+        QMessageBox::critical(this, tr("Play Macro Failed"), error);
+        return;
+    }
+    stopPlayback();
+    macroPlayer_->start(std::move(renderer));
+    statusBar()->showMessage(tr("Preparing the macro - it starts playing in a moment..."), 4000);
 }
 
 void MainWindow::usePickedPathAsMindWaveShape() {
@@ -4824,6 +4858,12 @@ void MainWindow::refreshFilterPresetCombo() {
 }
 
 void MainWindow::startPlayback() {
+    if (macroPlayer_->isActive()) {
+        if (macroPlayer_->hasStartedPlaying()) {
+            playbackController_->play();  // resumes a paused performance.
+        }
+        return;
+    }
     if (filterPreviewActive_) {
         setFilterPreviewEnabled(false);  // one thing heard at a time.
     }
@@ -4911,6 +4951,10 @@ void MainWindow::pausePlayback() {
 }
 
 void MainWindow::stopPlayback() {
+    if (macroPlayer_->isActive()) {
+        macroPlayer_->stop();
+        return;
+    }
     noteMacroPlayhead();  // where it stopped, before the position resets.
     playbackController_->stop();
     playbackPanel_->setDuration(0.0);

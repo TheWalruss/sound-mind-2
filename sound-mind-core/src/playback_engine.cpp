@@ -70,6 +70,26 @@ void PlaybackEngine::loadAudio(sound_mind::codec::AudioBuffer audio) {
     loopEnabled_.store(false, std::memory_order_relaxed);
     rangeEndSamples_.store(audio_.frameCount(), std::memory_order_relaxed);
     loopBackSamples_.store(0, std::memory_order_relaxed);
+    availableSamples_.store(audio_.frameCount(), std::memory_order_release);
+}
+
+void PlaybackEngine::beginStream(std::size_t totalSamples, std::uint32_t sampleRateHz) {
+    sound_mind::codec::AudioBuffer silence;
+    silence.sampleRateHz = sampleRateHz;
+    silence.left.assign(totalSamples, 0.0f);
+    silence.right.assign(totalSamples, 0.0f);
+    loadAudio(std::move(silence));
+    availableSamples_.store(0, std::memory_order_release);
+}
+
+void PlaybackEngine::appendStream(const sound_mind::codec::AudioBuffer& audio) {
+    const std::size_t from = availableSamples_.load(std::memory_order_relaxed);
+    const std::size_t count = std::min(audio.frameCount(), audio_.frameCount() - std::min(from, audio_.frameCount()));
+    // Only samples the audio thread can't read yet are written; publishing
+    // the new count afterwards (release) makes them visible to it.
+    std::copy_n(audio.left.begin(), count, audio_.left.begin() + static_cast<std::ptrdiff_t>(from));
+    std::copy_n(audio.right.begin(), count, audio_.right.begin() + static_cast<std::ptrdiff_t>(from));
+    availableSamples_.store(from + count, std::memory_order_release);
 }
 
 void PlaybackEngine::play() {
@@ -223,6 +243,7 @@ void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputC
 
     std::size_t position = position_.load(std::memory_order_relaxed);
     const std::size_t frameCount = frameCount_.load(std::memory_order_relaxed);
+    const std::size_t available = availableSamples_.load(std::memory_order_acquire);
     const std::size_t rangeEnd = std::min(rangeEndSamples_.load(std::memory_order_relaxed), frameCount);
     const float volume =
         volume_.load(std::memory_order_relaxed) * normalizationGain_.load(std::memory_order_relaxed);
@@ -243,7 +264,12 @@ void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputC
     }
 
     for (int sample = 0; sample < numSamples; ++sample) {
-        if (!halted && position < rangeEnd) {
+        if (!halted && position < rangeEnd && position >= available) {
+            // A stream that hasn't arrived this far yet: wait, silently.
+            for (int channel = 0; channel < numOutputChannels; ++channel) {
+                outputChannelData[channel][sample] = 0.0f;
+            }
+        } else if (!halted && position < rangeEnd) {
             outputChannelData[0][sample] = audio_.left[position] * volume;
             if (numOutputChannels > 1) {
                 outputChannelData[1][sample] = audio_.right[position] * volume;

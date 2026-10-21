@@ -2814,6 +2814,27 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `MainWindow::macroRendererFor()` builds a renderer on the UI thread with copies of everything: the start entries; `sourceLookupFor()`, a new copy of the source registry that is safe off-thread; and the limiter setting.
       - `exportMacroVideoAsync(path, id)` runs it on the shared `exportTask_`, with `setShouldCancel()` wiring the task's token, the status-bar progress and Cancel, and the existing outcome reporting.
     - **Tests:** core `test_macro_renderer.cpp`, 6 cases: one segment per change with silence before an import and sound after it; audio following the playhead through a seek, sample-exact against the composite; undo/redo replayed with the recipe run once; simultaneous changes collapsing; an MP4 written with progress; cancellation.
+269. **Macros installment C: Play Macro.** Settled in `v0.1.44.3`, completing roadmap slot `v0.Y.82.1`.
+    - **`MacroPlayer` (Studio)** runs a `MacroRenderer` on a `BackgroundTask`, at most `kMaxAheadSeconds` (20 s) ahead of the playhead; it backs off while further ahead.
+      - A ~33 ms UI timer moves finished segments into a playback stream and keeps their canvases, dropping each once the next one's moment comes, so memory holds the frames still ahead and not the whole performance.
+      - Playback starts once `kStartBufferSeconds` (2 s) are ready, or everything, if shorter. That's the user's "render ahead, then play" decision, with the start delay bounded instead of waiting for the whole render.
+      - It ends at the end of the performance, on stop(), or on a render failure (reported).
+    - **Streaming playback (`PlaybackEngine::beginStream()`/`appendStream()`):**
+      - The whole length is allocated up front as silence, and appended samples are published with a release store on `availableSamples_`.
+      - The audio callback reads that count with acquire and never reads past it: on an underrun it outputs silence and holds its position, so a slow render stalls rather than skipping. It's real-time safe, with no allocation or locking in the callback.
+      - `loadAudio()` sets the count to the full length, so ordinary playback is unchanged.
+      - `PlaybackController` forwards it, plus `positionSeconds()`.
+    - **`CanvasWidget::setFrameOverride()`:** the canvas shows a given image instead of the composite. Object overlays, chord preview and guide paths, which describe the live project, are hidden; the grid and playhead stay. Polar view works as usual.
+    - **MainWindow:**
+      - Play Macro toggles to Stop Macro.
+      - The transport's Play resumes a paused performance instead of compositing the project; Stop stops it.
+      - The project's own position handling stands aside while a performance plays.
+      - The canvas ignores the mouse meanwhile, and switching projects stops it.
+      - When it finishes, the playback cache is invalidated so the next Play composites the project again.
+    - **Performance:** rendering costs one composite and one full decode per change. A busy performance (many changes a second) can fall behind real time, and playback then stalls until it catches up. The 2 s head start and up to 20 s look-ahead hide this for typical performances. Decoding only the needed stretch is the optimization to make if real use shows stalls.
+    - **Tests:**
+      - core `test_playback_engine.cpp` +2: a stream plays only what was appended, waiting silently with position held, and drops overflow; loading ordinary audio makes it all available.
+      - Studio `MacroPlayerTest`, 5 cases: starts once buffered and shows rendered frames; stop clears the canvas and signals; reaching the end finishes; a render failure is reported; the project is never touched.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

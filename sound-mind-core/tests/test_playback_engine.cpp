@@ -566,3 +566,45 @@ TEST_CASE("The normalization gain scales the output like volume", "[core][playba
     CHECK(std::abs(left[1] - 0.1f) < 1e-6f);
 }
 
+
+// v0.1.44.3 - streaming (Play Macro): audio arrives while it plays.
+TEST_CASE("A stream plays only what has been appended, waiting silently for the rest", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.beginStream(4, 44100);
+    CHECK(engine.totalSamples() == 4);
+    CHECK(engine.availableSamples() == 0);
+    AudioBuffer first;
+    first.sampleRateHz = 44100;
+    first.left = {0.1f, 0.2f};
+    first.right = {-0.1f, -0.2f};
+    engine.appendStream(first);
+    CHECK(engine.availableSamples() == 2);
+    engine.play();
+
+    std::vector<float> left(3, 1.0f);
+    std::vector<float> right(3, 1.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 3);
+    CHECK(left[0] == 0.1f);
+    CHECK(left[1] == 0.2f);
+    CHECK(left[2] == 0.0f);  // not here yet: silence...
+    CHECK(engine.positionSamples() == 2);  // ...holding the position.
+    CHECK(engine.isPlaying());
+
+    AudioBuffer rest;
+    rest.sampleRateHz = 44100;
+    rest.left = {0.3f, 0.4f, 0.5f};  // one more than fits: dropped.
+    rest.right = {-0.3f, -0.4f, -0.5f};
+    engine.appendStream(rest);
+    CHECK(engine.availableSamples() == 4);
+    engine.renderBlock(channels, 2, 2);
+    CHECK(left[0] == 0.3f);
+    CHECK(left[1] == 0.4f);
+}
+
+TEST_CASE("Loading ordinary audio makes all of it available", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.beginStream(10, 44100);
+    engine.loadAudio(makeTestAudio());
+    CHECK(engine.availableSamples() == engine.totalSamples());
+}

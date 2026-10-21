@@ -1194,7 +1194,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.5` (follow-up `0.1.41.6`: shaders embedded) | #258, #259 |
 | `v0.Y.80.3` | Licensing and beta groundwork (inserted 2026-10-21) | `0.1.42.1` (follow-up `0.1.42.2`: Microsoft Store MSIX) | #260, #261 |
 | `v0.Y.81.1` | History: every action recorded, sources in the project, Remaster (redesigned 2026-10-21) | `0.1.43.1`-`0.1.43.4` | #262-#266 |
-| `v0.Y.82.1` | Macros: record, play and export a performance (redesigned 2026-10-21) | `0.1.44.1`-`0.1.44.2` *(in progress)* | #262, #267, #268 |
+| `v0.Y.82.1` | Macros: record, play and export a performance (redesigned 2026-10-21) | `0.1.44.1`-`0.1.44.3` | #262, #267-#269 |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
 
 **Standing decision (2026-10-15): disregard file-format and backward-compatibility concerns completely until after Beta.** Old projects don't need to keep loading, so there are no lenient-read shims, migration paths or load-time notices for changes made before Beta. This overrides the usual "ask on file-format compatibility" stance for this period only.
@@ -1419,7 +1419,7 @@ The project can be rebuilt from scratch by replaying its saved History against i
   - **File → Remaster...**: new codec settings and/or replaced sources produce a new project.
 - No migration path for older projects, per the standing decision above.
 
-#### `v0.Y.82.1` - Macros: record, play and export a performance (M) - redesigned 2026-10-21, see architecture Decision #262
+#### ✅ `v0.Y.82.1` - Macros: record, play and export a performance (M) - redesigned 2026-10-21, see architecture Decision #262; settled in `v0.1.44.1`-`v0.1.44.3`, Decisions #267-#269
 
 Replaces the `v0.1.2.x` Macro implementation. **Depends on `v0.Y.81.1`.**
 
@@ -1437,7 +1437,7 @@ Replaces the `v0.1.2.x` Macro implementation. **Depends on `v0.Y.81.1`.**
 - ✅ **Installment B: `MacroRenderer` and video export.** Settled in `v0.1.44.2`, see architecture Decision #268.
   - Background rendering on a project copy, producing segments of canvas image plus the audio the playhead played.
   - **Export Macro Video** on it, with the playhead following the recorded track.
-- **Installment C: Play Macro.**
+- ✅ **Installment C: Play Macro.** Settled in `v0.1.44.3`, see architecture Decision #269.
   - Render ahead, start once buffered, seamless playback showing the rendered canvas.
   - Cancellable; the live project is untouched.
 - **Not planned:** a Macro timeline editor, progressive stroke drawing, viewport following, and gesture automation (see Decision #262).

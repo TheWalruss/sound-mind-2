@@ -59,6 +59,24 @@ public:
      */
     void load(sound_mind::codec::AudioBuffer audio);
 
+    /**
+     * @brief Loads a stream of `totalSamples` that appendStream() fills as
+     *        it plays (`v0.1.44.3`, Play Macro) - see
+     *        `PlaybackEngine::beginStream()`. Stops playback first, as
+     *        load() does.
+     * @param totalSamples The whole length.
+     * @param sampleRateHz Its sample rate.
+     */
+    void beginStream(std::size_t totalSamples, std::uint32_t sampleRateHz);
+
+    /// @brief Appends the next stretch of a stream - see beginStream().
+    /// @param audio The samples.
+    void appendStream(const sound_mind::codec::AudioBuffer& audio) { engine_.appendStream(audio); }
+
+    /// @brief The current playback position, read straight from the engine.
+    /// @return Seconds.
+    [[nodiscard]] double positionSeconds() const noexcept;
+
     /// @brief Whether load() has been called since construction or the
     ///        last stop()/invalidate().
     /// @return `true` if audio is currently loaded.

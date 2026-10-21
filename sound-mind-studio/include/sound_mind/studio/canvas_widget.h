@@ -220,6 +220,20 @@ public:
      */
     void setLiveOverlay(std::optional<sound_mind::codec::StreamImage> overlay);
 
+    /**
+     * @brief Shows `frame` instead of the project's composite (`v0.1.44.3`,
+     *        Play Macro showing a rendered performance), or goes back to the
+     *        composite. Operation overlays and guide paths, which describe
+     *        the live project, are hidden meanwhile; the grid and the
+     *        playhead stay.
+     * @param frame The image (canvas-sized), or `std::nullopt`.
+     */
+    void setFrameOverride(std::optional<sound_mind::codec::RgbImage> frame);
+
+    /// @brief Whether a frame override is showing.
+    /// @return `true` while setFrameOverride() has an image.
+    [[nodiscard]] bool hasFrameOverride() const noexcept { return frameOverride_.has_value(); }
+
     /// @return Whether a live overlay is currently set.
     [[nodiscard]] bool hasLiveOverlay() const noexcept { return liveOverlay_.has_value(); }
 
@@ -1189,6 +1203,8 @@ private:
     bool clipIndicatorEnabled_ = false;
     /// @brief See setLiveOverlay().
     std::optional<sound_mind::codec::StreamImage> liveOverlay_;
+    /// See setFrameOverride().
+    std::optional<sound_mind::codec::RgbImage> frameOverride_;
     std::optional<double> playheadFraction_;
     /// @brief See setPolarMode()'s own docs.
     bool polarMode_ = false;

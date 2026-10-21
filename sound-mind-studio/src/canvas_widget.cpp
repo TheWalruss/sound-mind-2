@@ -501,6 +501,9 @@ void CanvasWidget::wheelEvent(QWheelEvent* event) {
 }
 
 std::optional<sound_mind::codec::RgbImage> CanvasWidget::currentComposite() {
+    if (frameOverride_.has_value()) {
+        return frameOverride_;
+    }
     if (project_ == nullptr) {
         return std::nullopt;
     }
@@ -542,6 +545,14 @@ void CanvasWidget::setLiveOverlay(std::optional<sound_mind::codec::StreamImage> 
     }
     liveOverlay_ = std::move(overlay);
     ++compositeGeneration_;
+    update();
+}
+
+void CanvasWidget::setFrameOverride(std::optional<sound_mind::codec::RgbImage> frame) {
+    if (!frame.has_value() && !frameOverride_.has_value()) {
+        return;
+    }
+    frameOverride_ = std::move(frame);
     update();
 }
 
@@ -598,7 +609,9 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         // quadrilateral across the disk instead of the curved shape the
         // underlying geometry actually has. See setPolarMode()'s own docs.
         if (!polarMode_) {
-            if (showBoundingBoxes_ || showPathGeometry_) {
+            // A frame override (Play Macro) shows something other than the
+            // live project, which the object overlays describe.
+            if ((showBoundingBoxes_ || showPathGeometry_) && !frameOverride_) {
                 drawOperationOverlays(painter);
             }
 
@@ -615,11 +628,13 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
             // reference-aid ordering as Overlay Grids above, drawn right
             // after them so both sets of reference lines sit together,
             // under every interactive overlay.
-            drawChordPreview(painter);
+            if (!frameOverride_) {
+                drawChordPreview(painter);
 
-            // Silent guide paths - drawn above the reference lines, under
-            // the live preview and highlights, like any other object.
-            drawGuidePaths(painter);
+                // Silent guide paths - drawn above the reference lines, under
+                // the live preview and highlights, like any other object.
+                drawGuidePaths(painter);
+            }
         }
 
         // MindWave Preview (see setMindWavePreview()'s own docs) - a

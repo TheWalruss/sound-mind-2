@@ -103,6 +103,38 @@ public:
      */
     void loadAudio(sound_mind::codec::AudioBuffer audio);
 
+    /**
+     * @brief Prepares to play audio that arrives while it plays
+     *        (`v0.1.44.3`, Play Macro): `totalSamples` of silence are
+     *        allocated, and appendStream() fills them in order.
+     *
+     * The audio callback plays only what has been appended: reaching the
+     * end of it, it outputs silence and holds its position until more
+     * arrives (an underrun stalls rather than skipping). Like loadAudio(),
+     * not to be called while playing.
+     *
+     * @param totalSamples The whole length, in samples.
+     * @param sampleRateHz The audio's sample rate.
+     */
+    void beginStream(std::size_t totalSamples, std::uint32_t sampleRateHz);
+
+    /**
+     * @brief Appends audio after what was appended so far - see
+     *        beginStream(). Called on one non-audio thread at a time;
+     *        real-time safe for the audio thread, which never reads past
+     *        what this publishes (release/acquire on the count).
+     * @param audio The next samples; anything beyond the stream's length is
+     *        dropped.
+     */
+    void appendStream(const sound_mind::codec::AudioBuffer& audio);
+
+    /// @brief How many samples are available to play - all of them for
+    ///        loadAudio(), what's been appended for a stream.
+    /// @return The count.
+    [[nodiscard]] std::size_t availableSamples() const noexcept {
+        return availableSamples_.load(std::memory_order_acquire);
+    }
+
     /// @brief Starts (or resumes) playback from the current position.
     void play();
 
@@ -409,6 +441,8 @@ private:
     // Cached so the UI thread can read them while the audio thread swaps
     // audio_'s buffers; stageAudio() only accepts audio matching both.
     std::atomic<std::size_t> frameCount_{0};
+    /// How much of audio_ may be played - see beginStream().
+    std::atomic<std::size_t> availableSamples_{0};
     std::atomic<std::uint32_t> sampleRateHzCached_{44100};
     std::mutex stagedMutex_;
     sound_mind::codec::AudioBuffer staged_;

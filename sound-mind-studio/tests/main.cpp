@@ -60,6 +60,7 @@
 #include "test_layer_controller.h"
 #include "test_layers_panel.h"
 #include "test_loop_panel.h"
+#include "test_macro_player.h"
 #include "test_macro_recorder.h"
 #include "test_main_window.h"
 #include "test_midi_configuration_panel.h"
@@ -124,6 +125,7 @@ const std::array kTestClasses{
     SM_TEST_CLASS_ENTRY(CreateProjectWizardTest),
     SM_TEST_CLASS_ENTRY(LayersPanelTest),
     SM_TEST_CLASS_ENTRY(LoopPanelTest),
+    SM_TEST_CLASS_ENTRY(MacroPlayerTest),
     SM_TEST_CLASS_ENTRY(MacroRecorderTest),
     SM_TEST_CLASS_ENTRY(RecordPanelTest),
     SM_TEST_CLASS_ENTRY(PlaybackPanelTest),
