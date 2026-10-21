@@ -132,6 +132,10 @@ public:
      *       the user: a project has whatever layers its own file says it
      *       has, the same as any other field).
      *
+     * Deterministic (`v0.1.43.3`): the same settings always give the same
+     * project, noise seeds included - replaying a History starts from here.
+     * Its History has a baseline and starts at creation.
+     *
      * @param settings The settings the new project should carry.
      * @return The new project, with its Background and Equalizer layers
      *         and an empty operation log.

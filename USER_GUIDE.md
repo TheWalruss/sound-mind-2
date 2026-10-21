@@ -1361,7 +1361,10 @@ or Redo repeatedly, just in one step.
 steps back through what you did before. A step that brings back an
 earlier version of a layer's audio (undoing a recording over a layer, a
 Loop take or pooling) needs that version, which isn't kept once the
-project is closed - for now such a step stops Undo there.
+project is closed: the Studio remakes it by replaying the project's
+history from its sources (see [Saving and Project Files](#saving-and-project-files)),
+which can take a moment. In a project made with a version before 0.1.43.1
+that isn't possible, and Undo stops at such a step.
 
 Only **Procedural**, **Instrument** (harmonic series + inharmonicity only so
 far - no noise, body resonance, or envelope yet), **Mind Shot**

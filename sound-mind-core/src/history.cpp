@@ -299,7 +299,7 @@ ProjectState captureProjectState(const Project& project) {
     ProjectState state;
     state.layers.reserve(project.layers().size());
     for (const Layer& layer : project.layers()) {
-        state.layers.push_back({layer.id(), nlohmann::json(layer), layer.baseRevision()});
+        state.layers.push_back({layer.id(), nlohmann::json(layer), layer.baseRevision(), layer.baseContent() != nullptr});
     }
     state.nextLayerId = project.nextLayerId();
     const OperationLog& log = project.operationLog();
@@ -376,6 +376,8 @@ std::optional<HistoryEntryId> History::commit(Project& project, std::string desc
         layerChange.before = was != nullptr ? was->json : nlohmann::json();
         layerChange.after = now != nullptr ? now->json : nlohmann::json();
         layerChange.baseChanged = was == nullptr || now == nullptr || was->baseRevision != now->baseRevision;
+        layerChange.beforeHasContent = was != nullptr && was->hasContent;
+        layerChange.afterHasContent = now != nullptr && now->hasContent;
         if (was != nullptr && layerChange.baseChanged) {
             if (const auto it = displaced.find(id); it != displaced.end() && it->second.revision == was->baseRevision) {
                 layerChange.baseBefore = it->second;
@@ -484,7 +486,9 @@ std::optional<HistoryChange> History::step(Project& project, bool forward, const
             continue;
         }
         const std::optional<LayerBase>& kept = forward ? layerChange.baseAfter : layerChange.baseBefore;
-        if (kept.has_value()) {
+        if (!(forward ? layerChange.afterHasContent : layerChange.beforeHasContent)) {
+            targetBases.emplace(layerChange.id, LayerBase{nullptr, nullptr, target.value("baseRecipe", nlohmann::json()), 0});
+        } else if (kept.has_value()) {
             targetBases.emplace(layerChange.id, *kept);
         } else if (auto recovered = resolver ? resolver(targetPosition, layerChange.id) : std::nullopt) {
             targetBases.emplace(layerChange.id, std::move(*recovered));
@@ -518,7 +522,10 @@ std::optional<HistoryChange> History::applyEntry(Project& project, HistoryEntry&
         if (!layerChange.baseChanged || layerChange.after.is_null()) {
             continue;
         }
-        if (layerChange.baseAfter.has_value()) {
+        if (!layerChange.afterHasContent) {
+            targetBases.emplace(layerChange.id,
+                                LayerBase{nullptr, nullptr, layerChange.after.value("baseRecipe", nlohmann::json()), 0});
+        } else if (layerChange.baseAfter.has_value()) {
             targetBases.emplace(layerChange.id, *layerChange.baseAfter);
         } else if (auto supplied = base ? base(layerChange.id) : std::nullopt) {
             targetBases.emplace(layerChange.id, std::move(*supplied));
@@ -570,17 +577,12 @@ void History::enforceBaseBudget() {
 void to_json(nlohmann::json& json, const HistoryEntry& entry) {
     nlohmann::json layers = nlohmann::json::array();
     for (const HistoryLayerChange& layer : entry.layers) {
-        nlohmann::json change{
-            {"id", layer.id}, {"before", layer.before}, {"after", layer.after}, {"baseChanged", layer.baseChanged}};
-        // An empty base is fully known without its images - keep that
-        // across a reload (a layer without content needs no recovering).
-        if (layer.baseBefore && !layer.baseBefore->stream && !layer.baseBefore->pool) {
-            change["baseBeforeEmpty"] = true;
-        }
-        if (layer.baseAfter && !layer.baseAfter->stream && !layer.baseAfter->pool) {
-            change["baseAfterEmpty"] = true;
-        }
-        layers.push_back(std::move(change));
+        layers.push_back({{"id", layer.id},
+                          {"before", layer.before},
+                          {"after", layer.after},
+                          {"baseChanged", layer.baseChanged},
+                          {"beforeHasContent", layer.beforeHasContent},
+                          {"afterHasContent", layer.afterHasContent}});
     }
     nlohmann::json resources = nlohmann::json::array();
     for (const HistoryResourceChange& resource : entry.resources) {
@@ -635,12 +637,8 @@ void from_json(const nlohmann::json& json, HistoryEntry& entry) {
         change.before = layer.at("before");
         change.after = layer.at("after");
         change.baseChanged = layer.value("baseChanged", false);
-        if (layer.value("baseBeforeEmpty", false)) {
-            change.baseBefore = LayerBase{nullptr, nullptr, layer.at("before").value("baseRecipe", nlohmann::json()), 0};
-        }
-        if (layer.value("baseAfterEmpty", false)) {
-            change.baseAfter = LayerBase{nullptr, nullptr, layer.at("after").value("baseRecipe", nlohmann::json()), 0};
-        }
+        change.beforeHasContent = layer.value("beforeHasContent", !change.before.is_null());
+        change.afterHasContent = layer.value("afterHasContent", !change.after.is_null());
         entry.layers.push_back(std::move(change));
     }
     json.at("nextLayerIdBefore").get_to(entry.nextLayerIdBefore);
@@ -679,7 +677,9 @@ void to_json(nlohmann::json& json, const History& history) {
     for (std::size_t i = 0; i < history.position_; ++i) {
         entries.push_back(history.entries_[i]);
     }
-    json = nlohmann::json{{"entries", std::move(entries)}, {"nextEntryId", history.nextEntryId_}};
+    json = nlohmann::json{{"entries", std::move(entries)},
+                          {"nextEntryId", history.nextEntryId_},
+                          {"startsAtCreation", history.startsAtCreation_}};
 }
 
 void from_json(const nlohmann::json& json, History& history) {
@@ -688,6 +688,7 @@ void from_json(const nlohmann::json& json, History& history) {
     history.nextEntryId_ = json.value("nextEntryId", HistoryEntryId{history.entries_.size() + 1});
     history.committed_ = ProjectState{};
     history.hasBaseline_ = false;
+    history.startsAtCreation_ = json.value("startsAtCreation", false);
 }
 
 }  // namespace sound_mind::core

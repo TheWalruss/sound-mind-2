@@ -13,4 +13,5 @@ private slots:
     void jumpToReachesThePositionAndSignalsOnce();
     void undoWithoutARecoverableBaseFailsCleanly();
     void undoUsesTheBaseResolver();
+    void aChangeMadeOutsideTheHistoryMarksItIncomplete();
 };

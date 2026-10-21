@@ -1193,7 +1193,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.12` (`0.1.40.8`: slider ranges; `0.1.40.13` belongs to `v0.Y.78.1`) | #249-#256 |
 | `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.5` (follow-up `0.1.41.6`: shaders embedded) | #258, #259 |
 | `v0.Y.80.3` | Licensing and beta groundwork (inserted 2026-10-21) | `0.1.42.1` (follow-up `0.1.42.2`: Microsoft Store MSIX) | #260, #261 |
-| `v0.Y.81.1` | History: every action recorded, sources in the project, Remaster (redesigned 2026-10-21) | `0.1.43.1`-`0.1.43.2` *(in progress)* | #262-#264 |
+| `v0.Y.81.1` | History: every action recorded, sources in the project, Remaster (redesigned 2026-10-21) | `0.1.43.1`-`0.1.43.3` *(in progress)* | #262-#265 |
 | `v0.Y.82.1` | Macros: record, play and export a performance (redesigned 2026-10-21) | *(planned: `0.1.44.x`)* | #262 |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
 
@@ -1406,7 +1406,8 @@ The project can be rebuilt from scratch by replaying its saved History against i
   - Audio, image and MIDI import become History entries referencing sources.
   - Recordings and Loop captures saved as FLAC sources.
   - Generated layers as entries.
-- **Installment C: content operations into History.**
+- ✅ **Installment C, as built: the headless replay engine.** Settled in `v0.1.43.3`, see architecture Decision #265. The installment as planned below was mostly delivered by A (whose generic change capture records content operations, pooling and phase cleanup) - what was left became this: `HistoryReplayer`, undo after reopening via replay, deterministic project creation, the "history starts at creation" flag. Load-time validation moved to D. In-project pastes are resampled on Remaster rather than referencing their origin (D).
+- *Originally planned as C:* content operations into History.
   - Paint, fill, paste, text, sequence, filter-to-selection and guide paths, plus Pick edits, restacking and deletion.
   - Pooling, phase cleanup, and Mind Shot/Mind Grain capture.
   - `OperationLog` loses its own undo.

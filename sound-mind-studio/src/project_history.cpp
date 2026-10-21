@@ -8,9 +8,12 @@ void ProjectHistory::setProject(sound_mind::core::Project* project) {
     project_ = project;
     // Whatever was done to the project before it was handed over isn't
     // anybody's action to undo.
-    if (project_ != nullptr &&
-        (!project_->history().hasBaseline() || project_->history().hasUncommittedChanges(*project_))) {
+    if (project_ != nullptr && !project_->history().hasBaseline()) {
         project_->history().setBaseline(*project_);
+    } else if (project_ != nullptr && project_->history().hasUncommittedChanges(*project_)) {
+        // Changed outside the history: its entries no longer rebuild it.
+        project_->history().setBaseline(*project_);
+        project_->history().markIncomplete();
     }
     emit historyChanged();
 }

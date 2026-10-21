@@ -14,6 +14,7 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/base_recipes.h"
 #include "sound_mind/studio/import_export.h"
+#include "sound_mind/studio/project_history.h"
 
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
@@ -209,5 +210,47 @@ void BaseRecipesTest::aMissingSourceOrUnknownRecipeFailsWithAReason() {
     error.clear();
     QVERIFY(!runBaseRecipe(nullptr, 0, project, sourcesOf(project), renderedOf(project), &error).has_value());
     QVERIFY(!error.isEmpty());
+    std::filesystem::remove_all(folder);
+}
+
+// v0.1.43.3 - the replaced base isn't in memory after reopening; the
+// resolver replays the history from the project's sources to remake it.
+void BaseRecipesTest::undoAfterReopeningRemakesAReplacedBase() {
+    const auto folder = freshFolder("sound-mind-test-recipe-reopen");
+    const auto file = folder / "Reopen.smproj";
+    {
+        Project project = projectIn(folder);
+        project.save(file);
+        sound_mind::studio::ProjectHistory history;
+        history.setProject(&project);
+        writeWav(folder / "first.wav", 8 * 441);
+        QString error;
+        QCOMPARE(sound_mind::studio::importAudioSnippetsInto(project, folder / "first.wav", {0}, &error), 1);
+        history.commit(project, QStringLiteral("Imported"));
+        const LayerId id = project.layers()[project.layers().size() - 2].id();
+        sound_mind::codec::AudioBuffer take;
+        take.sampleRateHz = 44100;
+        take.left.assign(8 * 441, 0.5f);
+        take.right = take.left;
+        const auto source =
+            project.addSource(sound_mind::core::storeSourceAudio(*project.sourcesFolder(), take, "recording", "Take"));
+        project.layerById(id)->setBaseContent(
+            sound_mind::codec::encode(take, sound_mind::core::streamCodecConfigFor(project.settings())),
+            nlohmann::json{{"kind", "record"}, {"source", source}});
+        history.commit(project, QStringLiteral("Recorded over"));
+        project.save(file);
+    }
+
+    Project reopened = Project::load(file);
+    QVERIFY(reopened.history().startsAtCreation());
+    const LayerId id = reopened.layers()[reopened.layers().size() - 2].id();
+    const auto original = sound_mind::studio::encodeAudioSnippets(reopened.settings(), folder / "first.wav", {0},
+                                                                  nullptr, nullptr, 0.0);
+    sound_mind::studio::ProjectHistory history;
+    history.setProject(&reopened);
+    QVERIFY(!history.undo());  // no way to remake it yet.
+    history.setBaseResolver(sound_mind::studio::replayingBaseResolver(reopened));
+    QVERIFY(history.undo());
+    QVERIFY(reopened.layerById(id)->content()->leftMagnitudeDb == original.front().content()->leftMagnitudeDb);
     std::filesystem::remove_all(folder);
 }

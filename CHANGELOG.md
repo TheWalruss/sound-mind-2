@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.43.3] - 2026-10-21
+
+Roadmap slot `v0.Y.81.1` (History), installment C.
+
+### Added
+
+- **Undo reaches all the way back after reopening a project.** Undoing a recording over a layer, a Loop take or pooling needs the layer's earlier content, which isn't kept once the project is closed. The Studio now remakes it by replaying the project's history from its saved sources. This can take a moment on a long history. Projects made before version 0.1.43.1 have no complete history, so there Undo still stops at such a step.
+
+### Changed
+
+- **New projects are created identically every time** (the Background and Equalizer layers no longer get a random noise seed), so replaying a project's history reproduces it exactly.
+
 ## [0.1.43.2] - 2026-10-21
 
 Roadmap slot `v0.Y.81.1` (History), installment B.

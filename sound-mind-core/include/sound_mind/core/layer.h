@@ -418,7 +418,8 @@ public:
      *        `History` undoing or redoing an entry that changed it.
      *
      * Restores the revision too, so the history sees exactly the state it
-     * recorded. The rendered content starts out as the base; re-render it
+     * recorded - or, for a base remade by replay (revision `0`), gives it a
+     * fresh one. The rendered content starts out as the base; re-render it
      * if operations target the layer.
      *
      * @param base The base to restore; an empty `stream` leaves the layer

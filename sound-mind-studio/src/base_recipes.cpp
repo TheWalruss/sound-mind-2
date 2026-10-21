@@ -162,4 +162,46 @@ std::optional<sound_mind::core::LayerBase> runBaseRecipe(const nlohmann::json& r
     return fail(errorMessage, tr("This layer's content was made in a way that can't be repeated."));
 }
 
+sound_mind::core::ReplayRecipeRunner replayRecipeRunner(SourcePathLookup sourcePath) {
+    return [sourcePath = std::move(sourcePath)](const nlohmann::json& recipe, sound_mind::core::LayerId layer,
+                                                const sound_mind::core::Project& project,
+                                                const sound_mind::core::ReplayRenderedLookup& rendered,
+                                                std::string* error) -> std::optional<sound_mind::core::LayerBase> {
+        QString reason;
+        auto base = runBaseRecipe(recipe, layer, project, sourcePath, rendered, &reason);
+        if (!base.has_value() && error != nullptr) {
+            *error = reason.toStdString();
+        }
+        return base;
+    };
+}
+
+sound_mind::core::HistoryBaseResolver replayingBaseResolver(const sound_mind::core::Project& project) {
+    return [&project](std::size_t position,
+                      sound_mind::core::LayerId layer) -> std::optional<sound_mind::core::LayerBase> {
+        if (!project.history().startsAtCreation()) {
+            return std::nullopt;
+        }
+        sound_mind::core::ReplayOptions options;
+        options.runRecipe = replayRecipeRunner([&project](sound_mind::core::SourceId id) { return project.sourcePath(id); });
+        sound_mind::core::HistoryReplayer replayer(project.settings(), std::move(options));
+        if (!replayer.applyAll(project.history(), position)) {
+            return std::nullopt;
+        }
+        const sound_mind::core::Layer* replayed = replayer.project().layerById(layer);
+        if (replayed == nullptr) {
+            return std::nullopt;
+        }
+        sound_mind::core::LayerBase base;
+        if (replayed->baseContent() != nullptr) {
+            base.stream = std::make_shared<const sound_mind::codec::StreamImage>(*replayed->baseContent());
+        }
+        if (replayed->poolContent().has_value()) {
+            base.pool = std::make_shared<const sound_mind::codec::PoolImage>(*replayed->poolContent());
+        }
+        base.recipe = replayed->baseRecipe();
+        return base;
+    };
+}
+
 }  // namespace sound_mind::studio

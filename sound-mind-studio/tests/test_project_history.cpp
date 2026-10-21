@@ -138,6 +138,21 @@ void ProjectHistoryTest::undoWithoutARecoverableBaseFailsCleanly() {
     QCOMPARE(project.layerById(id)->content()->leftMagnitudeDb.at(0), -2.0f);
 }
 
+// v0.1.43.3 - entries that don't rebuild the project from its creation
+// must say so, or a replay (Remaster) would silently produce something else.
+void ProjectHistoryTest::aChangeMadeOutsideTheHistoryMarksItIncomplete() {
+    Project project = smallProject();
+    QVERIFY(project.history().startsAtCreation());
+    ProjectHistory history;
+    history.setProject(&project);
+    QVERIFY(project.history().startsAtCreation());  // nothing done outside it.
+
+    project.layers().front().setOpacity(0.5f);
+    history.setProject(&project);  // attached again, with an uncommitted change.
+    QVERIFY(!project.history().startsAtCreation());
+    QVERIFY(!project.history().hasUncommittedChanges(project));
+}
+
 void ProjectHistoryTest::undoUsesTheBaseResolver() {
     Project project = smallProject();
     ProjectHistory history;

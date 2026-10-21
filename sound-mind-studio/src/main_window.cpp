@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 
+#include <QApplication>
 #include <QAction>
 #include <QActionGroup>
 #include <QCloseEvent>
@@ -51,6 +52,7 @@
 #include "sound_mind/core/filter_preview.h"
 #include "sound_mind/core/loudness_meter.h"
 #include "sound_mind/core/pitch_detection.h"
+#include "sound_mind/studio/base_recipes.h"
 #include "sound_mind/studio/text_controller.h"
 #include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/compositor.h"
@@ -2282,6 +2284,9 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     project_ = std::move(project);
     // The History belongs to the project (v0.1.43.1) - it came with it.
     history_.setProject(&*project_);
+    // A base no longer in memory (after reopening) is remade by replaying
+    // the project's history from its sources (v0.1.43.3).
+    history_.setBaseResolver(sound_mind::studio::replayingBaseResolver(*project_));
 
     // (Re)constructed fresh for the new project's own settings - loop
     // length is the project's own duration in samples (canvasWidth
@@ -3856,12 +3861,31 @@ void MainWindow::updateConfiguredDeviceLockState() {
 }
 
 void MainWindow::undo() {
-    history_.undo();
+    if (!history_.canUndo()) {
+        return;
+    }
+    QApplication::setOverrideCursor(Qt::WaitCursor);  // remaking a base can take a moment.
+    const bool undone = history_.undo();
+    QApplication::restoreOverrideCursor();
+    if (!undone) {
+        statusBar()->showMessage(tr("Can't undo further: the earlier version of a layer's content can't be remade "
+                                    "from this project's sources."),
+                                 8000);
+    }
     noteProjectChangedForAnalysis();  // undo can change anything the report measured.
 }
 
 void MainWindow::redo() {
-    history_.redo();
+    if (!history_.canRedo()) {
+        return;
+    }
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const bool redone = history_.redo();
+    QApplication::restoreOverrideCursor();
+    if (!redone) {
+        statusBar()->showMessage(tr("Can't redo: a layer's content can't be remade from this project's sources."),
+                                 8000);
+    }
     noteProjectChangedForAnalysis();
 }
 

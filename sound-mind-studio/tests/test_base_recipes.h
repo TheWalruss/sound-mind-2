@@ -12,4 +12,5 @@ private slots:
     void recordingReplaysFromItsFlacSource();
     void emptyDuplicatePoolAndPhaseCleanupStartFromTheRenderedContent();
     void aMissingSourceOrUnknownRecipeFailsWithAReason();
+    void undoAfterReopeningRemakesAReplacedBase();
 };

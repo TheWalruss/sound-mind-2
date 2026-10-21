@@ -49,6 +49,10 @@ Project Project::createNew(ProjectSettings settings) {
     Project project;
     project.settings_ = settings;
     project.layers_.emplace_back(kBackgroundLayerId, "Background", LayerType::Background);
+    // Creation is deterministic (v0.1.43.3): replaying a project's History
+    // starts from createNew(), so its two fixed layers can't carry the
+    // random noise seed a FilterConfiguration otherwise starts with.
+    project.layers_.back().filterConfiguration().setNoiseSeed(0);
 
     // The Equalizer's own default "Cut" gradient: intensity pinned to
     // the silence floor on both stops/channels - see createNew()'s own
@@ -56,6 +60,7 @@ Project Project::createNew(ProjectSettings settings) {
     // cut applied yet).
     Layer equalizer(kEqualizerLayerId, "Equalizer", LayerType::Equalizer);
     FilterConfiguration equalizerConfig;
+    equalizerConfig.setNoiseSeed(0);
     Gradient& cutGradient = equalizerConfig.frequencyGradient();
     GradientStop startStop = cutGradient.stops().front();
     startStop.leftIntensity = -96.0f;
@@ -69,6 +74,7 @@ Project Project::createNew(ProjectSettings settings) {
     project.layers_.push_back(std::move(equalizer));
 
     project.history_.setBaseline(project);
+    project.history_.markStartsAtCreation();
     return project;
 }
 

@@ -40,6 +40,8 @@ struct ProjectState {
         nlohmann::json json;
         /// Its Layer::baseRevision().
         std::uint64_t baseRevision = 0;
+        /// Whether it has any base content.
+        bool hasContent = false;
     };
 
     /// Every layer, bottom to top.
@@ -86,6 +88,11 @@ struct HistoryLayerChange {
     /// Whether its base content changed (always when added or removed with
     /// content).
     bool baseChanged = false;
+    /// Whether it had base content before (`v0.1.43.3`) - a side without
+    /// any is restored as empty, with nothing to recover.
+    bool beforeHasContent = false;
+    /// Whether it has base content after - see beforeHasContent.
+    bool afterHasContent = false;
     /// Session-only: the base before and after, while kept - see
     /// `History::setBaseBudgetBytes()`. Restored exactly on undo/redo.
     std::optional<LayerBase> baseBefore;
@@ -221,6 +228,24 @@ public:
     [[nodiscard]] bool hasBaseline() const noexcept { return hasBaseline_; }
 
     /**
+     * @brief Whether the entries start from the project's creation
+     *        (`v0.1.43.3`) - so replaying them into
+     *        `Project::createNew(settings)` rebuilds the project. `false` for
+     *        a project from before History existed, whose history starts at
+     *        the first time it was opened, or after markIncomplete().
+     * @return `true` for a complete history.
+     */
+    [[nodiscard]] bool startsAtCreation() const noexcept { return startsAtCreation_; }
+
+    /// @brief Records that the project was changed outside the history, so
+    ///        its entries no longer rebuild it from creation.
+    void markIncomplete() noexcept { startsAtCreation_ = false; }
+
+    /// @brief Records that the entries start at the project's creation -
+    ///        `Project::createNew()`.
+    void markStartsAtCreation() noexcept { startsAtCreation_ = true; }
+
+    /**
      * @brief Records everything that changed in `project` since the last
      *        commit, undo or redo as one entry.
      *
@@ -332,6 +357,7 @@ private:
     HistoryEntryId nextEntryId_ = 1;
     ProjectState committed_;
     bool hasBaseline_ = false;
+    bool startsAtCreation_ = false;
     std::size_t baseBudgetBytes_ = std::size_t{1} << 30;
 };
 

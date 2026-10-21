@@ -40,6 +40,7 @@ add_executable(sound-mind-core-tests
     test_chord_generator.cpp
     test_sequence_notation.cpp
     test_history.cpp
+    test_history_replay.cpp
     test_operation_log.cpp
     test_paint_application.cpp
     test_fill_application.cpp

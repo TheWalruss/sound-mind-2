@@ -2735,6 +2735,27 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **Tests:**
       - core `test_project_sources.cpp`, 6 cases: SHA-256 against the FIPS test vectors, file hash, store once, FLAC round trip, registry de-duplication and lookup, Save As carrying sources;
       - Studio `BaseRecipesTest`, 6 cases: audio and image imports keep their file and replay bit-identically, a generated layer replays from its seed, a recording replays from FLAC within quantization, empty/duplicate/pool/phase cleanup from rendered content, missing source or unknown recipe fails with a reason.
+265. **History installment C: the headless replay engine.** Settled in `v0.1.43.3`, roadmap slot `v0.Y.81.1`. Installment C as planned ("content operations into History") had been delivered by A's generic capture. What remained is the engine the rest builds on.
+    - **`HistoryReplayer` (Core, `history_replay.h`)** starts from `Project::createNew(settings)` and applies each entry's "after" side with `History::applyEntry()`.
+      - **Bases** come from the entry when kept and allowed (`useKeptBases`, exact and fast), otherwise from an injected `ReplayRecipeRunner`. That's the Studio's `runBaseRecipe()`, injected so Core stays free of Qt.
+      - **Rendering is lazy.** A layer whose base or operations changed is marked stale and only re-rendered when something reads it: a recipe (pool/duplicate/phase cleanup read rendered content), a Mind Grain stroke on another layer (the content resolver renders its source first, guarded against cycles), or `renderAll()`/`takeProject()`. A long painting session renders each layer once, not after every stroke.
+      - It owns its project, so it can run on a background thread.
+      - It has options for cancellation, progress, and a per-entry `transformEntry` (Remaster's hook).
+    - **Entries now record whether each side had content** (`beforeHasContent`/`afterHasContent`). A side without any (a Filter layer, a removed empty layer) restores as empty with nothing to recover or remake, replacing installment A's narrower "empty base" flags.
+    - **`History::startsAtCreation()`** (saved):
+      - true for projects from `createNew()`;
+      - false for a project from before 0.1.43.1 (whose history starts when first opened);
+      - false after `ProjectHistory::setProject()` finds changes made outside the history (`markIncomplete()`).
+
+      Replays require it.
+    - **`Project::createNew()` is deterministic.** `FilterConfiguration` seeds its noise from `std::random_device`, so two new projects' Background/Equalizer layers differed, and a replay couldn't reproduce the original's creation state. Found by the replay test. Their seeds are now fixed at `0`; Filter layers added later carry their seed in the entry's JSON, so they replay exactly regardless.
+    - **Undo after reopening:**
+      - `replayingBaseResolver()` (Studio) replays the live project's history up to the needed position, using its sources, and returns that layer's base. `MainWindow` installs it on every project.
+      - A base remade without a revision gets a fresh one in `Layer::restoreBase()`, so caches keyed on revisions see it as new.
+      - Undo/redo show a busy cursor, and a status message when a step can't be remade (an incomplete history, a missing source).
+    - **Tests:**
+      - core `test_history_replay.cpp`, 8 cases: completeness flag and its persistence; deterministic creation; a full replay reproducing layers, rendering, operations and resources; kept versus remade bases; a layer without content needing no recipe; an unremakeable recipe failing with the entry's name and the reason, changing nothing; progress and cancellation; transforms.
+      - Studio: `BaseRecipesTest::undoAfterReopeningRemakesAReplacedBase` (save, reopen, undo fails without a resolver, succeeds with one, bit-identical to the original import) and `ProjectHistoryTest::aChangeMadeOutsideTheHistoryMarksItIncomplete`.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

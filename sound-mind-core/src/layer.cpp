@@ -131,7 +131,9 @@ void Layer::restoreBase(const LayerBase& base) {
         poolContent_.reset();
     }
     baseRecipe_ = base.recipe;
-    baseRevision_ = base.revision;
+    // A base remade by replaying the history comes without a revision of
+    // its own: it's a new one as far as anything caching on it knows.
+    baseRevision_ = base.revision != 0 || !base.stream ? base.revision : nextBaseRevision();
 }
 
 void Layer::assignProperties(const Layer& other) {

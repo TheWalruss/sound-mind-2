@@ -9,6 +9,8 @@
 #include <nlohmann/json.hpp>
 
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/history.h"
+#include "sound_mind/core/history_replay.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_sources.h"
@@ -66,5 +68,27 @@ using RenderedContentLookup = std::function<const sound_mind::codec::StreamImage
                                                                       const SourcePathLookup& sourcePath,
                                                                       const RenderedContentLookup& renderedContent,
                                                                       QString* errorMessage = nullptr);
+
+/**
+ * @brief runBaseRecipe() as a replay's recipe runner (`v0.1.43.3`).
+ * @param sourcePath Finds each source's file - the live project's, or
+ *        (Remaster) with replacements.
+ * @return The runner.
+ */
+[[nodiscard]] sound_mind::core::ReplayRecipeRunner replayRecipeRunner(SourcePathLookup sourcePath);
+
+/**
+ * @brief Recovers a base the history no longer holds in memory by replaying
+ *        `project`'s history up to the needed position (`v0.1.43.3`) - what
+ *        lets undo reach back past a recording, Loop take or pooling after
+ *        the project was reopened.
+ *
+ * Gives up (returns `std::nullopt`) for a history that doesn't start at the
+ * project's creation, or if a recipe can't be remade.
+ *
+ * @param project The live project; must outlive the resolver.
+ * @return The resolver.
+ */
+[[nodiscard]] sound_mind::core::HistoryBaseResolver replayingBaseResolver(const sound_mind::core::Project& project);
 
 }  // namespace sound_mind::studio
