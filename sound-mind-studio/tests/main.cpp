@@ -31,6 +31,7 @@
 #include <QtTest/QtTest>
 
 #include "test_about_dialog.h"
+#include "test_command_line.h"
 #include "test_audio_snippet_picker_dialog.h"
 #include "test_axis_labels.h"
 #include "test_branch_curve_session.h"
@@ -169,6 +170,7 @@ const std::array kTestClasses{
     SM_TEST_CLASS_ENTRY(ResourceBrowserControllerTest),
     SM_TEST_CLASS_ENTRY(UndoStackTest),
     SM_TEST_CLASS_ENTRY(AboutDialogTest),
+    SM_TEST_CLASS_ENTRY(CommandLineTest),
 };
 // clang-format on
 

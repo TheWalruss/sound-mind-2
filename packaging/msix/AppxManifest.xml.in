@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sound Mind Studio's MSIX package manifest (v0.1.42.2). A template:
+  packaging/msix/make_msix.cmake fills in the @...@ values. The identity
+  (Name, Publisher) must match what Partner Center assigns when the app name
+  is reserved in the Microsoft Store - see docs/store-submission.md.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="@MSIX_IDENTITY_NAME@"
+    Publisher="@MSIX_PUBLISHER@"
+    Version="@MSIX_VERSION@"
+    ProcessorArchitecture="@MSIX_ARCHITECTURE@" />
+
+  <Properties>
+    <DisplayName>Sound Mind Studio</DisplayName>
+    <PublisherDisplayName>@MSIX_PUBLISHER_DISPLAY_NAME@</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Treats sound as a picture: import audio as a spectrogram, paint and filter it like an image, and hear the result.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="SoundMindStudio" Executable="sound-mind-studio.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Sound Mind Studio"
+        Description="Treats sound as a picture."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <!-- Double-clicking a project opens it (main.cpp reads the path). -->
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="smproj">
+            <uap:DisplayName>Sound Mind Studio project</uap:DisplayName>
+            <uap:Logo>Assets\Square44x44Logo.png</uap:Logo>
+            <uap:SupportedFileTypes>
+              <uap:FileType>.smproj</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- A regular desktop program (not sandboxed). -->
+    <rescap:Capability Name="runFullTrust" />
+    <!-- Recording and Loop Mode; Windows asks the user the first time. -->
+    <DeviceCapability Name="microphone" />
+  </Capabilities>
+</Package>

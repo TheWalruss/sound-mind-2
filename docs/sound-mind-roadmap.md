@@ -1192,7 +1192,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.79.1` | Generators | `0.1.39.1`-`0.1.39.4` (plus the codec fix `0.1.39.5`) | #244-#248 |
 | `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.12` (`0.1.40.8`: slider ranges; `0.1.40.13` belongs to `v0.Y.78.1`) | #249-#256 |
 | `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.5` (follow-up `0.1.41.6`: shaders embedded) | #258, #259 |
-| `v0.Y.80.3` | Licensing and beta groundwork (inserted 2026-10-21) | `0.1.42.1` | #260 |
+| `v0.Y.80.3` | Licensing and beta groundwork (inserted 2026-10-21) | `0.1.42.1` (follow-up `0.1.42.2`: Microsoft Store MSIX) | #260, #261 |
 | `v0.Y.81.1` | Operation history persisted with the project | *(planned: `0.1.43.x`)* | |
 | `v0.Y.82.1` | Macro recording and macro video export | *(planned: `0.1.44.x`)* | |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
@@ -1386,6 +1386,12 @@ The GPU-offloading candidates assessed on 2026-10-16, taken in the order recomme
 - The package is trimmed (no software OpenGL, D3D/DXC compilers, Qt Network or TLS/TUIO plugins).
 - The sources release; README, user guide and quickstart licence sections; `BETA.md`; GitHub issue forms.
 
+**Follow-up `v0.1.42.2` (user decision, 2026-10-21: distribute via the Microsoft Store, Decision #261):**
+- The `msix` target and `packaging/msix/`: manifest, tile images, app-local VC++ runtime.
+- The release workflow builds both architectures and bundles them as a Store-upload artifact.
+- `.smproj` files open from the command line or by file association.
+- `docs/store-submission.md` covers the Partner Center steps.
+
 #### `v0.Y.81.1` - Operation history persisted with the project (L)
 
 - The queued item: a project can be re-rendered from scratch from its saved operation history.
@@ -1409,7 +1415,7 @@ The GPU-offloading candidates assessed on 2026-10-16, taken in the order recomme
   - mark beta builds as GitHub pre-releases;
   - announce.
 - **Before opening, decide:**
-  - **Code signing:** an unsigned MSI/EXE triggers SmartScreen's "unknown publisher" warning. Options include a certificate or Azure Trusted Signing.
+  - **Code signing:** an unsigned MSI/EXE triggers SmartScreen's "unknown publisher" warning. **Chosen (2026-10-21): the Microsoft Store**, which signs the MSIX (`v0.1.42.2`, Decision #261). Still to do: register in Partner Center, reserve the name, set the identity repository variables, publish a privacy policy, and submit with a private audience (`docs/store-submission.md`). The MSI/zip stay unsigned unless a certificate is bought later.
   - **Repository visibility:** proprietary code is currently readable in a public repo. If it goes private, releases need a public home (e.g. a separate releases repo).
 - **Before selling (not needed for a free beta):**
   - a patent review of video export's AAC and MPEG-4 Part 2 encoders (MP3's patents have expired);

@@ -121,9 +121,19 @@ jobs:
           VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}\vcpkg-binary-cache
           QT_ROOT_DIR: ${{ matrix.qt_root_dir }}
           QT_HOST_PATH_DIR: ${{ matrix.qt_host_path_dir }}
+          # The MSIX package identity, once the app name is reserved in Partner
+          # Center (docs/store-submission.md) - repository variables; unset,
+          # the CMake defaults (fine for local testing only) apply.
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
         run: |
           New-Item -ItemType Directory -Force "${{ runner.temp }}\vcpkg-binary-cache" | Out-Null
-          cmake --preset release
+          $msixArgs = @()
+          if ($env:MSIX_IDENTITY_NAME) { $msixArgs += "-DSOUND_MIND_MSIX_IDENTITY_NAME=$env:MSIX_IDENTITY_NAME" }
+          if ($env:MSIX_PUBLISHER) { $msixArgs += "-DSOUND_MIND_MSIX_PUBLISHER=$env:MSIX_PUBLISHER" }
+          if ($env:MSIX_PUBLISHER_DISPLAY_NAME) { $msixArgs += "-DSOUND_MIND_MSIX_PUBLISHER_DISPLAY_NAME=$env:MSIX_PUBLISHER_DISPLAY_NAME" }
+          cmake --preset release @msixArgs
 
       # Saved straight after Configure, even if a later step fails or times
       # out - a post-job save is skipped on failure, which kept the cache
@@ -201,6 +211,56 @@ jobs:
           name: sound-mind-studio-${{ matrix.asset_name }}-msi
           path: build/release/*.msi
           if-no-files-found: error
+
+      # The MSIX package for the Microsoft Store (v0.1.42.2) - unsigned, so
+      # it's kept as a workflow artifact rather than a release asset (an
+      # unsigned MSIX can't be installed outside the Store); bundle-msix
+      # below combines both architectures for upload to Partner Center.
+      - name: Package (MSIX)
+        shell: pwsh
+        run: cmake --build --preset release --target msix
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sound-mind-studio-${{ matrix.asset_name }}-msix
+          path: build/release/msix/*.msix
+          if-no-files-found: error
+
+  # Both architectures' MSIX packages in one .msixbundle - what gets uploaded
+  # to Partner Center for a Store submission (docs/store-submission.md). A
+  # workflow artifact only; the Store signs what it distributes.
+  bundle-msix:
+    name: Bundle MSIX for the Store
+    needs: build-package
+    runs-on: windows-latest
+    steps:
+      - name: Download MSIX packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sound-mind-studio-*-msix
+          path: msix
+          merge-multiple: true
+
+      - name: Bundle
+        shell: pwsh
+        run: |
+          $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter makeappx.exe |
+            Where-Object { $_.DirectoryName -like '*\x64' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $makeappx) { throw "makeappx.exe not found in the Windows SDK" }
+          # Same version mapping as the packages: X.Y.Z.W -> X.Y.(Z*1000+W).0.
+          $parts = "${{ github.ref_name }}".TrimStart('v').Split('.')
+          $bundleVersion = "$($parts[0]).$($parts[1]).$([int]$parts[2] * 1000 + [int]$parts[3]).0"
+          & $makeappx.FullName bundle /o /bv $bundleVersion /d msix /p "sound-mind-studio-${{ github.ref_name }}.msixbundle"
+          if ($LASTEXITCODE -ne 0) { throw "makeappx bundle failed ($LASTEXITCODE)" }
+
+      - name: Upload MSIX bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sound-mind-studio-msix-store-upload
+          path: sound-mind-studio-${{ github.ref_name }}.msixbundle
+          if-no-files-found: error
+          retention-days: 90
 
   publish-release:
     name: Publish GitHub Release

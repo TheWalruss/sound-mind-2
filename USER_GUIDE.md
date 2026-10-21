@@ -2077,6 +2077,13 @@ without the other breaks the project.
 Closing the window, opening a different project, or starting a new one
 while you have unsaved changes prompts you to save first.
 
+A project can also be opened from outside the Studio: start
+`sound-mind-studio.exe` with the `.smproj` file's path (for example by
+dropping the file onto the program, or onto a shortcut to it). The
+Microsoft Store version, once it's published, also makes double-clicking a
+`.smproj` file open it. If the project can't be opened, a message says why
+and the start screen stays up.
+
 ## Resource Browser
 
 **Resource Browser** (its own entry in the menu bar, between **View** and

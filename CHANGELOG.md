@@ -6,6 +6,15 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.42.2] - 2026-10-21
+
+Roadmap slot `v0.Y.80.3`, follow-up: Microsoft Store packaging.
+
+### Added
+
+- **An MSIX package for the Microsoft Store.** Each release now also builds an MSIX package for both architectures, ready to submit to the Store, where Microsoft signs it. Once the app is published, a Store install shows no "unknown publisher" warning and updates itself. The package isn't on the Releases page: until the Store signs it, Windows won't install it.
+- **Double-clicking a project opens it.** Starting the Studio with a `.smproj` file - from the command line, or by double-clicking the file once the Store version associates `.smproj` files with the Studio - opens that project straight away.
+
 ## [0.1.42.1] - 2026-10-21
 
 Roadmap slot `v0.Y.80.3` (licensing and beta groundwork).

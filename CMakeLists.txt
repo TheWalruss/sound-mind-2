@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(SoundMind
-    VERSION 0.1.42.1
+    VERSION 0.1.42.2
     DESCRIPTION "Sound Mind Studio: a spectrogram-as-image DAW and graphics studio"
     LANGUAGES CXX C
 )
@@ -136,4 +136,53 @@ if (WIN32)
     set(CPACK_PACKAGE_FILE_NAME "sound-mind-studio-v${PROJECT_VERSION}-${CPACK_SYSTEM_NAME}")
 
     include(CPack)
+
+    # --- MSIX package (v0.1.42.2) ------------------------------------------
+    # `cmake --build <dir> --target msix` builds an unsigned
+    # sound-mind-studio-v<version>-windows-<arch>.msix in <dir>/msix - for the
+    # Microsoft Store, which signs what it distributes. See
+    # packaging/msix/make_msix.cmake and docs/store-submission.md.
+    #
+    # The identity must match what Partner Center assigns when the app name is
+    # reserved; the defaults only suit local test installs.
+    set(SOUND_MIND_MSIX_IDENTITY_NAME "AndreasLundberg.SoundMindStudio" CACHE STRING
+        "MSIX Identity Name (Partner Center: Product identity -> Package/Identity/Name)")
+    set(SOUND_MIND_MSIX_PUBLISHER "CN=Andreas Lundberg" CACHE STRING
+        "MSIX Identity Publisher (Partner Center: Package/Identity/Publisher, e.g. CN=XXXXXXXX-...)")
+    set(SOUND_MIND_MSIX_PUBLISHER_DISPLAY_NAME "Andreas Lundberg" CACHE STRING
+        "MSIX publisher display name (Partner Center: Package/Properties/PublisherDisplayName)")
+
+    # The Visual C++ runtime DLLs go inside the package (an MSIX can't run the
+    # vc_redist installer the zip and MSI rely on). Microsoft permits shipping
+    # them app-locally; CMake finds the right ones for this compiler.
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+    include(InstallRequiredSystemLibraries)
+    # "|"-separated: a ;-list inside a custom-command argument would be split
+    # into separate arguments.
+    string(REPLACE ";" "|" SOUND_MIND_MSIX_CRT_DLLS "${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}")
+
+    find_program(SOUND_MIND_MAKEAPPX makeappx
+        HINTS "$ENV{WindowsSdkVerBinPath}x64" "$ENV{WindowsSdkVerBinPath}arm64"
+              "$ENV{WindowsSdkVerBinPath}/x64" "$ENV{WindowsSdkVerBinPath}/arm64")
+    if (SOUND_MIND_MAKEAPPX)
+        add_custom_target(msix
+            COMMAND "${CMAKE_COMMAND}"
+                    "-DBINARY_DIR=${CMAKE_BINARY_DIR}"
+                    "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
+                    "-DOUTPUT_DIR=${CMAKE_BINARY_DIR}/msix"
+                    "-DVERSION=${PROJECT_VERSION}"
+                    "-DARCHITECTURE=${CPACK_WIX_ARCHITECTURE}"
+                    "-DIDENTITY_NAME=${SOUND_MIND_MSIX_IDENTITY_NAME}"
+                    "-DPUBLISHER=${SOUND_MIND_MSIX_PUBLISHER}"
+                    "-DPUBLISHER_DISPLAY_NAME=${SOUND_MIND_MSIX_PUBLISHER_DISPLAY_NAME}"
+                    "-DCRT_DLLS=${SOUND_MIND_MSIX_CRT_DLLS}"
+                    "-DMAKEAPPX=${SOUND_MIND_MAKEAPPX}"
+                    -P "${CMAKE_SOURCE_DIR}/packaging/msix/make_msix.cmake"
+            DEPENDS sound-mind-studio
+            COMMENT "Packaging MSIX"
+            VERBATIM
+        )
+    else ()
+        message(STATUS "makeappx (Windows SDK) not found - the msix target is unavailable")
+    endif ()
 endif ()

@@ -27,6 +27,7 @@ set(CMAKE_AUTORCC ON)
 # without this, AUTOMOC silently never scans them and moc never runs.
 add_library(sound-mind-studio-lib
     src/about_dialog.cpp
+    src/command_line.cpp
     src/audio_snippet_picker_dialog.cpp
     src/axis_labels.cpp
     src/branch_curve_session.cpp
@@ -95,6 +96,7 @@ add_library(sound-mind-studio-lib
     src/undo_stack.cpp
     src/waveform_preview_widget.cpp
     include/sound_mind/studio/about_dialog.h
+    include/sound_mind/studio/command_line.h
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/branch_curve_session.h
     include/sound_mind/studio/canvas_widget.h

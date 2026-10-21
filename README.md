@@ -70,6 +70,14 @@ Regenerate the Doxygen code documentation (requires Doxygen on `PATH`):
 cmake --build build/debug --target docs
 ```
 
+Package the Microsoft Store MSIX from a Release build (needs the Windows
+SDK's `makeappx`) - see `docs/store-submission.md` for the identity
+settings, local testing, and submitting:
+
+```
+cmake --build build/release --target msix
+```
+
 A developer-only performance benchmarking tool also lives here
 (`sound-mind-benchmark` - not part of the shipped app) - see
 `docs/sound-mind-benchmarking.md`.

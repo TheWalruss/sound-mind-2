@@ -18,6 +18,9 @@ The `.msi` installs it with a Start menu shortcut; the `.zip` runs from any fold
 `vc_redist` installer first if it doesn't start). Windows may warn that the app is from an unknown publisher,
 because it isn't code-signed yet - choose **More info → Run anyway**.
 
+Beta testers may instead be invited to a private Microsoft Store listing. That copy is signed by Microsoft,
+installs and updates from the Store, and opens `.smproj` files on double-click.
+
 ## What to test
 
 - Start with [`QUICKSTART.md`](QUICKSTART.md), then explore with [`USER_GUIDE.md`](USER_GUIDE.md) (also under
@@ -41,6 +44,7 @@ Issues are public - only attach files you're happy to share.
 
 ## Known issues
 
-- The app isn't code-signed yet, so Windows SmartScreen warns about an unknown publisher.
+- The `.msi`/`.zip` downloads aren't code-signed, so Windows SmartScreen warns about an unknown publisher. The
+  Microsoft Store version won't.
 - Project files from earlier test builds may not open in later ones.
 - See "What's Not Here Yet" in the [user guide](USER_GUIDE.md) for features that aren't available yet.

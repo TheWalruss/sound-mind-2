@@ -2555,6 +2555,41 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - beta-opening items on the roadmap's readiness check (code signing, repo visibility; patents, JUCE tier and legal review before selling).
       - Also fixed the stale release-notes template and README intro, which still said painting was "ahead".
     - **Tests:** `AboutDialogTest`, 3 new cases - copyright holder and summary; the embedded documents byte-equal the repository's `LICENSE.md`/`THIRD_PARTY_NOTICES.md` and name the key components; both buttons open viewers showing the text, and a second click doesn't stack.
+261. **Microsoft Store distribution: an MSIX package.** Settled in `v0.1.42.2`, a follow-up to roadmap slot `v0.Y.80.3`.
+    - **The user's decision (2026-10-21):** code signing goes through the Microsoft Store. The user is an individual in Sweden. Azure Trusted Signing's individual onboarding was limited to the US/Canada, and an OV certificate needs a hardware token plus a yearly fee. The Store signs what it distributes. An MSIX outside the Store needs a trusted signature, so the MSI and zip stay as unsigned direct downloads.
+    - **`packaging/msix/`:**
+      - **`AppxManifest.xml.in`:**
+        - `Windows.FullTrustApplication`, with the `runFullTrust` restricted capability: the Studio stays an ordinary desktop program, not sandboxed;
+        - the `microphone` device capability, for Recording and Loop Mode;
+        - a `.smproj` file-type association;
+        - Windows 10 2004 (`10.0.19041.0`) or later, tested on `10.0.26100.0`.
+      - **Tile images:** `Assets/`, generated from the app logo by `make_assets.ps1` with System.Drawing, and committed.
+      - **`make_msix.cmake`:**
+        1. `cmake --install` into a fresh layout, so the files are exactly what the zip/MSI ship;
+        2. remove `vc_redist*.exe`, since an MSIX can't run installers;
+        3. copy in the VC++ runtime DLLs app-locally, from `InstallRequiredSystemLibraries` with `CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP`;
+        4. add the tile images and the configured manifest;
+        5. run `makeappx pack /h SHA256`.
+
+        The DLL list crosses the custom-command boundary `|`-separated, because a `;`-list would split into separate arguments.
+    - **The version mapping:** `X.Y.Z.W` → `X.Y.(Z*1000+W).0`, the same packing as the MSI's ProductVersion. The Store requires revision 0, and each part must be ≤ 65535. That holds until `Z` reaches 65.
+    - **The identity** (`Name`, `Publisher`, `PublisherDisplayName`) comes from Partner Center once the name is reserved. It's three cache variables (`SOUND_MIND_MSIX_*`), with placeholder defaults for local testing. CI sets them from repository variables, so nothing identity-specific is committed before registration.
+    - **CI (`release.yml`):**
+      - each architecture's job builds the `msix` target and uploads its package;
+      - a `bundle-msix` job runs `makeappx bundle` (bundle version mapped the same way) and keeps `sound-mind-studio-msix-store-upload` for 90 days.
+
+      The bundle is a workflow artifact, not a release asset, since it's unsigned.
+    - **Opening a project from the command line:** a file association launches `sound-mind-studio.exe <path>`, which the Studio had ignored.
+      - `projectToOpenFromArguments()` (`command_line.h`) takes the first `.smproj` argument after the program name (any case), converted via `toStdWString` so non-ASCII paths survive.
+      - `main()` opens it with `MainWindow::openProjectAt()` after `show()`, and a failure shows a warning over the start screen.
+      - It's a free function in the library, so it's testable without a window.
+    - **Verified locally (Arm64 Release):**
+      - The package built (20 MB, version `0.1.42002.0`) with the runtime DLLs and no redistributable.
+      - Its layout registered with `Add-AppxPackage -Register` (Developer Mode, `SignatureKind None`) and launched from the Start menu.
+      - Opening a `.smproj` through the association started the Studio with that project open (title "Sound Mind Studio v0.1.42.2 - Association Test").
+      - The microphone consent prompt is a manual test.
+    - **`docs/store-submission.md`:** the Partner Center steps (registration, name reservation, identity variables, privacy policy for the microphone, `runFullTrust` justification, private-audience beta) and local testing.
+    - **Tests:** `CommandLineTest`, 3 cases - finds the project argument (any case); ignores the program name, other arguments and later projects; keeps non-ASCII paths.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

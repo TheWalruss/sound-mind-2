@@ -8,8 +8,10 @@
  * `docs/sound-mind-roadmap.md` for which milestone this build represents.
  */
 
+#include <QMessageBox>
 #include <QApplication>
 
+#include "sound_mind/studio/command_line.h"
 #include "sound_mind/studio/main_window.h"
 #include "sound_mind/studio/theme.h"
 
@@ -45,6 +47,17 @@ int main(int argc, char** argv) {
 
     sound_mind::studio::MainWindow window;
     window.show();
+
+    // A project passed on the command line - e.g. by double-clicking a
+    // .smproj file, which the MSIX package associates with the Studio - opens
+    // straight away (v0.1.42.2).
+    if (const auto project = sound_mind::studio::projectToOpenFromArguments(QCoreApplication::arguments())) {
+        QString error;
+        if (!window.openProjectAt(*project, &error)) {
+            QMessageBox::warning(&window, QObject::tr("Couldn't Open Project"),
+                                 QObject::tr("%1\n\n%2").arg(QString::fromStdWString(project->wstring()), error));
+        }
+    }
 
     return app.exec();
 }
