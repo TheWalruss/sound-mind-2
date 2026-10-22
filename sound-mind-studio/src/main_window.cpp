@@ -62,6 +62,7 @@
 #include "sound_mind/studio/remaster_dialog.h"
 #include "sound_mind/studio/background_job.h"
 #include "sound_mind/studio/export_controller.h"
+#include "sound_mind/studio/import_controller.h"
 #include "sound_mind/studio/base_recipes.h"
 #include "sound_mind/studio/video_export_dialog.h"
 #include "sound_mind/studio/macro_manager_dialog.h"
@@ -491,14 +492,19 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // meaningfully run together), importing new content and exporting
     // existing content are independent operations with no reason to block
     // each other.
-    importCancelButton_ = new QPushButton(tr("✕"));  // "✕".
-    importCancelButton_->setObjectName(QStringLiteral("importCancelButton"));
-    importCancelButton_->setToolTip(tr("Cancel"));
-    importCancelButton_->setFixedWidth(24);
-    importCancelButton_->hide();
-    statusBar()->addPermanentWidget(importCancelButton_);
-    importJob_ = std::make_unique<BackgroundJob>();
-    importJob_->setCancelButton(importCancelButton_);
+    // Imports live in their own controller since v0.1.48.3 - see ImportController.
+    importController_ = std::make_unique<ImportController>(
+        ImportController::Context{
+            [this]() -> sound_mind::core::Project* { return project_ ? &*project_ : nullptr; },
+            [this](const QString& description, nlohmann::json metadata) {
+                if (project_) {
+                    history_.commit(*project_, description, std::move(metadata));
+                }
+            },
+            [this](sound_mind::core::LayerId layer) { toolPaletteController_->rebuildLayerContent(layer); },
+            [this](const ProjectChange& change) { applyProjectChange(change); },
+            [this](const QString& title, const QString& message) { QMessageBox::critical(this, title, message); }},
+        statusBar());
 
     // Finding #12, Installment H - see startPlayback()'s own docs. A
     // third, independent slot - not shared with export's/import's own.
@@ -2576,67 +2582,21 @@ void MainWindow::importMidi() {
 
 bool MainWindow::importMidiFile(const std::filesystem::path& path, bool separateLayerPerChannel,
                                  QString* errorMessage, const std::vector<int>& channelNumbers) {
-    if (!project_) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("No project is open.");
-        }
-        return false;
-    }
-
-    showBusyStatus(statusBar(), tr("Importing MIDI..."));
-    const auto newLayerIds = sound_mind::studio::importMidiChannelsInto(*project_, path, separateLayerPerChannel,
-                                                                         errorMessage, channelNumbers);
-    return finishMidiImport(newLayerIds, path);
+    return importController_->importMidiFile(path, separateLayerPerChannel, errorMessage, channelNumbers);
 }
 
 std::optional<sound_mind::studio::MidiImportPreview> MainWindow::midiImportPreviewForFile(
     const std::filesystem::path& path, QString* errorMessage) const {
-    if (!project_) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("No project is open.");
-        }
-        return std::nullopt;
-    }
-    return sound_mind::studio::midiImportPreviewForFile(*project_, path, errorMessage);
+    return importController_->midiPreviewForFile(path, errorMessage);
 }
 
 bool MainWindow::importMidiSelection(const std::filesystem::path& path, const std::vector<int>& channelNumbers,
                                       const std::vector<std::size_t>& snippetIndices, bool separateLayerPerChannel,
                                       QString* errorMessage) {
-    if (!project_) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("No project is open.");
-        }
-        return false;
-    }
-
-    showBusyStatus(statusBar(), tr("Importing MIDI..."));
-    const auto newLayerIds = sound_mind::studio::importMidiSelectionInto(
-        *project_, path, channelNumbers, snippetIndices, separateLayerPerChannel, errorMessage);
-    return finishMidiImport(newLayerIds, path);
+    return importController_->importMidiSelection(path, channelNumbers, snippetIndices, separateLayerPerChannel,
+                                                  errorMessage);
 }
 
-bool MainWindow::finishMidiImport(const std::vector<sound_mind::core::LayerId>& newLayerIds,
-                                   const std::filesystem::path& path) {
-    if (newLayerIds.empty()) {
-        statusBar()->clearMessage();
-        return false;
-    }
-
-    for (const auto layerId : newLayerIds) {
-        toolPaletteController_->rebuildLayerContent(layerId);
-    }
-    nlohmann::json metadata;
-    if (const auto source = sound_mind::studio::attachImportSource(*project_, path, "midi", {})) {
-        metadata = {{"source", *source}};
-    }
-    history_.commit(*project_, tr("Imported MIDI \"%1\"").arg(QString::fromStdString(path.filename().string())),
-                    std::move(metadata));
-
-    applyProjectChange(ProjectChange::layersAdded());
-    statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
-    return true;
-}
 
 bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* errorMessage) {
     QString snippetsError;
@@ -2659,13 +2619,7 @@ bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* err
 std::vector<AudioSnippetPickerDialog::RowData> MainWindow::audioSnippetsForFile(const std::filesystem::path& path,
                                                                                  QString* errorMessage,
                                                                                  double offsetSeconds) const {
-    if (!project_) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("No project is open.");
-        }
-        return {};
-    }
-    return sound_mind::studio::audioSnippetsForFile(*project_, path, errorMessage, offsetSeconds);
+    return importController_->audioSnippetsForFile(path, errorMessage, offsetSeconds);
 }
 
 void MainWindow::wireSnippetOffsetRecompute(AudioSnippetPickerDialog& dialog, const std::filesystem::path& path) {
@@ -2677,155 +2631,28 @@ void MainWindow::wireSnippetOffsetRecompute(AudioSnippetPickerDialog& dialog, co
 
 bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const std::vector<std::size_t>& snippetIndices,
                                       QString* errorMessage, double offsetSeconds) {
-    if (!project_) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("No project is open.");
-        }
-        return false;
-    }
-
-    showBusyStatus(statusBar(), tr("Importing audio..."));
-    const int importedCount =
-        sound_mind::studio::importAudioSnippetsInto(*project_, path, snippetIndices, errorMessage, offsetSeconds);
-    if (importedCount == 0) {
-        statusBar()->clearMessage();
-        return false;
-    }
-
-    applyProjectChange(ProjectChange::layersAdded());
-    statusBar()->showMessage(
-        tr("Imported %1 layer(s) from \"%2\".").arg(importedCount).arg(QString::fromStdString(path.filename().string())),
-        5000);
-    return true;
+    return importController_->importAudioSnippets(path, snippetIndices, errorMessage, offsetSeconds);
 }
 
 void MainWindow::importAudioSnippetsAsync(const std::filesystem::path& path,
                                            const std::vector<std::size_t>& snippetIndices, double offsetSeconds) {
-    if (!project_) {
-        statusBar()->showMessage(tr("No project is open."), 5000);
-        return;
-    }
-    if (isImportRunning()) {
-        statusBar()->showMessage(tr("Already importing - wait for it to finish, or cancel it, first."), 5000);
-        return;
-    }
-
-    // settings copied by value - encodeAudioSnippets() never touches
-    // project_ itself, so the background thread has nothing shared to
-    // synchronize against - see this method's own docs.
-    const auto settings = project_->settings();
-    const std::optional<std::filesystem::path> sourcesFolder = project_->sourcesFolder();
-    importJob_->start([this, path, snippetIndices, settings, offsetSeconds,
-                       sourcesFolder](sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
-        auto result = std::make_shared<ImportResult>();
-        QString encodeError;
-        try {
-            result->layers = sound_mind::studio::encodeAudioSnippets(
-                settings, path, snippetIndices, [&token]() { return token.cancellationRequested(); }, &encodeError,
-                offsetSeconds);
-            if (result->layers.empty()) {
-                result->outcome = ImportOutcome::Failed;
-                result->error = encodeError;
-            } else if (sourcesFolder.has_value()) {
-                // The file itself is kept in the project (v0.1.43.2),
-                // copied here off the UI thread; registered on completion.
-                try {
-                    result->source = sound_mind::core::storeSourceFile(*sourcesFolder, path, "audio");
-                } catch (const std::exception&) {
-                    result->source.reset();  // the import stands, just not replayable.
-                }
-            }
-        } catch (const sound_mind::studio::ImportCancelled&) {
-            result->outcome = ImportOutcome::Cancelled;
-        } catch (const std::exception& e) {
-            result->outcome = ImportOutcome::Failed;
-            result->error = QString::fromStdString(e.what());
-        }
-        return [this, path, result](bool) { finishImport(path, std::move(*result)); };
-    });
-    statusBar()->showMessage(tr("Importing audio..."));
+    importController_->importAudioSnippetsAsync(path, snippetIndices, offsetSeconds);
 }
 
-bool MainWindow::isImportRunning() const noexcept { return importJob_->isRunning(); }
+bool MainWindow::isImportRunning() const noexcept { return importController_->isRunning(); }
 
-void MainWindow::cancelImport() { importJob_->requestCancel(); }
+void MainWindow::cancelImport() { importController_->cancel(); }
 
-void MainWindow::finishImport(const std::filesystem::path& path, ImportResult result) {
-    switch (result.outcome) {
-        case ImportOutcome::Success: {
-            const auto importedCount = static_cast<int>(result.layers.size());
-            if (result.source.has_value()) {
-                const sound_mind::core::SourceId source = project_->addSource(std::move(*result.source));
-                for (auto& layer : result.layers) {
-                    nlohmann::json recipe = layer.baseRecipe();
-                    recipe["source"] = source;
-                    layer.setBaseRecipe(std::move(recipe));
-                }
-            }
-            for (auto& layer : result.layers) {
-                project_->addLayer(std::move(layer));
-            }
-            commitHistory(tr("Imported \"%1\"").arg(QString::fromStdString(path.filename().string())));
-            applyProjectChange(ProjectChange::layersAdded());
-            statusBar()->showMessage(tr("Imported %1 layer(s) from \"%2\".")
-                                          .arg(importedCount)
-                                          .arg(QString::fromStdString(path.filename().string())),
-                                      5000);
-            break;
-        }
-        case ImportOutcome::Cancelled:
-            // Nothing to roll back - the encoded layers were never added to
-            // project_ (finding #12's "cancel rolls back partial work").
-            statusBar()->showMessage(tr("Audio import cancelled."), 5000);
-            break;
-        case ImportOutcome::Failed:
-            statusBar()->clearMessage();
-            QMessageBox::critical(this, tr("Import Audio Failed"), result.error);
-            break;
-    }
-}
 
 bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePickerDialog::Mode mode,
                                   QString* errorMessage) {
-    if (!project_) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("No project is open.");
-        }
-        return false;
-    }
-
-    showBusyStatus(statusBar(), tr("Importing image..."));
-    if (!sound_mind::studio::importImageFileInto(*project_, path, mode, errorMessage)) {
-        statusBar()->clearMessage();
-        return false;
-    }
-
-    applyProjectChange(ProjectChange::layersAdded());
-    statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
-    return true;
+    return importController_->importImageFile(path, mode, errorMessage);
 }
 
 bool MainWindow::importImageFiles(const std::vector<std::filesystem::path>& paths, ImageScalePickerDialog::Mode mode,
                                    bool importAsSequence, QString* errorMessage,
                                    std::optional<PolarImportParams> polarParams) {
-    if (!project_) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("No project is open.");
-        }
-        return false;
-    }
-
-    showBusyStatus(statusBar(), tr("Importing image..."));
-    const int importedCount =
-        sound_mind::studio::importImageFilesInto(*project_, paths, mode, importAsSequence, errorMessage, polarParams);
-    if (importedCount == 0) {
-        statusBar()->clearMessage();
-        return false;
-    }
-
-    applyProjectChange(ProjectChange::layersAdded());
-    statusBar()->showMessage(tr("Imported %1 file(s).").arg(importedCount), 5000);
-    return true;
+    return importController_->importImageFiles(paths, mode, importAsSequence, errorMessage, polarParams);
 }
 
 void MainWindow::exportAudio() {

@@ -3077,6 +3077,30 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - a Macro that can't be rebuilt is reported.
 
       The 13 `MainWindowTest` export cases pass unchanged through the forwards.
+278. **Modularity pass, installment C: `ImportController`.** Settled in `v0.1.48.3`.
+    - **`studio::ImportController` (new, `QObject`)** wraps `import_export.h`/`midi_import.h`'s free functions with status messages, the background audio-import job and its cancel button (`importCancelButton`), source registration, one History entry and the change notification. It covers:
+      - `audioSnippetsForFile()`;
+      - `importAudioSnippets()` and `importAudioSnippetsAsync()`;
+      - `importImageFile()` and `importImageFiles()`;
+      - `midiPreviewForFile()`, `importMidiFile()` and `importMidiSelection()`.
+    - **No dependency on `MainWindow`.** A `Context` supplies:
+      - the mutable project;
+      - `commitHistory(description, metadata)`;
+      - `rebuildLayerContent()` (MIDI notes are operations);
+      - `applyChange()` (`MainWindow::applyProjectChange()`);
+      - `reportError()`.
+    - The background import still encodes from copied settings and touches the project only in its completion, so cancel adds nothing.
+    - **`MainWindow`:**
+      - Its import API forwards. The file pickers, option dialogs and drag-and-drop stay.
+      - Removed: `ImportOutcome`, `ImportResult`, `finishImport()`, `finishMidiImport()`, `importJob_` and `importCancelButton_`.
+      - The controller is a `unique_ptr` with the jobs, destroyed first.
+    - **Tests:** Studio `ImportControllerTest`, 4 cases, about 2.5 s:
+      - a background audio import adds a layer with its source, one History entry and one change;
+      - cancel adds nothing;
+      - an image import adds a layer and notifies;
+      - no project imports nothing.
+
+      The 52 `MainWindowTest` import/MIDI/drop cases pass unchanged.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

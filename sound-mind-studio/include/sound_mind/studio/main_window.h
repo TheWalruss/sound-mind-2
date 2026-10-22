@@ -30,6 +30,7 @@
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/background_job.h"
 #include "sound_mind/studio/export_controller.h"
+#include "sound_mind/studio/import_controller.h"
 #include "sound_mind/studio/branch_curve_session.h"
 #include "sound_mind/studio/project_change.h"
 #include "sound_mind/studio/analysis_panel.h"
@@ -2537,8 +2538,8 @@ public:
      * `Project&`), so the background thread never needs to synchronize
      * against `project_`. The encoded layers are only ever added to
      * `project_` afterward, on the UI thread, once the background encode
-     * has actually finished successfully - see finishImport()'s own
-     * docs. Cancelling therefore rolls back cleanly by construction: the
+     * has actually finished successfully - see ImportController (`v0.1.48.3`;
+     * this forwards to it). Cancelling therefore rolls back cleanly by construction: the
      * encoded-so-far layers are simply discarded, having never touched
      * `project_` in the first place - simpler than Export's own "delete
      * the partial file" rollback (Decision #136), since nothing persistent
@@ -2546,14 +2547,14 @@ public:
      *
      * A no-op (just a status bar message, no dialog) if no project is open,
      * or if isImportRunning() is already `true` - a second call would
-     * otherwise collide with the running one on `importJob_`. Also why
+     * otherwise collide with the running one. Also why
      * newProject()/openProject()/openProjectAt()/closeEvent() all refuse
      * outright while isImportRunning(): switching or closing the project
      * out from under a background import that will later call
      * `project_->addLayer()` on whatever `project_` turns out to be by
      * then would silently misattribute those layers to the wrong project.
      *
-     * A separate job (`importJob_`) from export's, not shared with it - unlike Video/Audio
+     * A separate job (ImportController's) from export's, not shared with it - unlike Video/Audio
      * export (which read the same topmost layer and are never meaningfully
      * run together), importing new content and exporting existing content
      * are independent operations with no reason to block each other.
@@ -3071,26 +3072,6 @@ private:
     void setProject(sound_mind::core::Project project);
 
     /**
-     * @brief The shared "bake content in, then update the UI" tail
-     *        importMidiFile()/importMidiSelection() both need after their
-     *        own Studio-level import call returns - rebuilds each of
-     *        `newLayerIds` via `toolPaletteController_->rebuildLayerContent()`
-     *        (a MIDI import's new layers start content-less, unlike audio/
-     *        image import - see importMidiFile()'s own docs), then the
-     *        same `canvas_->update()`/`playbackController_->invalidate()`/
-     *        `hasUnsavedChanges_`/`layerController_->refreshLayersPanel()`/
-     *        status-bar sequence importImageFile() already establishes.
-     * @param newLayerIds The layer ids the Studio-level import call just
-     *        returned - empty means nothing was imported.
-     * @param path The source file, for the status-bar message only.
-     * @return `true` if `newLayerIds` was non-empty (something was
-     *         imported); `false` otherwise, clearing the busy status
-     *         message first.
-     */
-    bool finishMidiImport(const std::vector<sound_mind::core::LayerId>& newLayerIds,
-                           const std::filesystem::path& path);
-
-    /**
      * @brief Wires `dialog`'s own offsetChanged() to recompute `path`'s
      *        own snippet split and push it back in via `setSnippets()` -
      *        real-world testing pass finding #23, shared by every call
@@ -3360,26 +3341,8 @@ private:
     /// device. `v0.0.42.1`.
     void pollTestInputLevel();
 
-    /// @brief How a background import or playback composite ended.
-    enum class ImportOutcome { Success, Cancelled, Failed };
+    /// @brief How a background playback composite ended.
     enum class CompositeOutcome { Success, Cancelled, Failed };
-
-    /// @brief What an audio import's background work produced.
-    struct ImportResult {
-        ImportOutcome outcome = ImportOutcome::Success;          ///< How it ended.
-        QString error;                                            ///< Why it failed, if it did.
-        std::vector<sound_mind::core::Layer> layers;              ///< The encoded layers, not yet added.
-        std::optional<sound_mind::core::ProjectSource> source;   ///< The copied file, not yet registered.
-    };
-
-
-    /// @brief Applies a finished audio import: registers the copied source,
-    ///        adds the layers and commits one History entry; or reports a
-    ///        cancel (nothing was added) or a failure (a dialog). Finding #12
-    ///        Installment F.
-    /// @param path The imported file, for messages.
-    /// @param result What the import produced.
-    void finishImport(const std::filesystem::path& path, ImportResult result);
 
     /// @brief Starts playback with a finished startPlayback() composite -
     ///        the same load()-then-play() sequence it always did - or
@@ -4120,8 +4083,6 @@ private:
     /// as the timestamp to record against.
     double currentPlaybackPositionSeconds_ = 0.0;
 
-    /// @brief Shown while an audio import runs - see importJob_.
-    QPushButton* importCancelButton_ = nullptr;
     /// @brief Shown while startPlayback() prepares - see compositeJob_.
     QPushButton* compositeCancelButton_ = nullptr;
 
@@ -4152,7 +4113,7 @@ private:
     /// any member its work or completion uses goes away.
     /// @{
     std::unique_ptr<ExportController> exportController_;  ///< Export audio/video/macro video (`v0.1.48.2`).
-    std::unique_ptr<BackgroundJob> importJob_;         ///< Audio import.
+    std::unique_ptr<ImportController> importController_;  ///< Audio, image and MIDI import (`v0.1.48.3`).
     std::unique_ptr<BackgroundJob> compositeJob_;      ///< startPlayback()'s first composite.
     std::unique_ptr<BackgroundJob> refreshJob_;        ///< Repeat's background refresh.
     std::unique_ptr<BackgroundJob> editPlaybackJob_;   ///< Delta/Review preparation.
