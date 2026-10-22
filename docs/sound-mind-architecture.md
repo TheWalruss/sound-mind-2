@@ -3059,6 +3059,24 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Loop take display;
       - Macro playback ending.
     - **Tests:** Studio `ProjectChangeTest`, 4 cases, one per kind of change. `MainWindowTest` +1: importing audio adds its Composer track; failed before.
+277. **Modularity pass, installment B: `ExportController`.** Settled in `v0.1.48.2`. The first piece split out of `MainWindow`.
+    - **`studio::ExportController` (new, `QObject`)** owns the export `BackgroundJob`, its status-bar cancel button (`exportCancelButton`, the same object name), the progress display and the finish handling. It covers:
+      - `exportVideoAsync()`, `exportAudioAsync()` and `exportMacroVideoAsync()`;
+      - `exportAudioNow()` and `exportVideoNow()`;
+      - `isRunning()`, `cancel()` and the static `hasExportableContent()`.
+    - **No dependency on `MainWindow`.** A `Context` of callbacks supplies the project, the limiter ceiling, the Macro renderer factory and error reporting (a dialog in the Studio, recorded in tests). Progress is a `shared_ptr<atomic<double>>` shared with the worker, so the worker never touches the controller.
+      - The destructor cancels; the job's own destructor waits and drops the completion, which would report to a status bar that may be gone.
+    - **`MainWindow` keeps its public export API as one-line forwards**, so its tests run unchanged. The export dialogs (`exportAudio()`, `exportVideo()`, `exportMacroVideo()`) stay with the menus for now.
+      - The controller is a `unique_ptr` declared with the jobs, so it's destroyed first.
+      - Removed from `MainWindow`: `ExportKind`, `ExportOutcome`, `ExportResult`, `startExportJob()`, `showExportProgress()`, `finishExport()`, `exportJob_`, `exportProgress_`, `exportKind_` and `exportCancelButton_`.
+    - **Tests:** Studio `ExportControllerTest`, 5 cases, about 3 s with no `MainWindow`:
+      - an audio export writes the file and says so;
+      - nothing to export is reported and nothing starts;
+      - a second export while one runs is refused;
+      - cancel deletes the partial file;
+      - a Macro that can't be rebuilt is reported.
+
+      The 13 `MainWindowTest` export cases pass unchanged through the forwards.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

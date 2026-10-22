@@ -29,6 +29,7 @@
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/background_job.h"
+#include "sound_mind/studio/export_controller.h"
 #include "sound_mind/studio/branch_curve_session.h"
 #include "sound_mind/studio/project_change.h"
 #include "sound_mind/studio/analysis_panel.h"
@@ -2866,6 +2867,7 @@ public:
      * isExportRunning() - see exportCompositeAudioAsync() on why audio and
      * video share one slot.
      *
+     * Forwards to `ExportController::exportVideoAsync()` (`v0.1.48.2`).
      * Returns once the task has started - see isExportRunning()/
      * cancelExport(). An internal `QTimer` polls for completion: success
      * shows a status bar message naming the destination (and opens the
@@ -2896,10 +2898,9 @@ public:
      *        project - the real work behind the interactive exportAudio()
      *        slot, with the same shape as exportCompositeVideoAsync().
      *
-     * Shares `exportJob_` and its cancel button with the video path: the
+     * Forwards to `ExportController::exportAudioAsync()` (`v0.1.48.2`),
+     * which shares one job and cancel button between all exports: the
      * status bar has room for one message and one cancel button at a time.
-     * `exportKind_` records which one is in flight, so showExportProgress()
-     * and finishExport() can phrase their messages correctly.
      *
      * @param path Destination path; its extension (`.flac`/`.ogg`/`.mp3`)
      *        selects the compressed format.
@@ -2913,7 +2914,7 @@ public:
      *        `docs/sound-mind-design.md`'s *Macros*): a `MacroRenderer`
      *        rebuilds the performance on a project of its own and
      *        `core::exportMacroVideo()` writes it segment by segment, on
-     *        `exportJob_` (cancellable, sharing the other exports' progress
+     *        `ExportController` (cancellable, sharing the other exports' progress
      *        and cancel button). The open project is never touched.
      * @param path Destination path.
      * @param id The Macro.
@@ -3359,18 +3360,9 @@ private:
     /// device. `v0.0.42.1`.
     void pollTestInputLevel();
 
-    /// @brief How a background export, import or playback composite ended.
-    enum class ExportOutcome { Success, Cancelled, Failed };
+    /// @brief How a background import or playback composite ended.
     enum class ImportOutcome { Success, Cancelled, Failed };
     enum class CompositeOutcome { Success, Cancelled, Failed };
-    /// @brief Which kind of export is running - for its status messages.
-    enum class ExportKind { Video, Audio, MacroVideo };
-
-    /// @brief What an export's background work reports.
-    struct ExportResult {
-        ExportOutcome outcome = ExportOutcome::Success;  ///< How it ended.
-        QString error;                                    ///< Why it failed, if it did.
-    };
 
     /// @brief What an audio import's background work produced.
     struct ImportResult {
@@ -3380,35 +3372,6 @@ private:
         std::optional<sound_mind::core::ProjectSource> source;   ///< The copied file, not yet registered.
     };
 
-    /**
-     * @brief Starts an export on exportJob_ (`v0.1.47.2`) - the shared part
-     *        of exportCompositeVideoAsync()/exportCompositeAudioAsync()/
-     *        exportMacroVideoAsync(). `work` runs off the UI thread;
-     *        `ExportCancelled`/`CompositeCancelled` and other exceptions it
-     *        throws become a Cancelled/Failed result.
-     * @param kind What is exported, for messages and the progress display.
-     * @param path The destination; removed if the export is cancelled.
-     * @param openWhenDone Whether to open the file afterwards (not audio).
-     * @param work The export itself.
-     * @param startMessage The status bar message while it runs.
-     */
-    void startExportJob(ExportKind kind, const std::filesystem::path& path, bool openWhenDone,
-                        std::function<ExportResult(sound_mind::core::CancellationToken&)> work,
-                        const QString& startMessage);
-
-    /// @brief exportJob_'s progress display: "Exporting video... N%" (not
-    ///        for audio, which reports no progress).
-    void showExportProgress();
-
-    /// @brief Reports a finished export: a status message (and opening the
-    ///        file, if asked) on success; deleting the partial file on
-    ///        cancel; a dialog on failure. `v0.0.45.15`, finding #12.
-    /// @param kind What was exported.
-    /// @param path Where it was written.
-    /// @param openWhenDone Whether to open it.
-    /// @param result How it ended.
-    void finishExport(ExportKind kind, const std::filesystem::path& path, bool openWhenDone,
-                      const ExportResult& result);
 
     /// @brief Applies a finished audio import: registers the copied source,
     ///        adds the layers and commits one History entry; or reports a
@@ -4157,13 +4120,6 @@ private:
     /// as the timestamp to record against.
     double currentPlaybackPositionSeconds_ = 0.0;
 
-    /// @brief Shown while an export runs - see exportJob_.
-    QPushButton* exportCancelButton_ = nullptr;
-    /// @brief The running export's kind - for showExportProgress().
-    ExportKind exportKind_ = ExportKind::Video;
-    /// @brief How far the running video export is, `0` to `1` - written by
-    ///        its worker, shown by showExportProgress() (`v0.1.45.1`).
-    std::atomic<double> exportProgress_{0.0};
     /// @brief Shown while an audio import runs - see importJob_.
     QPushButton* importCancelButton_ = nullptr;
     /// @brief Shown while startPlayback() prepares - see compositeJob_.
@@ -4195,7 +4151,7 @@ private:
     /// destroyed first: a running job is cancelled and waited for before
     /// any member its work or completion uses goes away.
     /// @{
-    std::unique_ptr<BackgroundJob> exportJob_;         ///< Export audio/video/macro video.
+    std::unique_ptr<ExportController> exportController_;  ///< Export audio/video/macro video (`v0.1.48.2`).
     std::unique_ptr<BackgroundJob> importJob_;         ///< Audio import.
     std::unique_ptr<BackgroundJob> compositeJob_;      ///< startPlayback()'s first composite.
     std::unique_ptr<BackgroundJob> refreshJob_;        ///< Repeat's background refresh.
