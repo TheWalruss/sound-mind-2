@@ -594,28 +594,6 @@ changing its blend mode, never affects any other layer - each one mixes
 in independently. Every layer defaults to Normal, matching how
 compositing has always worked.
 
-### Important: what's actually shown and played right now
-
-The canvas and Playback now show/play a real composite of every visible
-layer, mixed together (see [Compositing](#compositing) above) - opacity
-included, so two overlapping layers genuinely blend rather than one
-hiding the other. **A few other operations still work on a single
-layer, not the composite**: **Recording's result, Loop Mode, Pooling,
-and Audio/Video Export** all still use the **topmost layer that's both
-visible and has content**, skipping hidden ones - each of these is
-about capturing, processing, or exporting one specific layer's own data,
-not "everything currently audible," so extending them to the composite
-is separate, still-open work. This means:
-
-- The canvas and Playback reflect every visible layer's own opacity;
-  Recording/Loop Mode/Pooling/Export don't read it yet for the single
-  layer they act on.
-- To compare two layers on the canvas, toggle visibility - both stay
-  visible together if you leave them both on, now genuinely blended, not
-  one replacing the other.
-- For Pooling/Export specifically, importing a new layer or reordering
-  one to the top still changes which single layer gets acted on.
-
 ### Layer Timing
 
 Two more controls, useful once you have multiple layers you want to line
@@ -632,8 +610,7 @@ up in time:
 Both affect Playback too, not just what the canvas shows - a layer's
 translation/rescale shifts where its own content lands before mixing
 into the composite, so "lining up" two layers visually is exactly what
-you'll hear lined up as well. Recording's result, Loop Mode, Pooling,
-and Export are the exception - see the note above.
+you'll hear lined up as well, in Playback, Loop Mode and every export.
 
 ### MindWaves
 
@@ -2147,9 +2124,6 @@ far rather than leaving a broken file behind. Only one export (of either
 kind) runs at a time - starting another while one is already in progress
 just shows a reminder to wait or cancel first.
 
-Both act on the same "one layer" rule described above - see
-[the note above](#important-whats-actually-shown-and-played-right-now).
-
 ## Saving and Project Files
 
 **Ctrl+S** (or **File → Save Project**) saves in place; **File → Save
@@ -2516,237 +2490,99 @@ entirely offline.
 
 ## What's Not Here Yet
 
-**Superposition** (combining several MindWaves into one with a blend
-mode) was removed in v0.1.32.1. It may come back later in a different
-form.
-
 The [design document](docs/sound-mind-design.md) describes the Studio's
-full intended scope - analysis tools, Sound Flower's polar view, chord/
-sequence generation, and a Sound Mind VST plugin, among others none of
-which exist in the Studio yet. MIDI import (see
-[Importing MIDI](#importing-media) above) is built. MindWave-
-driven modulation (see [MindWaves](#mindwaves) above) has made a real
-start - layer opacity binding works - but it's far from its own full
-scope either; see the note further down. Filter layers (see
-[Filter Layers](#filter-layers) above) have finished their own milestone -
-all twenty designed filter types work now, the Equalizer layer included.
-`docs/sound-mind-roadmap.md` tracks what's actually being built next, in
-order; this guide will grow alongside it.
+full intended scope; `docs/sound-mind-roadmap.md` tracks what's being
+built, in order. This section lists what isn't in the Studio today.
 
-**Composer Mode** (toggle it from the **View** menu) has also made a
-real start - each visible layer shows as its own track along the bottom
-of the window, alongside the canvas, with a per-track background choice
-(Clean/Amplitude/Thumbnail) and every paint stroke/fill drawn as a box.
-It's read-only for now: you can't yet drag a box to retime it, move it to
-a different track, or edit an object's/track's own settings from there -
-those are all still to come.
+### Planned
 
-**Macros** (see [Macros](#macros)): there's no timeline view to inspect or
-edit what a Macro recorded, strokes appear whole rather than being drawn
-in, and the video doesn't follow your zoom or scrolling (it shows the
-whole canvas, or the export dialog's Scrolling window).
+These are scheduled after the Beta readiness check:
 
-**Video export**: WebM/VP9 isn't offered (it would need an extra encoder
-library), and HEVC is only listed where Windows itself provides an HEVC
-encoder.
+- **Image export** - saving the canvas as a PNG, JPEG or other image.
+- **A light mode** - the Studio is dark only for now.
+- **A color mapping choice** - which of the two channels' amplitude and
+  phase show as red, green and blue is fixed today.
+- **Composer Mode editing** - Composer Mode (**View** menu) shows each
+  visible layer as a track with every stroke and fill as a box, but it's
+  read-only: you can't yet drag a box to retime it, move it to another
+  track, or change an object's or track's own gain or EQ from there.
+- **The rest of Sound Mind Instruments** - an Instrument has a harmonic
+  series, inharmonicity and MindWave-driven vibrato/tremolo, but no noise
+  component, body resonance or ADSR envelope yet. Also planned: a
+  **Harmonic** stamp mode (stamps spaced by the instrument's own
+  harmonics), MindWave binding for every instrument setting, and Loop
+  Mode retriggering per note.
+- **More analysis** - the [Analysis](#analysis) panel has loudness, stereo
+  and pitch. Vibrato characterization, formant content, key/scale
+  detection, and analysing just a selection are planned; so are the
+  design document's spectral-health and criticality/pattern meters.
+- **Editing refinements:**
+  - inserting or deleting a path node by double-clicking, and detaching a
+    handle from its mirrored pair with Alt+drag (today you can move nodes
+    and handles, toggle a node's type, and delete the selected node);
+  - the Alt/Shift/Ctrl axis restriction (see
+    [Canvas Navigation](#canvas-navigation)) applies only to Zoom so far,
+    not to dragging a Pick, a selection's handles, or a layer's
+    translation and rescale;
+  - pitch quantising while painting - Snap to Grid snaps placed nodes,
+    moves and selections, but a freehand stroke's pitch doesn't snap to
+    the Frequency Grid as you draw;
+  - pasting where you click - **Paste** lands where the clip was copied
+    from (or on another layer at the same place); Pick then moves it.
+- **Performance Hints** - speed badges on filters, blend modes, brushes
+  and MindWave generators, from your own machine's benchmark results.
+- **Live MIDI input** - playing a sequence from a connected MIDI
+  controller. Today sequences come from the Chord Generator's Chord
+  Builder and Custom Notation, or from MIDI file import.
 
+### Not planned
 
-**Analysis Tools**: the [Analysis](#analysis) panel's loudness meter and
-the Layers panel's per-layer loudness indicator are live. The Stereo
-(goniometer and stereo width) and Pitch tabs are live too, as are the master limiter and output
-loudness normalization in [Configure Devices](#configure-devices). The design document's spectral-health
-and criticality/pattern meters are planned for after Beta.
+- **Clone** and the **Tool Configuration Wizard** are deferred until
+  further notice; the Tool Configuration panel and its presets cover
+  configuring a tool.
+- **Superposition** (combining several MindWaves into one with a blend
+  mode) was removed in v0.1.32.1. It may come back in a different form.
+- **Warp Selection** was removed: it didn't survive undo, redo or
+  reopening a project, and was confusing to use.
+- **Video export** doesn't offer WebM/VP9 (it would need an extra encoder
+  library), and lists HEVC only where Windows provides an HEVC encoder.
+- **The Sound Mind VST plugins** and hosting other plugins come after
+  version 1.0.
 
-**Sound Flower** (see [Canvas Navigation](#canvas-navigation) above) is
-now complete for its own confirmed scope: the polar canvas view and
-polar-form image import both work, and the MindWave preview warps onto
-the disk along with everything else. Overlay Grids, the Chord Overlay,
-Axis Labels, bounding-box/path-geometry display, and a Rectangle-shaped
-Pick/Selection highlight are still hidden while the polar view is active
-rather than drawn incorrectly - a proper polar-aware redraw for each
-remains future work, since each is built from straight lines that don't
-translate onto a disk without their own dedicated redesign.
+### Limits of what's here
 
-**Resonance** (formerly "Resonant Instrument") is now complete end to
-end: **Edit → Picked Path Tools → Create Resonance from Picked Path...** (see [Pick](#pick)
-above) analyzes a picked path's own shape and stores the result
-permanently, under a name you choose; **Resonance** (see
-[Painting](#painting) below) paints with it; a **Resonance** MindWave
-generator (see [MindWaves](#mindwaves) above) reads a saved profile back
-out as a modulation source; and the Branching Curve editor (see
-[Pick](#pick) above) lets you build a real tree/graph by hand instead of
-only an ordinary linear path/stroke. Still missing: a panel listing
-everything you've captured (the Tool Configuration panel's own picker is
-the only place they show up so far).
-
-Painting (see [Painting](#painting) above) exists, but only a fraction of
-what's designed for it:
-
-- Only **Procedural**, **Instrument** (harmonic series, inharmonicity, and
-  MindWave-driven vibrato/tremolo - no noise component, body resonance, or
-  ADSR envelope yet), **Resonance** (a computed spectrum in place
-  of a hand-typed harmonic series, plus a single decay-rate decay - no
-  vibrato/tremolo or inharmonicity of its own yet), **Mind Shot**
-  (capture-and-restamp), **Mind Grain** (a live reference, updating
-  immediately everywhere it's used the moment its own source is
-  repainted), **Heal** (temporal blur), **Soften** (radial blur), **Smudge**
-  (a simple per-stamp directional smear, not a real stateful "brush load"
-  carried across the whole stroke the way a classic paint program's own
-  Smudge tool works), and **Order/Chaos** (concrete permutation/reordering
-  mechanics rather than a formal entropy metric) exist - **Clone** and the
-  Tool Configuration Wizard (see the next point) are **permanently
-  deferred, until further notice**, not merely not yet scheduled.
-  Instrument strokes
-  also don't yet bind to a MindWave, and Loop Mode doesn't yet retrigger
-  per note. There's also no UI yet to reposition an
-  already-captured Mind Grain's own referenced region, and a Mind Grain
-  only ever samples its own source *layer*'s own raw content - not the
-  full composite (every layer up through it, blended together) as it
-  actually appears at that point in the stack; see
-  `docs/sound-mind-design.md`'s own Deferred Decisions for that one.
-- No **Tool Configuration Wizard** - a guided, question-based way to build
-  up a brush setup step by step. The Panel's own Tool Preset drop-down
-  (save/load/delete a named brush setup, described above) exists today;
-  only the guided Wizard itself is permanently deferred, until further
-  notice, along with Clone above.
-- Pick can't **copy** a picked object yet - only move, modify a stroke's
-  own brush settings, delete it, restack it within its own layer, or (for
-  a brush stroke) edit its own path.
-- Path editing (Edit → Path Editing → Edit Path) can move a node, drag a handle, or
-  toggle a node's type, but can't yet insert or delete a node by
-  double-clicking a segment or an existing node, or detach a handle from
-  its own mirrored pair with Alt+drag - only whole-node delete (Delete
-  key) is here today.
-- The Alt/Shift/Ctrl axis-restriction mnemonic (see
-  [Canvas Navigation](#canvas-navigation) above) only applies to Zoom so
-  far - holding a modifier while dragging to move or resize a Pick
-  selection, or while adjusting a layer's own translation/rescale, does
-  nothing extra yet.
-
-Selection (see [Selection and Fill](#selection-and-fill) above) exists,
-but only a fraction of what's designed for it:
-
-- **Rectangle** (rotatable), **Lasso** (freehand), and **Wand**
-  (flood-fill by amplitude similarity, optionally harmonics-aware)
-  selection all exist, and can be combined (add/subtract/intersect). A
-  Wand or combined selection shows as a dashed bounding box rather than
-  its own exact outline (a Lasso selection still gets a real curve) - the
-  underlying Fill/Copy/Cut/Paste still respect its precise shape
-  regardless. Mind Shot/Mind Grain capture from a Lasso/Wand/combined
-  selection still captures/references its full bounding box, not confined
-  to its actual shape.
-- **Warp Selection was removed** - it never actually survived a layer
-  rebuild (undo/redo, reopening a project) the way every other edit does,
-  and the workflow needed to use it at all (draw a curve, Pick it, keep a
-  separate rectangular selection, invoke the action while still in Pick
-  mode) proved too confusing in practice. No replacement is planned.
-- **Paste** always lands back at the exact position it was copied/cut
-  from - there's no click-to-place gesture yet to paste somewhere else on
-  the same layer (pasting onto a *different* layer is supported today;
-  see [Selection and Fill](#selection-and-fill) above).
-- Fill only ever produces a uniform color, not a real two-color gradient
-  across the selection - there's no UI yet to pick a second color.
-
-[Compositing](#compositing) (see above) mixes every visible layer
-together on the canvas and in Playback, but only a fraction of what's
-designed for it:
-
-- **Normal (mixing) is the only blend mode** - a fuller catalogue
-  (Multiply, Screen, and the rest of the usual image-editor set) isn't
-  designed or built yet.
-- **MindWave-bound opacity exists now** (see [MindWaves](#mindwaves)
-  above), but nothing else does yet - blend mode itself still can't vary
-  spatially, only opacity.
-- **Recording's result, Loop Mode, Pooling, and Audio/Video Export**
-  still act on a single (topmost) layer, not the composite - see
-  [the note above](#important-whats-actually-shown-and-played-right-now).
-- **Playback decodes the composite once, at Play** - it doesn't yet keep
-  re-decoding live as you make further edits during playback.
-
-[Filter Layers](#filter-layers) (see above) have finished their own
-milestone - all twenty-one designed filter types work now - but a couple
-of loose ends remain:
-
-- **MindWave-bound filter parameters exist now** (see
-  [MindWaves](#mindwaves) above) for nearly every scalar control across
-  every filter type - see [Filter Layers](#filter-layers)'s own list
-  above. Three remain permanently unbindable: Convolve's Kernel Size,
-  Granular Noise's Grain Size, and Spectral Reverb's Pre-Delay/Decay/Room
-  Size/Diffusion/Absorption - each shapes a fixed-size grid or a
-  computation spanning many cells at once, not a value one cell owns on
-  its own, so there's no meaningful "this cell's own value" for a
-  MindWave to drive.
-- **Convolve's own saved kernels have no rename or delete UI yet** - once
-  saved, a kernel stays in the project's own library permanently (there's
-  no way to remove or rename one from within the Studio itself).
-
-[MindWaves](#mindwaves) (see above) exist now, but only a narrow slice of
-what's designed for them:
-
-- **Layer opacity, every filter-parameter scalar, a stroke's own Opacity/
-  Size/Color, and Sound Mind Instruments' own Vibrato/Tremolo** can bind to
-  a MindWave now (see [Painting](#painting) above for all of these). A
-  layer's **Blend Mode** can't bind to a MindWave either - it's a single,
-  fixed choice per layer, not spatially varying.
-- **Opacity/Size/Color can track either true canvas position or a stroke's
-  own progress along itself, via Binding Frame; Vibrato/Tremolo always
-  track stroke progress, with no Canvas Space choice of their own** -
-  Canvas Space (the default) samples a stroke's Opacity/Size/Color
-  MindWave at each stamp's own real position on the canvas, the same
-  fixed-mask-over-the-whole-piece behavior layer opacity/filter parameters
-  already use, so two identical strokes at different points on the canvas
-  are shaded differently. Operation-Relative instead follows the stroke's
-  *own* progress from start to end - the same mechanism Vibrato/Tremolo
-  already use, unconditionally - so a MindWave's shape always plays out
-  fully over one stroke, however long or short it is, and two identical
-  strokes anywhere in the piece look the same as each other. Vibrato/
-  Tremolo's own "retriggers exactly the same way for every distinct note,
-  regardless of stroke length" behavior is not a genuine per-note clock in
-  the real-time synthesis sense (there is no live playback voice here yet)
-  - it only shapes how a painted stroke's own stamps vary, the same as
-  Opacity/Size/Color do.
-- **Warp and Reduce exist now** - Warp (one field
-  distorting where another samples from) is directly editable in the
-  MindWaves panel; Reduce (collapsing a field to a plain control signal)
-  has no standalone UI of its own yet - Vibrato/Tremolo above are its only
-  current use.
-- **Every generator type the design doc names now exists**, including
-  Drawn, Step Grid, and Continuous (see above). Most of the MindWaves
-  panel's own editor is still plain numeric fields (or, for Step Grid, a
-  plain list of value boxes with no visual grid to click on) rather than a
-  fully polished interface - Continuous is the one exception, with real
-  turnable dials and a live shape preview (see above) - and Continuous's
-  own exact formula is still an explicitly provisional first attempt, not
-  a finished design.
-
-Once a path is drawn with the [Path Tool](#path-tool), reshaping it is
-Pick's job (see [Pick](#pick) above, "Edit its own path"):
-
-- Inserting or removing a node from an already-placed path (other than
-  deleting the single selected node) still isn't here - see the Pick
-  section above.
-- No way yet to reopen a stamped chord/arpeggio's own instrument for
-  editing after the fact - see [Chord Generator](#chord-generator) above;
-  re-timing/re-voicing it with Pick works today, but re-pointing it at a
-  different instrument doesn't yet.
-- Driving a sequence live from a connected MIDI controller isn't here -
-  the Chord Generator's own Chord Builder/Custom Notation modes are the
-  only ways to build a sequence today.
-- No pitch quantising while painting - Snap to Grid (see
-  [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid) above)
-  snaps a *placed* node/move/selection to the nearest grid line, but a
-  freehand stroke's own pitch doesn't yet snap to the active Frequency
-  Grid while it's being painted.
-- No curated preset sets for Custom Frequencies, and no way yet to
-  retune the note grid's own tuning reference (fixed at 440 Hz/A4) or
-  change the project's own default tempo (fixed at 120 BPM) - Custom
-  Frequencies is free-entry only for now (type your own Hz values).
-- No *separate* Path Gradient UI, but none is needed any more - a
-  finished path uses whatever gradient Painting's own Gradient editor
-  held at the moment it was drawn (see [Painting](#painting) above), and
-  a gradient with more than two stops really does vary continuously
-  along the path's own length as it's stamped, the same way it varies
-  across a Fill Selection or Filter Configuration's own frequency axis.
-  Editing the panel's Gradient afterward doesn't retroactively change an
-  already-finished path, the same snapshot-at-draw-time rule every other
-  tool setting already follows.
+- **Macros** (see [Macros](#macros)): there's no timeline view to inspect
+  or edit what a Macro recorded, strokes appear whole rather than being
+  drawn in, and the video doesn't follow your zoom or scrolling (it shows
+  the whole canvas, or the export dialog's Scrolling window).
+- **Sound Flower**: Overlay Grids, the Chord Overlay, Axis Labels,
+  bounding boxes and path geometry, the analysis overlays, and a
+  Rectangle-shaped Pick or Selection highlight are hidden while the polar
+  view is on, rather than drawn incorrectly.
+- **Loop Mode**: while a loop runs, filters and blend modes on layers
+  above Loop Input don't apply to the live take.
+- **Brushes:** **Smudge** smears each stamp on its own rather than
+  carrying paint along the whole stroke, and **Order/Chaos** reorders
+  content rather than measuring entropy. **Resonance** has a single decay
+  rate and no vibrato/tremolo or inharmonicity of its own.
+- **Mind Shots and Mind Grains:** capturing from a Lasso, Wand or
+  combined selection takes its whole bounding box. There's no way to move
+  a Mind Grain's referenced region after capturing it, and a Mind Grain
+  samples its source layer on its own, not the composite as it looks at
+  that point in the stack.
+- **Selections:** a Wand or combined selection shows as a dashed bounding
+  box rather than its exact outline; Fill, Copy, Cut and Paste still
+  follow its exact shape.
+- **Filter layers:** Convolve's Kernel Size, Granular Noise's Grain Size,
+  and Spectral Reverb's Pre-Delay, Decay, Room Size, Diffusion and
+  Absorption can't bind to a MindWave - each shapes a whole neighbourhood
+  of cells, not one cell's own value. Saved Convolve kernels can't be
+  renamed or deleted from within the Studio.
+- **MindWaves:** a layer's Blend Mode can't bind to a MindWave.
+  Vibrato/Tremolo always follow the stroke's own progress (they have no
+  Canvas Space choice). Reduce has no panel of its own - Vibrato/Tremolo
+  are its only use. Step Grid values are a plain list of boxes, and
+  Continuous's formula is a provisional first attempt.
+- **Chords:** a stamped chord or arpeggio can be re-timed and re-voiced
+  with Pick, but not pointed at a different instrument.
+- **Custom Frequencies** is free entry only, with no curated preset sets.

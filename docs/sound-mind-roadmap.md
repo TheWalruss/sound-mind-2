@@ -1197,6 +1197,15 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.82.1` | Macros: record, play and export a performance (redesigned 2026-10-21) | `0.1.44.1`-`0.1.44.3` | #262, #267-#269 |
 | `v0.Y.82.2` | Video export overhaul, modelled on the legacy Studio (inserted 2026-10-22) | `0.1.45.1` | #270 |
 | - | Beta readiness check | *(after `v0.Y.82.2`)* | |
+| `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
+| `v0.Y.84.1` | Light and dark mode | - | |
+| `v0.Y.85.1` | Color mapping choice | - | |
+| `v0.Y.86.1` | Composer Mode editing | - | |
+| `v0.Y.87.1` | Sound Mind Instruments, completed | - | |
+| `v0.Y.88.1` | Analysis: pitch and vocal additions | - | |
+| `v0.Y.89.1` | Editing refinements | - | |
+| `v0.Y.90.1` | Performance Hints | - | |
+| `v0.Y.91.1` | Live MIDI input | - | |
 
 **Standing decision (2026-10-15): disregard file-format and backward-compatibility concerns completely until after Beta.** Old projects don't need to keep loading, so there are no lenient-read shims, migration paths or load-time notices for changes made before Beta. This overrides the usual "ask on file-format compatibility" stance for this period only.
 
@@ -1472,6 +1481,74 @@ User request (2026-10-22): review and improve video export, taking the legacy St
 - **Whenever a dependency changes version:** re-run `tools/licenses/generate_notices.py`, and publish a new `third-party-sources-N` release if Qt, FFmpeg, LAME or Eigen changed.
 
 The Beta Readiness Loop's "judged beta-ready" call happens here.
+
+### After the readiness check (added 2026-10-22)
+
+Design-document features the plan above didn't cover, found by a design-doc-versus-roadmap check on 2026-10-22. They come after the readiness check, not before it: none blocks the beta. The order is a starting point; beta feedback may reorder it. Pick copy and gradient Fill, also listed as missing at the time, turned out to exist already.
+
+#### `v0.Y.83.1` - Image export (S)
+
+- **File → Export Image...**: the composite canvas as PNG, JPEG, BMP, TGA or WebP (the formats image import reads), at the canvas's size.
+- In the coordinate system shown (flat or Sound Flower), matching the video export.
+- The design doc's "import and export sound and images of all common formats".
+
+#### `v0.Y.84.1` - Light and dark mode (S)
+
+- A light theme alongside today's dark one: a View-menu choice, remembered.
+- Panels, canvas background, overlays and the playhead follow it.
+- Video and image export reflect the active mode, as the design doc's Export section says.
+
+#### `v0.Y.85.1` - Color mapping choice (M)
+
+- The design doc's single, shared mapping: left and right amplitude always drive two of red, green and blue; the third carries phase, a blend of both channels, or nothing.
+- One choice used everywhere color is involved: displaying the canvas, image import, and rendering Pool data for viewing.
+- Saved with the project. It replaces the fixed mapping in use since Phase 2.
+
+#### `v0.Y.86.1` - Composer Mode editing (L)
+
+Continues `v0.Y.48.1`, whose Installment A shipped the read-only track view.
+- Retime and reorder an operation's box within its track.
+- Move an operation to another track. This needs a new Core capability: an operation re-targeted to a different layer, since `translatedCopy()` keeps the layer fixed.
+- Gain and EQ for one object, a whole track, or a section of a track.
+
+#### `v0.Y.87.1` - Sound Mind Instruments, completed (M)
+
+The scope `v0.Y.32.1` left unscheduled:
+- the **noise component**, **body resonance** and **ADSR envelope** of the instrument model;
+- a **Harmonic** stamp mode, spacing an Instrument stroke's stamps by its own harmonic intervals;
+- every instrument parameter bindable to a MindWave;
+- Loop Mode retriggering per note.
+
+#### `v0.Y.88.1` - Analysis: pitch and vocal additions (M)
+
+The rest of the design doc's "Pitch & vocal coaching" category, plus selections:
+- **vibrato characterization** (rate and depth);
+- **formant content**;
+- **key/scale detection**;
+- every analysis able to run on a selection, not only the whole project.
+
+The spectral-health and criticality/pattern categories stay on the "Moved to after Beta" list below.
+
+#### `v0.Y.89.1` - Editing refinements (M)
+
+- **Path nodes:** insert and delete them by double-click, and detach a handle from its mirrored pair with Alt+drag.
+- **Alt/Shift/Ctrl axis restriction** on every drag: moving or resizing a Pick, a selection's handles, a layer's translation and rescale. Today only zoom has it.
+- **Pitch quantising while painting:** a freehand stroke's pitch snaps to the active Frequency Grid as it's drawn.
+- **Click-to-place paste:** paste where you click, not only back where the clip came from.
+
+#### `v0.Y.90.1` - Performance Hints (M)
+
+The design doc's "Performance Hints". The Studio reads the benchmark report (`docs/sound-mind-benchmarking.md`) for the first time:
+- per-operation speed badges (filters, blend modes, brush types, MindWave generators);
+- a project setting to hide operations that would interrupt work;
+- a Help-menu tuning guide for the current project.
+
+Calibrating the thresholds needs real report data first.
+
+#### `v0.Y.91.1` - Live MIDI input (M)
+
+- A MIDI input device in Configure Devices.
+- Playing a connected controller drives the Chord Generator's sequences, and records notes as sequence paint events through the chosen instrument while Playback or Loop runs.
 
 **Moved to after Beta (2026-10-15):**
 - the remaining `v0.Y.52.1` analysis categories (spectral health, criticality/pattern);

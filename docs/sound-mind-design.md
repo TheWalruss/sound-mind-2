@@ -315,11 +315,11 @@ New gradients start fully transparent (zero intensity and opacity at both stops)
 
 Painting is how sound is sculpted directly: every brush writes into the amplitude and/or phase of the active layer, and every stroke is recorded as a non-destructive operation rather than a pixel change (see [Non-destructive Processing](#non-destructive-processing)). A stroke can either follow the raw motion of the cursor, or be stamped along a previously-drawn [Path](#paths) for precise, repeatable placement — the same brush and gradient settings apply either way.
 
-A mouse or trackpad is the baseline input device; support for a pressure-sensitive tablet is a desirable addition, not a hard requirement.
+A mouse or trackpad is the input device.
 
 ### Freehand Path Capture
 
-A freehand stroke doesn't just record raw motion — its raw mouse/tablet input is curve-fitted into a genuine [Path](#paths) in real time, continuously, as the cursor moves: a sparse set of smooth Bézier nodes tracking the actual motion, the same representation a guide path drawn with the Path tool has. The Path is rendered live as it's captured, growing with the stroke, so the artist always sees exactly what geometry the stroke is turning into, not just a raw ink trail.
+A freehand stroke doesn't just record raw motion — its raw mouse input is curve-fitted into a genuine [Path](#paths) in real time, continuously, as the cursor moves: a sparse set of smooth Bézier nodes tracking the actual motion, the same representation a guide path drawn with the Path tool has. The Path is rendered live as it's captured, growing with the stroke, so the artist always sees exactly what geometry the stroke is turning into, not just a raw ink trail.
 
 Capturing and rendering that Path stays perfectly responsive to the cursor no matter what — the motion itself must never feel laggy. Actually *applying* the paint along the Path is allowed to trail the cursor by a small, barely-perceptible delay if that's what keeps the capture and its live preview smooth; the felt responsiveness of the stroke's motion takes priority over the painted result appearing the instant the cursor does.
 
@@ -537,7 +537,7 @@ Beyond chords, the same underlying notation lets a sequence be written directly 
 
 The intent is to reuse an existing, established text notation for this rather than invent a new one. ABC notation is a reasonable starting candidate — compact, plain-text, and already expressive enough for pitch, duration, and key — but it needs validating against Sound Mind's actual needs (arbitrary frequencies, not just named pitches; the codec's own timing resolution) before being committed to.
 
-Driving a sequence live from a connected MIDI controller, in addition to writing or painting it, is a desirable addition, not a hard requirement.
+A sequence can also be driven live from a connected MIDI controller, in addition to being written or painted (planned after the Beta readiness check: roadmap `v0.Y.91.1`).
 
 ## Composer Mode
 
@@ -567,10 +567,6 @@ A **Macro** records a performance: the project as it plays, and everything done 
 - **Play Macro** renders the performance in the background on a separate copy of the project, then plays it seamlessly once enough is rendered. A heavy filter change that took a moment live is instant in the replay. The project being edited is never touched.
 - **Export Macro Video** renders the same performance to a video file: the whole canvas with the moving playhead, and the audio as played.
 - **Macros are saved with the project**, named, and several can exist. A Macro stays playable even after the project is edited further, because it keeps whatever History it depends on.
-
-## Live
-
-Live turns the Studio into a real-time instrument or effect: a live input signal — microphone, instrument, or synthesizer — is continuously encoded into a dedicated layer, composited with the rest of the project exactly like any other layer (including its own blend mode and opacity, and any MindWave or filter applied to it), and streamed back out. Because Stream mode's transforms are designed to run in real time, this is a genuinely continuous signal path rather than a record-then-playback loop — the same low-latency path that underlies [Sound Mind VST](#sound-mind-vst).
 
 ## Import
 
@@ -672,9 +668,9 @@ The Quickstart, Readme, and Userguide shall be available from the Help menu and 
 
 There shall be a menu option to toggle GPU acceleration. That way, the user can evaluate the effects of having the GPU enabled - does it go faster, are the results the same, and how is power/heat/battery life affected?
 
-## Performance Hints (2026-10-02, aspirational - not yet implemented)
+## Performance Hints (2026-10-02, not yet implemented)
 
-**Status: design concept only.** None of this is built yet; it depends on the benchmark suite described in `docs/sound-mind-benchmarking.md` existing and having actually been run by someone, on their own machine, first. Recorded here now so the shape of the idea isn't lost before that data exists.
+**Status: design concept, planned after the Beta readiness check** (`docs/sound-mind-roadmap.md`'s `v0.Y.90.1`). None of this is built yet; it depends on the benchmark suite described in `docs/sound-mind-benchmarking.md` existing and having actually been run by someone, on their own machine, first. Recorded here now so the shape of the idea isn't lost before that data exists.
 
 The benchmark suite's raw purpose is finding things to optimize in the Studio's own code. A secondary purpose, once a user has run it on their own machine, is letting the Studio itself use those numbers to help that user work faster:
 
@@ -702,7 +698,7 @@ The layer panel is critical to the workflow and the general appearance and appea
 
 Resolved (2026-09-17): what was named "Continuous" is renamed **Stroke** (`v0.0.32.3`) - it isn't actually a fixed, even spacing the way "Time Axis" (and every other mode) is; it just samples/stamps exactly as densely as the stroke's own raw input was drawn, independent of tip size, so a slow stroke stamps more densely than a fast one over the same distance. See [Stamp Intervals](#stamp-intervals) for the corrected description, and "Along curve" there for how it differs from that mode too (both follow the path's own geometry; the difference is density - dense-enough-to-look-solid vs. a deliberately sparse, countable interval).
 
-In addition to "frequency" stamp mode, add "harmonic" stamp mode, which is an appropriate audio-space stamping mode that makes more sense than a set frequency. (Tracked in `docs/sound-mind-roadmap.md`'s `v0.Y.32.1`.)
+In addition to "frequency" stamp mode, add "harmonic" stamp mode, which is an appropriate audio-space stamping mode that makes more sense than a set frequency. (Planned after the Beta readiness check: `docs/sound-mind-roadmap.md`'s `v0.Y.87.1`.)
 
 # Deferred Decisions
 
