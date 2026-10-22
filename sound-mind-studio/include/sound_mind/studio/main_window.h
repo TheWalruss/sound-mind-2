@@ -33,6 +33,7 @@
 #include "sound_mind/studio/import_controller.h"
 #include "sound_mind/studio/playback_preparer.h"
 #include "sound_mind/studio/analysis_controller.h"
+#include "sound_mind/studio/recording_controller.h"
 #include "sound_mind/studio/branch_curve_session.h"
 #include "sound_mind/studio/project_change.h"
 #include "sound_mind/studio/analysis_panel.h"
@@ -3329,15 +3330,9 @@ private:
     /// @param cancelled Whether the run was cancelled (Loop Mode stopped).
     void finishLoopBacking(std::optional<sound_mind::codec::AudioBuffer> result, bool cancelled);
 
-    /// @brief recordDrainTimer_'s slot: moves whatever's newly captured
-    /// out of recordEngine_'s ring buffer, while Recording is running -
-    /// see RecordEngine::drainAvailable()'s docs for why this needs to
-    /// happen periodically rather than only once recording stops.
-    void drainRecording();
-
     /// @brief testInputLevelTimer_'s slot: drains deviceTestRecordEngine_'s
     /// own ring buffer (so it never overflows, same reasoning as
-    /// drainRecording()) and pushes its currentInputLevel() into
+    /// Record's drain - see RecordingController) and pushes its currentInputLevel() into
     /// configureDevicesPanel_'s own level meter, while testing an input
     /// device. `v0.0.42.1`.
     void pollTestInputLevel();
@@ -3362,29 +3357,6 @@ private:
     ///        it - before New/Open/Close, so the take is part of the project
     ///        they ask about. A no-op when none is pending.
     void flushRecordingSave();
-
-    /// @brief What a recording becomes once encoded and stored - the part
-    ///        of commitRecording() that's safe off the UI thread.
-    struct PreparedRecording {
-        sound_mind::codec::StreamImage content;                ///< The encoded take.
-        std::optional<sound_mind::core::ProjectSource> source;  ///< Its FLAC source, unregistered; empty if saving failed.
-    };
-
-    /// @brief Encodes `captured` and writes it as a source - thread-safe;
-    ///        touches no MainWindow state.
-    /// @param captured The recorded audio.
-    /// @param config The project's codec settings.
-    /// @param sourcesFolder The project's sources folder, if it has one.
-    /// @return The prepared recording.
-    [[nodiscard]] static PreparedRecording prepareRecording(const sound_mind::codec::AudioBuffer& captured,
-                                                            const sound_mind::codec::StreamCodecConfig& config,
-                                                            const std::optional<std::filesystem::path>& sourcesFolder);
-
-    /// @brief Adds a prepared recording to the project, where the Record
-    ///        panel says - the UI-thread half of commitRecording().
-    /// @param prepared The encoded take and its source.
-    /// @return `true` on success; a failure is reported in a dialog.
-    bool applyRecording(PreparedRecording prepared);
 
     /// @brief Starts a background render of the filter preview, or marks
     ///        one pending if a render is already running - see
@@ -3871,14 +3843,10 @@ private:
     /// @brief Loop Mode was started and is waiting for its first project
     ///        audio before the engine actually starts.
     bool loopStartPending_ = false;
-    /// @brief The Record/Loop panels' "Live-encoding view" choices - see
-    ///        CanvasWidget::setLiveOverlay().
-    bool recordLiveView_ = false;
+    /// @brief The Loop panel's "Live-encoding view" choice - see
+    ///        CanvasWidget::setLiveOverlay(). (Record's is
+    ///        RecordingController's.)
     bool loopLiveView_ = false;
-    /// @brief Encodes the recording in progress for Record's live view;
-    ///        recordLiveFed_ is how many captured samples it has seen.
-    std::unique_ptr<sound_mind::codec::StreamIncrementalEncoder> recordLiveEncoder_;
-    std::size_t recordLiveFed_ = 0;
     /// @brief The last LoopEngine::takesCompleted() copied into the Loop
     ///        layer - see updateLoopLayer().
     std::uint64_t loopTakesShown_ = 0;
@@ -3887,7 +3855,6 @@ private:
     /// in-class default) since it needs `audioDeviceMode_`'s value, which
     /// is only known once the constructor's own parameter is available.
     sound_mind::core::RecordEngine recordEngine_;
-    QTimer* recordDrainTimer_ = nullptr;
 
     /// @brief A dedicated `RecordEngine` used *only* for the Configure
     /// Devices panel's own "test an input device" affordance - never the
@@ -3900,8 +3867,8 @@ private:
 
     /// @brief Polls deviceTestRecordEngine_'s own currentInputLevel() into
     /// configureDevicesPanel_'s own level meter while testing an input
-    /// device - same 100ms cadence as recordDrainTimer_, for the same
-    /// "nothing visual depends on finer granularity than that" reasoning.
+    /// device - every 100ms, since nothing visual depends on finer
+    /// granularity than that.
     QTimer* testInputLevelTimer_ = nullptr;
 
     /// @brief Plays the Configure Devices panel's own "test an output
@@ -3963,7 +3930,7 @@ private:
     std::unique_ptr<ExportController> exportController_;  ///< Export audio/video/macro video (`v0.1.48.2`).
     std::unique_ptr<ImportController> importController_;  ///< Audio, image and MIDI import (`v0.1.48.3`).
     std::unique_ptr<PlaybackPreparer> playbackPreparer_;  ///< Play's composite, Repeat, Delta/Review (`v0.1.48.4`).
-    std::unique_ptr<BackgroundJob> recordingSaveJob_;  ///< Saving a stopped recording.
+    std::unique_ptr<RecordingController> recordingController_;  ///< Record's take and its save (`v0.1.48.6`).
     std::unique_ptr<BackgroundJob> filterPreviewJob_;  ///< Filter preview renders.
     std::unique_ptr<AnalysisController> analysisController_;  ///< The Analysis panel's runs (`v0.1.48.5`).
     std::unique_ptr<BackgroundJob> loopBackingJob_;    ///< Loop Mode's backing audio.

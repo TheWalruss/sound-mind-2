@@ -12,6 +12,7 @@ add_executable(sound-mind-studio-tests
     test_import_controller.cpp
     test_playback_preparer.cpp
     test_analysis_controller.cpp
+    test_recording_controller.cpp
     test_background_job.cpp
     test_branch_curve_session.cpp
     test_canvas_widget.cpp

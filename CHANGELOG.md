@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.48.6] - 2026-10-22
+
+Roadmap slot `v0.Y.82.5` (modularity), installment F.
+
+### Changed
+
+- Internal: Record (starting and stopping a take, the live-encoding view, the moving position bar, saving the take into the project) moved out of the main window into its own component, tested on its own. Nothing changes in how recording behaves.
+
 ## [0.1.48.5] - 2026-10-22
 
 Roadmap slot `v0.Y.82.5` (modularity), installment E.

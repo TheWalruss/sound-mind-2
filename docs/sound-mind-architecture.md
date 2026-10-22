@@ -3150,6 +3150,27 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Auto-update is remembered.
 
       The 12 `MainWindowTest` analysis cases pass unchanged.
+281. **Modularity pass, installment F: `RecordingController`.** Settled in `v0.1.48.6`.
+    - **`studio::RecordingController` (new, `QObject`)** owns:
+      - starting and stopping a take (`toggle()`), and dropping one when the project is replaced (`abandon()`);
+      - the 33 ms drain timer, which keeps `RecordEngine`'s ring buffer from filling, feeds the live-encoding view and moves the playback position bar;
+      - the live view's `StreamIncrementalEncoder` and the Record panel's Live-encoding view choice;
+      - the save `BackgroundJob`: `commit()`, `commitAsync()`, `isSaving()`, `flushSave()`, plus the thread-safe `prepare()` (previously `MainWindow::prepareRecording()`);
+      - the Record panel's targets (`refreshTargets()`).
+    - **No dependency on `MainWindow`.** It's given a `Context` of callbacks: project, may start (not while Loop Mode runs), about to start (stops Playback), recording changed (locks the input device choice), the canvas's live overlay and playhead, History, `applyChange` and error reporting. It also gets the `RecordEngine` by reference and the Record panel.
+    - **The `RecordEngine` stays a `MainWindow` member**, because Configure Devices also sets its preferred input device and gain, and New/Open/Close check it. Only the take's lifecycle moved.
+    - **`MainWindow`:**
+      - `toggleRecording()`, `commitRecording()`, `commitRecordingAsync()`, `isSavingRecording()`, `flushRecordingSave()` and `refreshRecordTargets()` forward.
+      - Removed: `drainRecording()`, `PreparedRecording`, `prepareRecording()`, `applyRecording()`, `recordDrainTimer_`, `recordLiveView_`, `recordLiveEncoder_`, `recordLiveFed_` and `recordingSaveJob_`.
+    - **Tests:** Studio `RecordingControllerTest`, 6 cases, under 1 s, using a device-less engine:
+      - a commit adds a named, recorded layer and offers it as a target;
+      - a commit over the chosen target replaces its content;
+      - an async commit adds the layer only when the save is done, and `flushSave()` applies it at once;
+      - nothing captured, or no project, changes nothing;
+      - toggle starts (stopping Playback first) and stops without adding a layer when nothing was captured;
+      - toggle refuses while not allowed or with no project.
+
+      The 14 `MainWindowTest` Record cases pass unchanged.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

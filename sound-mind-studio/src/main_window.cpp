@@ -65,6 +65,7 @@
 #include "sound_mind/studio/import_controller.h"
 #include "sound_mind/studio/playback_preparer.h"
 #include "sound_mind/studio/analysis_controller.h"
+#include "sound_mind/studio/recording_controller.h"
 #include "sound_mind/studio/base_recipes.h"
 #include "sound_mind/studio/video_export_dialog.h"
 #include "sound_mind/studio/macro_manager_dialog.h"
@@ -473,7 +474,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     refreshConfiguredDevices();
 
     testInputLevelTimer_ = new QTimer(this);
-    testInputLevelTimer_->setInterval(100);  // same cadence as recordDrainTimer_ - see its own docs.
+    testInputLevelTimer_->setInterval(100);  // keeps its ring buffer from filling, as Record's drain does.
     connect(testInputLevelTimer_, &QTimer::timeout, this, &MainWindow::pollTestInputLevel);
 
     // Exports (finding #12's cancellable long operations) live in their own
@@ -520,7 +521,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             [this]() { noteMacroPlayhead(); },
             [this](const QString& title, const QString& message) { QMessageBox::critical(this, title, message); }},
         playbackController_, statusBar());
-    recordingSaveJob_ = std::make_unique<BackgroundJob>();
     filterPreviewJob_ = std::make_unique<BackgroundJob>();
     loopBackingJob_ = std::make_unique<BackgroundJob>();
     connect(playbackController_, &PlaybackController::invalidated, this, &MainWindow::scheduleRepeatRefresh);
@@ -847,13 +847,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     recordPanel_ = new RecordPanel(this);
     recordPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, recordPanel_);
-    connect(recordPanel_, &RecordPanel::toggleRequested, this, &MainWindow::toggleRecording);
-    connect(recordPanel_, &RecordPanel::liveViewToggled, this, [this](bool enabled) {
-        recordLiveView_ = enabled;
-        if (!enabled && recordEngine_.isRecording()) {
-            canvas_->setLiveOverlay(std::nullopt);
-        }
-    });
+    // Start/Stop and Live-encoding view are wired by recordingController_
+    // (v0.1.48.6), made once the canvas exists - see below.
     connect(loopPanel_, &LoopPanel::liveViewToggled, this, [this](bool enabled) {
         loopLiveView_ = enabled;
         if (!enabled) {
@@ -1717,13 +1712,20 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     loopUpdateTimer_->setInterval(33);
     connect(loopUpdateTimer_, &QTimer::timeout, this, &MainWindow::updateLoopLayer);
 
-    // Just needs to keep RecordEngine's ring buffer (~370ms of headroom at
-    // its default capacity/sample rate) from ever filling up - unlike
-    // loopUpdateTimer_, nothing visual depends on this cadence, so a
-    // slower interval with a comfortable safety margin is fine.
-    recordDrainTimer_ = new QTimer(this);
-    recordDrainTimer_->setInterval(33);  // also moves the playback position bar - see drainRecording().
-    connect(recordDrainTimer_, &QTimer::timeout, this, &MainWindow::drainRecording);
+    // Record's take, draining and save live in their own controller since
+    // v0.1.48.6 - see RecordingController.
+    recordingController_ = std::make_unique<RecordingController>(
+        RecordingController::Context{
+            [this]() -> sound_mind::core::Project* { return project_ ? &*project_ : nullptr; },
+            [this]() { return !isLoopModeRunning(); },
+            [this]() { stopPlayback(); },
+            [this]() { updateConfiguredDeviceLockState(); },
+            [this](std::optional<sound_mind::codec::StreamImage> overlay) { canvas_->setLiveOverlay(std::move(overlay)); },
+            [this](std::optional<double> fraction) { canvas_->setPlayheadFraction(fraction); },
+            [this](const QString& description) { commitHistory(description); },
+            [this](const ProjectChange& change) { applyProjectChange(change); },
+            [this](const QString& title, const QString& message) { QMessageBox::critical(this, title, message); }},
+        recordEngine_, recordPanel_, statusBar());
 
     // No newProject() call here, per the Landing Page milestone (v0.Y.9.1):
     // the window starts with no project open at all, showing the Landing
@@ -2118,9 +2120,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     }
     loopLayerId_.reset();
     loopPanel_->setRunning(false);
-    recordDrainTimer_->stop();
-    recordEngine_.stop();
-    recordPanel_->setRecording(false);
+    recordingController_->abandon();
     updateConfiguredDeviceLockState();
     // Also stops any in-progress Configure Devices "test" session - a
     // project switch is exactly the kind of unrelated event every other
@@ -4595,45 +4595,7 @@ float MainWindow::playbackVolume() const noexcept {
     return playbackController_->volume();
 }
 
-void MainWindow::toggleRecording() {
-    if (recordEngine_.isRecording()) {
-        recordDrainTimer_->stop();
-        recordEngine_.stop();
-        recordPanel_->setRecording(false);
-        updateConfiguredDeviceLockState();
-
-        canvas_->setPlayheadFraction(std::nullopt);
-        canvas_->setLiveOverlay(std::nullopt);
-        recordLiveEncoder_.reset();
-        recordLiveFed_ = 0;
-        commitRecordingAsync(recordEngine_.capturedAudio());
-        return;
-    }
-
-    if (!project_) {
-        return;
-    }
-    if (isLoopModeRunning()) {
-        // Refuse rather than surprise-stop a running Loop Mode session -
-        // both would otherwise want the same input device at once.
-        return;
-    }
-
-    stopPlayback();
-
-    recordEngine_.start();
-    recordPanel_->setRecording(true);
-    updateConfiguredDeviceLockState();
-    if (!recordEngine_.isDeviceAvailable()) {
-        statusBar()->showMessage(
-            tr("Recording started, but no input device could be opened - nothing will be captured. %1")
-                .arg(QString::fromStdString(recordEngine_.deviceProblem())),
-            15000);
-    } else {
-        statusBar()->showMessage(tr("Recording..."));
-    }
-    recordDrainTimer_->start();
-}
+void MainWindow::toggleRecording() { recordingController_->toggle(); }
 
 void MainWindow::refreshConfiguredDevices() {
     const QStringList inputDevices = toQStringList(recordEngine_.availableInputDeviceNames());
@@ -4754,136 +4716,32 @@ void MainWindow::toggleTestOutputDevice(bool testing) {
     landingPage_->deviceConfiguration()->setTestingOutput(testing);
 }
 
-void MainWindow::drainRecording() {
-    recordEngine_.drainAvailable();
-    if (recordLiveView_ && project_) {
-        const sound_mind::codec::AudioBuffer& captured = recordEngine_.capturedAudio();
-        if (!recordLiveEncoder_) {
-            recordLiveEncoder_ = std::make_unique<sound_mind::codec::StreamIncrementalEncoder>(
-                sound_mind::core::streamCodecConfigFor(project_->settings()));
-            recordLiveFed_ = 0;
-        }
-        if (captured.frameCount() > recordLiveFed_) {
-            recordLiveEncoder_->pushSamples(captured.left.data() + recordLiveFed_, captured.right.data() + recordLiveFed_,
-                                            captured.frameCount() - recordLiveFed_);
-            recordLiveFed_ = captured.frameCount();
-        }
-        canvas_->setLiveOverlay(recordLiveEncoder_->snapshot());
-    }
-    // The playback position bar follows the recording, from the canvas's
-    // own start, until it reaches the end.
-    if (project_) {
-        const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
-        const double canvasSamples =
-            static_cast<double>(project_->settings().canvasWidth) * static_cast<double>(config.hopLength);
-        const double recorded = static_cast<double>(recordEngine_.capturedAudio().frameCount());
-        canvas_->setPlayheadFraction(canvasSamples > 0.0 ? std::optional<double>(std::min(1.0, recorded / canvasSamples))
-                                                          : std::nullopt);
-    }
-}
 
 bool MainWindow::commitRecording(const sound_mind::codec::AudioBuffer& captured) {
-    if (!project_ || captured.frameCount() == 0) {
-        return false;
-    }
-    try {
-        return applyRecording(prepareRecording(captured, sound_mind::core::streamCodecConfigFor(project_->settings()),
-                                               project_->sourcesFolder()));
-    } catch (const std::exception& e) {
-        QMessageBox::critical(this, tr("Record Failed"), QString::fromStdString(e.what()));
-        return false;
-    }
+    return recordingController_->commit(captured);
 }
 
-MainWindow::PreparedRecording MainWindow::prepareRecording(
-    const sound_mind::codec::AudioBuffer& captured, const sound_mind::codec::StreamCodecConfig& config,
-    const std::optional<std::filesystem::path>& sourcesFolder) {
-    PreparedRecording prepared;
-    // Encoded exactly as an imported file would be.
-    prepared.content = sound_mind::codec::encode(captured, config);
-    if (sourcesFolder.has_value()) {
-        try {
-            prepared.source = sound_mind::core::storeSourceAudio(*sourcesFolder, captured, "recording",
-                                                                 tr("Recording").toStdString());
-        } catch (const std::exception&) {
-            // Kept without a source: not replayable from the original.
-        }
-    }
-    return prepared;
-}
 
-bool MainWindow::applyRecording(PreparedRecording prepared) {
-    if (!project_) {
-        return false;
-    }
-    try {
-        nlohmann::json recipe{{"kind", "record"}};
-        if (prepared.source.has_value()) {
-            recipe["source"] = project_->addSource(std::move(*prepared.source));
-        }
-        const auto target = recordPanel_->targetLayerId();
-        sound_mind::core::Layer* existing = target.has_value() ? layerController_->layerById(*target) : nullptr;
-        if (existing != nullptr) {
-            // Recording over a layer replaces it, painting included.
-            existing->setBaseContent(std::move(prepared.content), std::move(recipe));
-            project_->operationLog().bakeLayer(existing->id());
-            commitHistory(tr("Recorded over \"%1\"").arg(QString::fromStdString(existing->name())));
-            statusBar()->showMessage(
-                tr("Recording replaced \"%1\".").arg(QString::fromStdString(existing->name())), 5000);
-        } else {
-            sound_mind::core::Layer layer(0, recordPanel_->newLayerName().toStdString(),
-                                          sound_mind::core::LayerType::Normal);
-            layer.setBaseContent(std::move(prepared.content), std::move(recipe));
-            layer.setRecorded(true);
-            project_->addLayer(std::move(layer));
-            commitHistory(tr("Recorded a new layer"));
-            statusBar()->showMessage(tr("Recording added as a new layer."), 5000);
-        }
-        applyProjectChange(ProjectChange::layersAdded());
-        return true;
-    } catch (const std::exception& e) {
-        QMessageBox::critical(this, tr("Record Failed"), QString::fromStdString(e.what()));
-        return false;
-    }
-}
 
 void MainWindow::commitRecordingAsync(sound_mind::codec::AudioBuffer captured) {
-    if (!project_ || captured.frameCount() == 0) {
-        statusBar()->showMessage(tr("Recording stopped - nothing captured."), 5000);
-        return;
-    }
-    flushRecordingSave();  // one at a time, in order.
-    recordingSaveJob_->start(
-        [audio = std::move(captured), config = sound_mind::core::streamCodecConfigFor(project_->settings()),
-         folder = project_->sourcesFolder(), this](sound_mind::core::CancellationToken&) -> BackgroundJob::Completion {
-            auto prepared = std::make_shared<PreparedRecording>(prepareRecording(audio, config, folder));
-            return [this, prepared](bool) { applyRecording(std::move(*prepared)); };
-        },
-        [this](const QString& error) { QMessageBox::critical(this, tr("Record Failed"), error); });
-    statusBar()->showMessage(tr("Saving the recording..."));
+    recordingController_->commitAsync(std::move(captured));
 }
 
-bool MainWindow::isSavingRecording() const noexcept { return recordingSaveJob_->isRunning(); }
+bool MainWindow::isSavingRecording() const noexcept { return recordingController_->isSaving(); }
 
-void MainWindow::flushRecordingSave() { recordingSaveJob_->finishNow(); }
+void MainWindow::flushRecordingSave() { recordingController_->flushSave(); }
 
 void MainWindow::refreshRecordTargets() {
-    std::vector<std::pair<sound_mind::core::LayerId, QString>> targets;
-    if (project_) {
-        for (const sound_mind::core::Layer& layer : project_->layers()) {
-            if (layer.recorded()) {
-                targets.emplace_back(layer.id(), QString::fromStdString(layer.name()));
-            }
-        }
+    if (recordingController_) {  // still constructing: no project yet.
+        recordingController_->refreshTargets();
     }
-    recordPanel_->setRecordedLayers(targets);
 }
 
 void MainWindow::pollTestInputLevel() {
     // Keeps deviceTestRecordEngine_'s own ring buffer from overflowing -
     // the accumulated capturedAudio() itself is never used for testing,
     // only currentInputLevel() below, but letting the ring fill up would
-    // start dropping samples mid-block, same reasoning as drainRecording().
+    // start dropping samples mid-block, same reasoning as Record's drain.
     deviceTestRecordEngine_.drainAvailable();
     const float level = deviceTestRecordEngine_.currentInputLevel();
     configureDevicesPanel_->setInputLevel(level);
