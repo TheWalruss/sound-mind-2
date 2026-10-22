@@ -10,6 +10,7 @@
 #include <QWheelEvent>
 #include <QtTest/QtTest>
 
+#include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/guide_path_operation.h"
 #include "sound_mind/core/gradient.h"
@@ -2110,4 +2111,50 @@ void CanvasWidgetTest::aStereoOverlayIsDrawnOverTheCanvas() {
     widget.setStereoOverlay({}, {}, 0.1);
     QVERIFY(!widget.hasStereoOverlay());
     QVERIFY(widget.grab().toImage() == before);
+}
+
+// v0.1.47.1: the Sound Flower is projected once per composite and size,
+// not on every repaint (the playhead alone repaints ~30 times a second).
+void CanvasWidgetTest::theSoundFlowerIsProjectedOnceUntilSomethingChanges() {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    project.layers().front().setBaseContent(sound_mind::core::silentContentFor(project.settings()));
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 100);
+    widget.setPolarMode(true);
+
+    (void)widget.grab();
+    QCOMPARE(widget.polarProjectionCount(), std::uint64_t{1});
+    widget.setPlayheadFraction(0.5);  // an overlay-only change
+    (void)widget.grab();
+    (void)widget.grab();
+    QCOMPARE(widget.polarProjectionCount(), std::uint64_t{1});
+
+    widget.invalidateCompositeAll();
+    (void)widget.grab();
+    QCOMPARE(widget.polarProjectionCount(), std::uint64_t{2});
+
+    widget.resize(160, 160);
+    (void)widget.grab();
+    QCOMPARE(widget.polarProjectionCount(), std::uint64_t{3});
+}
+
+void CanvasWidgetTest::anOverrideFrameIsProjectedOncePerFrame() {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 100);
+    widget.setPolarMode(true);
+    sound_mind::codec::RgbImage frame;
+    frame.width = 100;
+    frame.height = 50;
+    frame.pixels.assign(std::size_t{100} * 50 * 3, 128);
+
+    widget.setFrameOverride(frame);
+    (void)widget.grab();
+    (void)widget.grab();
+    QCOMPARE(widget.polarProjectionCount(), std::uint64_t{1});
+    widget.setFrameOverride(frame);  // the next frame of a performance
+    (void)widget.grab();
+    QCOMPARE(widget.polarProjectionCount(), std::uint64_t{2});
 }

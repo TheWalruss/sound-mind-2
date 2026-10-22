@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/operation.h"
 
 namespace sound_mind::core {
@@ -67,6 +68,52 @@ struct ProjectState {
  * @return Its state.
  */
 [[nodiscard]] ProjectState captureProjectState(const Project& project);
+
+/**
+ * @brief A cheap fingerprint of the Mind Shot library (`v0.1.47.1`): per
+ *        shot its id, name, pitch and offset, and where its clip's pixel
+ *        data lives and how big it is - not the data itself. A clip is
+ *        never edited in place once captured (NamedMindShot::clip), so an
+ *        unchanged fingerprint means an unchanged library; any copy or
+ *        replacement changes the data's address and is seen as a change,
+ *        which only costs a re-serialization, never a missed change.
+ */
+struct MindShotFingerprint {
+    /// One shot's identity.
+    struct Entry {
+        MindShotId id = 0;                         ///< The shot's id.
+        std::string name;                          ///< Its name.
+        double fundamentalFrequencyHz = 0.0;       ///< Its pitch.
+        double startTimeOffsetSeconds = 0.0;       ///< Its offset.
+        const float* left = nullptr;               ///< Its clip's left data.
+        const float* right = nullptr;              ///< Its clip's right data.
+        const float* phase = nullptr;              ///< Its clip's phase data.
+        std::size_t cells = 0;                     ///< Values per plane.
+        std::uint32_t frameCount = 0;              ///< The clip's width.
+        std::uint32_t binCount = 0;                ///< The clip's height.
+        /// @brief Equal when every field is.
+        /// @return Whether they match.
+        bool operator==(const Entry&) const = default;
+    };
+    std::vector<Entry> entries;  ///< In library order.
+    /// @brief Equal when every entry is, in order.
+    /// @return Whether they match.
+    bool operator==(const MindShotFingerprint&) const = default;
+};
+
+/**
+ * @brief captureProjectState(), reusing the Mind Shot library's JSON from
+ *        the last capture when its fingerprint hasn't changed - what
+ *        History's commits use, so a stroke or a slider doesn't serialize
+ *        every captured clip (`v0.1.47.1`).
+ * @param project The project.
+ * @param fingerprint The previous capture's fingerprint; updated.
+ * @param json The previous capture's Mind Shot JSON; updated.
+ * @param serializations Incremented whenever the library is serialized.
+ * @return Its state, identical to captureProjectState()'s.
+ */
+[[nodiscard]] ProjectState captureProjectState(const Project& project, MindShotFingerprint& fingerprint,
+                                               nlohmann::json& json, std::uint64_t& serializations);
 
 /**
  * @brief The names of the resource libraries a ProjectState tracks, in the
@@ -370,12 +417,20 @@ public:
     /// @return The id.
     [[nodiscard]] HistoryEntryId nextEntryId() const noexcept { return nextEntryId_; }
 
+    /// @brief How many times this history has serialized the Mind Shot
+    ///        library for a snapshot (`v0.1.47.1`) - diagnostics and tests:
+    ///        commits that don't touch Mind Shots don't add to it.
+    /// @return The count.
+    [[nodiscard]] std::uint64_t mindShotSnapshotCount() const noexcept { return mindShotSerializations_; }
+
     friend void to_json(nlohmann::json& json, const History& history);
     friend void from_json(const nlohmann::json& json, History& history);
 
 private:
     std::optional<HistoryChange> step(Project& project, bool forward, const HistoryBaseResolver& resolver);
     void enforceBaseBudget();
+    /// @brief captureProjectState() through this history's Mind Shot cache.
+    [[nodiscard]] ProjectState capture(const Project& project) const;
 
     std::vector<HistoryEntry> entries_;
     std::size_t position_ = 0;
@@ -384,6 +439,10 @@ private:
     bool hasBaseline_ = false;
     bool startsAtCreation_ = false;
     std::size_t baseBudgetBytes_ = std::size_t{1} << 30;
+    /// @brief See capture(); a cache, so updated by const queries too.
+    mutable MindShotFingerprint mindShotFingerprint_;
+    mutable nlohmann::json mindShotJson_;
+    mutable std::uint64_t mindShotSerializations_ = 0;
 };
 
 /// @brief Serializes the applied entries (undone ones aren't saved).

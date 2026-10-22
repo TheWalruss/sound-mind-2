@@ -500,25 +500,47 @@ void CanvasWidget::wheelEvent(QWheelEvent* event) {
     event->accept();
 }
 
-std::optional<sound_mind::codec::RgbImage> CanvasWidget::currentComposite() {
+const sound_mind::codec::RgbImage* CanvasWidget::currentComposite() {
     if (frameOverride_.has_value()) {
-        return frameOverride_;
+        return &*frameOverride_;
     }
     if (project_ == nullptr) {
-        return std::nullopt;
+        return nullptr;
     }
     auto signature = layerStackSignature();
     if (signature != lastRenderedSignature_) {
         compositeCache_.invalidateAll();
         ++compositeGeneration_;
     }
-    if (lastRenderedGeneration_ == compositeGeneration_) {
-        return lastRenderedComposite_;
+    if (lastRenderedGeneration_ != compositeGeneration_) {
+        lastRenderedComposite_ = renderComposite(*project_, compositeCache_, clipIndicatorEnabled_, liveOverlay_);
+        lastRenderedGeneration_ = compositeGeneration_;
+        lastRenderedSignature_ = std::move(signature);
+        ++displayGeneration_;
     }
-    lastRenderedComposite_ = renderComposite(*project_, compositeCache_, clipIndicatorEnabled_, liveOverlay_);
-    lastRenderedGeneration_ = compositeGeneration_;
-    lastRenderedSignature_ = std::move(signature);
-    return lastRenderedComposite_;
+    return lastRenderedComposite_.has_value() ? &*lastRenderedComposite_ : nullptr;
+}
+
+const sound_mind::codec::RgbImage& CanvasWidget::polarProjection(const sound_mind::codec::RgbImage& image,
+                                                                 std::uint32_t diameter) {
+    if (polarCacheGeneration_ != displayGeneration_ || polarCacheDiameter_ != diameter) {
+        polarCache_ = sound_mind::codec::rectToPolar(image, diameter);
+        polarCacheGeneration_ = displayGeneration_;
+        polarCacheDiameter_ = diameter;
+        ++polarProjectionCount_;
+    }
+    return polarCache_;
+}
+
+const sound_mind::codec::RgbImage& CanvasWidget::polarPreview(const QImage& source, PolarPreviewCache& cache,
+                                                              std::uint32_t diameter) {
+    if (cache.sourceKey != source.cacheKey() || cache.diameter != diameter) {
+        cache.image = sound_mind::codec::rectToPolar(toRgbImage(source), diameter);
+        cache.sourceKey = source.cacheKey();
+        cache.diameter = diameter;
+        ++polarProjectionCount_;
+    }
+    return cache.image;
 }
 
 CanvasWidget::LayerStackSignature CanvasWidget::layerStackSignature() const {
@@ -553,6 +575,7 @@ void CanvasWidget::setFrameOverride(std::optional<sound_mind::codec::RgbImage> f
         return;
     }
     frameOverride_ = std::move(frame);
+    ++displayGeneration_;
     update();
 }
 
@@ -578,13 +601,12 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     painter.fillRect(rect(), Qt::black);
 
     if (project_ != nullptr) {
-        if (const auto rendered = currentComposite(); rendered.has_value()) {
+        if (const sound_mind::codec::RgbImage* rendered = currentComposite(); rendered != nullptr) {
             if (polarMode_) {
                 // Sound Flower (v0.Y.53.1) - see setPolarMode()'s own docs.
                 const QRectF disk = polarDiskRect();
                 const auto diameter = static_cast<std::uint32_t>(disk.width());
-                const auto polarImage = sound_mind::codec::rectToPolar(*rendered, diameter);
-                painter.drawImage(disk, toQImageView(polarImage));
+                painter.drawImage(disk, toQImageView(polarProjection(*rendered, diameter)));
             } else {
                 painter.drawImage(rect(), toQImageView(*rendered));
             }
@@ -651,8 +673,8 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
             if (polarMode_) {
                 const QRectF disk = polarDiskRect();
                 const auto diameter = static_cast<std::uint32_t>(disk.width());
-                const auto polarPreview = sound_mind::codec::rectToPolar(toRgbImage(mindWavePreviewImage_), diameter);
-                painter.drawImage(disk, toQImageView(polarPreview));
+                painter.drawImage(disk,
+                                  toQImageView(polarPreview(mindWavePreviewImage_, mindWavePolarCache_, diameter)));
             } else {
                 painter.drawImage(rect(), mindWavePreviewImage_);
             }
@@ -669,8 +691,8 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
             if (polarMode_) {
                 const QRectF disk = polarDiskRect();
                 const auto diameter = static_cast<std::uint32_t>(disk.width());
-                const auto polarPreview = sound_mind::codec::rectToPolar(toRgbImage(equalizerPreviewImage_), diameter);
-                painter.drawImage(disk, toQImageView(polarPreview));
+                painter.drawImage(disk,
+                                  toQImageView(polarPreview(equalizerPreviewImage_, equalizerPolarCache_, diameter)));
             } else {
                 painter.drawImage(rect(), equalizerPreviewImage_);
             }

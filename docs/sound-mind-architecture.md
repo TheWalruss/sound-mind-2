@@ -2908,6 +2908,31 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
         - `AboutDialogTest`: no longer expects LibTIFF in the notices.
         - `test_history.cpp`: uses a phaseCleanup recipe as its example.
         - Codec: H.264 from a single-threaded apartment explains itself.
+272. **Responsiveness pass, installment A: the quick UI-thread wins.** Settled in `v0.1.47.1`, roadmap slot `v0.Y.82.4`. From the 2026-10-22 code scan; installments B-D follow.
+    - **Sound Flower repaint:**
+      - `CanvasWidget::paintEvent()` ran `rectToPolar()` on every repaint: about 30 a second during playback, and on every mouse move. The export timings put one 1080-pixel projection at about 0.3 s in debug.
+      - The projection is now cached (`polarProjection()`), keyed by `displayGeneration_` (bumped when a new composite is rendered or a new override frame is set) and the disk diameter.
+      - The MindWave and Equalizer previews' projections are cached by `QImage::cacheKey()` and diameter.
+      - `currentComposite()` returns a pointer instead of a copy of the whole image per paint.
+      - `polarProjectionCount()` exposes the count for tests.
+    - **Delta/Review edit playback:**
+      - `handleContentChangedForPlayback()` composited and decoded the whole project on the UI thread after every edit. Now it records the edited bounds (`pendingEditBounds_`) and starts `startEditPlaybackPreparation()`: a `BackgroundTask` on a project copy, polled every 15 ms.
+      - An edit during preparation cancels the run and marks a re-run, so the latest edit wins. A project switch cancels it, and the result is discarded.
+      - `applyEditPlayback()` holds the original load/seek/play logic unchanged. `isPreparingEditPlayback()` is public, for tests.
+      - Cost: the project copy is still made on the UI thread, as Track scope's repeat refresh already does. Installment C's worker compositing revisits copying.
+    - **Stopping a recording:**
+      - `commitRecording()` encoded the take and wrote its FLAC source on the UI thread. It is now split into `prepareRecording()` (static and thread-safe: encode plus `storeSourceAudio()`, unregistered) and `applyRecording()` (UI thread: `addSource()`, layer, History).
+      - `toggleRecording()` uses `commitRecordingAsync()`. New/Open/Close call `flushRecordingSave()` first, which waits and applies, so the take is part of the project the "unsaved changes" prompt asks about.
+      - The synchronous `commitRecording()` stays as prepare plus apply.
+    - **History snapshot cost:**
+      - `captureProjectState()` serialized every resource collection on every commit, including each Mind Shot's clip pixels.
+      - `History` now keeps a `MindShotFingerprint` (per shot: id, name, pitch, offset, the clip planes' data pointers and sizes) and reuses the last Mind Shot JSON while the fingerprint is unchanged.
+      - Sound because a clip is never edited in place (`NamedMindShot::clip`'s documented contract). A copy or replacement changes the pointers and costs only a re-serialization, never a missed change.
+      - The cache is plain, copyable members (`mutable`, since `hasUncommittedChanges()` is const), not shared: project copies go to worker threads. `mindShotSnapshotCount()` is for diagnostics and tests.
+    - **Tests:**
+      - `CanvasWidgetTest` +2: the flower is projected once until the composite, the size or an override frame changes.
+      - `MainWindowTest` +2: Delta preparation is in the background and the latest edit wins; `commitRecordingAsync()` adds the layer, with its source, only when done. The five Delta/Review cases now wait for `isPreparingEditPlayback()` to clear.
+      - Core `test_history.cpp` +1: unrelated commits don't re-serialize Mind Shots; a rename is recorded and undone, with the clip intact.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

@@ -518,6 +518,14 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     refreshTimer_ = new QTimer(this);
     refreshTimer_->setInterval(33);
     connect(refreshTimer_, &QTimer::timeout, this, &MainWindow::pollRepeatRefresh);
+
+    editPlaybackTimer_ = new QTimer(this);
+    editPlaybackTimer_->setInterval(15);
+    connect(editPlaybackTimer_, &QTimer::timeout, this, &MainWindow::pollEditPlayback);
+
+    recordingSaveTimer_ = new QTimer(this);
+    recordingSaveTimer_->setInterval(33);
+    connect(recordingSaveTimer_, &QTimer::timeout, this, &MainWindow::pollRecordingSave);
     filterPreviewTimer_ = new QTimer(this);
     filterPreviewTimer_->setInterval(33);
     connect(filterPreviewTimer_, &QTimer::timeout, this, &MainWindow::pollFilterPreviewRender);
@@ -1946,6 +1954,7 @@ bool MainWindow::isShowingLandingPage() const noexcept { return stack_->currentW
 bool MainWindow::hasUnsavedChanges() const noexcept { return hasUnsavedChanges_; }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
+    flushRecordingSave();  // the take belongs to the project being left (v0.1.47.1).
     if (isLoopModeRunning() || recordEngine_.isRecording()) {
         statusBar()->showMessage(tr("Stop Loop Mode or Recording before closing."), 5000);
         event->ignore();
@@ -2199,6 +2208,11 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // no-op when already stopped, or when loopEngine_ doesn't exist yet -
     // see its own docs), so this is always safe regardless of caller.
     setFilterPreviewEnabled(false);
+    if (editPlaybackTask_) {
+        editPlaybackDirty_ = false;
+        editPlaybackTask_->requestCancel();  // pollEditPlayback() discards it.
+    }
+    pendingEditBounds_.reset();
     if (loudnessTask_) {
         loudnessTask_->requestCancel();  // its result is for the old project - see the timer's handler.
     }
@@ -2361,6 +2375,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
 }
 
 void MainWindow::newProject() {
+    flushRecordingSave();  // the take belongs to the project being left (v0.1.47.1).
     if (isLoopModeRunning() || recordEngine_.isRecording()) {
         statusBar()->showMessage(tr("Stop Loop Mode or Recording before starting a new project."), 5000);
         return;
@@ -2411,6 +2426,7 @@ bool MainWindow::createProjectAt(sound_mind::core::ProjectSettings settings, con
 }
 
 void MainWindow::openProject() {
+    flushRecordingSave();  // the take belongs to the project being left (v0.1.47.1).
     if (isLoopModeRunning() || recordEngine_.isRecording()) {
         statusBar()->showMessage(tr("Stop Loop Mode or Recording before opening a project."), 5000);
         return;
@@ -2441,6 +2457,7 @@ void MainWindow::openProject() {
 }
 
 bool MainWindow::openProjectAt(const std::filesystem::path& path, QString* errorMessage) {
+    flushRecordingSave();  // the take belongs to the project being left (v0.1.47.1).
     if (isLoopModeRunning() || recordEngine_.isRecording()) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("Stop Loop Mode or Recording before opening a project.");
@@ -3920,14 +3937,6 @@ std::optional<sound_mind::core::SourceId> MainWindow::storeAudioSource(const sou
     }
 }
 
-nlohmann::json MainWindow::recordingRecipe(const sound_mind::codec::AudioBuffer& captured) {
-    nlohmann::json recipe{{"kind", "record"}};
-    if (const auto source = storeAudioSource(captured, "recording", tr("Recording"))) {
-        recipe["source"] = *source;
-    }
-    return recipe;
-}
-
 void MainWindow::commitHistory(const QString& description) {
     if (project_) {
         history_.commit(*project_, description);
@@ -5268,9 +5277,7 @@ void MainWindow::toggleRecording() {
         canvas_->setLiveOverlay(std::nullopt);
         recordLiveEncoder_.reset();
         recordLiveFed_ = 0;
-        if (!commitRecording(recordEngine_.capturedAudio())) {
-            statusBar()->showMessage(tr("Recording stopped - nothing captured."), 5000);
-        }
+        commitRecordingAsync(recordEngine_.capturedAudio());
         return;
     }
 
@@ -5451,14 +5458,45 @@ bool MainWindow::commitRecording(const sound_mind::codec::AudioBuffer& captured)
         return false;
     }
     try {
-        // Encoded exactly as an imported file would be.
-        sound_mind::codec::StreamImage content =
-            sound_mind::codec::encode(captured, sound_mind::core::streamCodecConfigFor(project_->settings()));
+        return applyRecording(prepareRecording(captured, sound_mind::core::streamCodecConfigFor(project_->settings()),
+                                               project_->sourcesFolder()));
+    } catch (const std::exception& e) {
+        QMessageBox::critical(this, tr("Record Failed"), QString::fromStdString(e.what()));
+        return false;
+    }
+}
+
+MainWindow::PreparedRecording MainWindow::prepareRecording(
+    const sound_mind::codec::AudioBuffer& captured, const sound_mind::codec::StreamCodecConfig& config,
+    const std::optional<std::filesystem::path>& sourcesFolder) {
+    PreparedRecording prepared;
+    // Encoded exactly as an imported file would be.
+    prepared.content = sound_mind::codec::encode(captured, config);
+    if (sourcesFolder.has_value()) {
+        try {
+            prepared.source = sound_mind::core::storeSourceAudio(*sourcesFolder, captured, "recording",
+                                                                 tr("Recording").toStdString());
+        } catch (const std::exception&) {
+            // Kept without a source: not replayable from the original.
+        }
+    }
+    return prepared;
+}
+
+bool MainWindow::applyRecording(PreparedRecording prepared) {
+    if (!project_) {
+        return false;
+    }
+    try {
+        nlohmann::json recipe{{"kind", "record"}};
+        if (prepared.source.has_value()) {
+            recipe["source"] = project_->addSource(std::move(*prepared.source));
+        }
         const auto target = recordPanel_->targetLayerId();
         sound_mind::core::Layer* existing = target.has_value() ? layerController_->layerById(*target) : nullptr;
         if (existing != nullptr) {
             // Recording over a layer replaces it, painting included.
-            existing->setBaseContent(std::move(content), recordingRecipe(captured));
+            existing->setBaseContent(std::move(prepared.content), std::move(recipe));
             project_->operationLog().bakeLayer(existing->id());
             commitHistory(tr("Recorded over \"%1\"").arg(QString::fromStdString(existing->name())));
             statusBar()->showMessage(
@@ -5466,7 +5504,7 @@ bool MainWindow::commitRecording(const sound_mind::codec::AudioBuffer& captured)
         } else {
             sound_mind::core::Layer layer(0, recordPanel_->newLayerName().toStdString(),
                                           sound_mind::core::LayerType::Normal);
-            layer.setBaseContent(std::move(content), recordingRecipe(captured));
+            layer.setBaseContent(std::move(prepared.content), std::move(recipe));
             layer.setRecorded(true);
             project_->addLayer(std::move(layer));
             commitHistory(tr("Recorded a new layer"));
@@ -5482,6 +5520,52 @@ bool MainWindow::commitRecording(const sound_mind::codec::AudioBuffer& captured)
     } catch (const std::exception& e) {
         QMessageBox::critical(this, tr("Record Failed"), QString::fromStdString(e.what()));
         return false;
+    }
+}
+
+void MainWindow::commitRecordingAsync(sound_mind::codec::AudioBuffer captured) {
+    if (!project_ || captured.frameCount() == 0) {
+        statusBar()->showMessage(tr("Recording stopped - nothing captured."), 5000);
+        return;
+    }
+    flushRecordingSave();  // one at a time, in order.
+    recordingSaveResult_.reset();
+    recordingSaveError_.clear();
+    recordingSaveTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+        [this, audio = std::move(captured), config = sound_mind::core::streamCodecConfigFor(project_->settings()),
+         folder = project_->sourcesFolder()](sound_mind::core::CancellationToken&) {
+            try {
+                recordingSaveResult_ = prepareRecording(audio, config, folder);
+            } catch (const std::exception& e) {
+                recordingSaveError_ = QString::fromStdString(e.what());
+            }
+        });
+    recordingSaveTask_->start();
+    recordingSaveTimer_->start();
+    statusBar()->showMessage(tr("Saving the recording..."));
+}
+
+bool MainWindow::isSavingRecording() const noexcept { return recordingSaveTask_ != nullptr; }
+
+void MainWindow::pollRecordingSave() {
+    if (!recordingSaveTask_ || recordingSaveTask_->isRunning()) {
+        return;
+    }
+    recordingSaveTimer_->stop();
+    recordingSaveTask_.reset();
+    auto result = std::move(recordingSaveResult_);
+    recordingSaveResult_.reset();
+    if (!result.has_value()) {
+        QMessageBox::critical(this, tr("Record Failed"), recordingSaveError_);
+        return;
+    }
+    applyRecording(std::move(*result));
+}
+
+void MainWindow::flushRecordingSave() {
+    if (recordingSaveTask_) {
+        recordingSaveTask_->waitForFinished();
+        pollRecordingSave();
     }
 }
 
@@ -5538,11 +5622,6 @@ void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer
         return;
     }
 
-    const auto composite = sound_mind::core::compositeProject(*project_, /*shouldCancel=*/nullptr, /*respectMute=*/true);
-    if (!composite.has_value()) {
-        return;
-    }
-
     // The edited region, for Delta/Review - layer's own most recently
     // active operation is a practical approximation of "what just
     // changed": exact for a fresh paint/fill/paste/sequence stamp
@@ -5557,10 +5636,65 @@ void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer
         editedBounds = operations.back()->bounds();
     }
 
+    pendingEditBounds_ = editedBounds;
+    // v0.1.47.1: composited and decoded on a background task - the edit
+    // returns at once, and playback starts when the audio is ready.
+    startEditPlaybackPreparation();
+}
+
+bool MainWindow::isPreparingEditPlayback() const noexcept { return editPlaybackTask_ != nullptr; }
+
+void MainWindow::startEditPlaybackPreparation() {
+    if (!project_) {
+        return;
+    }
+    if (editPlaybackTask_ && editPlaybackTask_->isRunning()) {
+        editPlaybackDirty_ = true;
+        editPlaybackTask_->requestCancel();
+        return;
+    }
+    editPlaybackDirty_ = false;
+    editPlaybackResult_.reset();
+    editPlaybackTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+        [this, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
+            try {
+                const auto composite = sound_mind::core::compositeProject(
+                    projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
+                if (composite.has_value() && !token.cancellationRequested()) {
+                    editPlaybackResult_ = sound_mind::codec::decode(*composite);
+                }
+            } catch (const std::exception&) {
+                editPlaybackResult_.reset();  // cancelled or failed: nothing to play.
+            }
+        });
+    editPlaybackTask_->start();
+    editPlaybackTimer_->start();
+}
+
+void MainWindow::pollEditPlayback() {
+    if (!editPlaybackTask_ || editPlaybackTask_->isRunning()) {
+        return;
+    }
+    editPlaybackTimer_->stop();
+    const bool cancelled = editPlaybackTask_->wasCancelled();
+    editPlaybackTask_.reset();
+    auto result = std::move(editPlaybackResult_);
+    editPlaybackResult_.reset();
+    if (editPlaybackDirty_) {
+        startEditPlaybackPreparation();
+        return;
+    }
+    if (cancelled || !result.has_value() || !project_) {
+        return;
+    }
+    applyEditPlayback(std::move(*result));
+}
+
+void MainWindow::applyEditPlayback(sound_mind::codec::AudioBuffer audio) {
     // Stops playback first (see load()'s own docs) - the confirmed
     // "audible restart on edit" behavior, not seamless live double-
     // buffering.
-    playbackController_->load(sound_mind::codec::decode(*composite));
+    playbackController_->load(std::move(audio));
     const double totalSeconds = playbackController_->totalSeconds();
 
     switch (playbackScope_) {
@@ -5577,14 +5711,14 @@ void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer
             playbackController_->seek(currentPlaybackPositionSeconds_);
             break;
         case sound_mind::studio::PlaybackScope::Delta:
-            repeatRangeStartSeconds_ = editedBounds ? editedBounds->startTimeSeconds : 0.0;
-            repeatRangeEndSeconds_ = editedBounds ? editedBounds->endTimeSeconds : totalSeconds;
+            repeatRangeStartSeconds_ = pendingEditBounds_ ? pendingEditBounds_->startTimeSeconds : 0.0;
+            repeatRangeEndSeconds_ = pendingEditBounds_ ? pendingEditBounds_->endTimeSeconds : totalSeconds;
             repeatLoopBackSeconds_ = repeatRangeStartSeconds_;
             syncPlaybackRangeToEngine();
             playbackController_->seek(repeatRangeStartSeconds_);
             break;
         case sound_mind::studio::PlaybackScope::Review:
-            repeatRangeStartSeconds_ = editedBounds ? editedBounds->startTimeSeconds : 0.0;
+            repeatRangeStartSeconds_ = pendingEditBounds_ ? pendingEditBounds_->startTimeSeconds : 0.0;
             repeatRangeEndSeconds_ = totalSeconds;
             // Unlike Delta, Review loops the whole track once it reaches
             // the end - back to the track's own start, not the edit's.

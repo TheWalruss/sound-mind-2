@@ -397,3 +397,32 @@ TEST_CASE("A history entry round-trips through JSON", "[core][history]") {
     REQUIRE(nlohmann::json(parsed) == nlohmann::json(entry));
     REQUIRE(parsed.metadata.at("source") == 3);
 }
+
+// v0.1.47.1: a commit no longer serializes the Mind Shot library (its
+// clips' pixel data included) unless the library actually changed.
+TEST_CASE("Commits don't re-serialize an unchanged Mind Shot library, but see changes to it", "[core][history]") {
+    Project project = Project::createNew(smallSettings());
+    sound_mind::core::Clip clip;
+    clip.frameCount = 10;
+    clip.binCount = 8;
+    clip.leftMagnitudeDb.assign(80, -20.0f);
+    clip.rightMagnitudeDb.assign(80, -20.0f);
+    clip.sharedPhaseRadians.assign(80, 0.0f);
+    const auto shotId = project.addMindShot("Shot", clip);
+    project.history().setBaseline(project);
+    const std::uint64_t afterBaseline = project.history().mindShotSnapshotCount();
+
+    const LayerId layer = project.layers().front().id();
+    for (const float opacity : {0.9f, 0.8f, 0.7f}) {
+        project.layerById(layer)->setOpacity(opacity);
+        REQUIRE(project.history().commit(project, "Opacity").has_value());
+    }
+    CHECK(project.history().mindShotSnapshotCount() == afterBaseline);
+
+    project.mindShotById(shotId)->name = "Renamed";
+    REQUIRE(project.history().commit(project, "Renamed").has_value());
+    CHECK(project.history().mindShotSnapshotCount() == afterBaseline + 1);
+    REQUIRE(project.history().undo(project).has_value());
+    CHECK(project.mindShotById(shotId)->name == "Shot");
+    CHECK(project.mindShotById(shotId)->clip.leftMagnitudeDb.size() == 80);  // restored whole.
+}

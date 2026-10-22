@@ -296,6 +296,28 @@ const std::vector<std::string>& historyResourceCollections() {
 }
 
 ProjectState captureProjectState(const Project& project) {
+    MindShotFingerprint fingerprint;
+    nlohmann::json json;
+    std::uint64_t serializations = 0;
+    return captureProjectState(project, fingerprint, json, serializations);
+}
+
+ProjectState captureProjectState(const Project& project, MindShotFingerprint& fingerprint, nlohmann::json& json,
+                                 std::uint64_t& serializations) {
+    MindShotFingerprint now;
+    now.entries.reserve(project.mindShots().size());
+    for (const NamedMindShot& shot : project.mindShots()) {
+        now.entries.push_back({shot.id, shot.name, shot.fundamentalFrequencyHz, shot.startTimeOffsetSeconds,
+                               shot.clip.leftMagnitudeDb.data(), shot.clip.rightMagnitudeDb.data(),
+                               shot.clip.sharedPhaseRadians.data(), shot.clip.leftMagnitudeDb.size(),
+                               shot.clip.frameCount, shot.clip.binCount});
+    }
+    if (now != fingerprint || json.is_null()) {
+        json = resourceJson(project, kMindShots);
+        fingerprint = std::move(now);
+        ++serializations;
+    }
+
     ProjectState state;
     state.layers.reserve(project.layers().size());
     for (const Layer& layer : project.layers()) {
@@ -311,19 +333,23 @@ ProjectState captureProjectState(const Project& project) {
     state.stackOrder = log.stackOrder();
     state.baked = log.bakedThresholds();
     for (const std::string& collection : historyResourceCollections()) {
-        state.resources[collection] = resourceJson(project, collection);
+        state.resources[collection] = collection == kMindShots ? json : resourceJson(project, collection);
     }
     return state;
 }
 
+ProjectState History::capture(const Project& project) const {
+    return captureProjectState(project, mindShotFingerprint_, mindShotJson_, mindShotSerializations_);
+}
+
 void History::setBaseline(Project& project) {
-    committed_ = captureProjectState(project);
+    committed_ = capture(project);
     clearDisplacedBases(project);
     hasBaseline_ = true;
 }
 
 bool History::hasUncommittedChanges(const Project& project) const {
-    return hasBaseline_ && !statesEqual(committed_, captureProjectState(project));
+    return hasBaseline_ && !statesEqual(committed_, capture(project));
 }
 
 std::optional<HistoryEntryId> History::commit(Project& project, std::string description, nlohmann::json metadata) {
@@ -331,7 +357,7 @@ std::optional<HistoryEntryId> History::commit(Project& project, std::string desc
         setBaseline(project);
         return std::nullopt;
     }
-    ProjectState current = captureProjectState(project);
+    ProjectState current = capture(project);
     if (statesEqual(committed_, current)) {
         clearDisplacedBases(project);
         return std::nullopt;
@@ -530,7 +556,7 @@ std::optional<HistoryChange> History::step(Project& project, bool forward, const
         }
     }
     position_ = targetPosition;
-    committed_ = captureProjectState(project);
+    committed_ = capture(project);
     clearDisplacedBases(project);
     enforceBaseBudget();
     return change;

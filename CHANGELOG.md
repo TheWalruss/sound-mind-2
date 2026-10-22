@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.47.1] - 2026-10-22
+
+Roadmap slot `v0.Y.82.4` (responsiveness and modularity), installment A.
+
+### Changed
+
+- **Sound Flower view plays smoothly.** The flower was redrawn from scratch on every repaint - about 30 times a second while playing, and on every mouse move - and is now drawn once and reused until the picture or the window size changes. The MindWave and Equalizer previews on the flower work the same way.
+- **Delta and Review no longer freeze the window after an edit.** The edited sound is prepared in the background, and playback starts when it's ready; editing again meanwhile plays the newer edit.
+- **Stopping a recording no longer freezes the window.** The take is encoded and saved in the background ("Saving the recording..."), and its layer appears when that's done. New Project, Open Project and closing the Studio wait for it.
+- **Edits on a project with many Mind Shots are quicker.** Each edit no longer re-reads every captured Mind Shot to record the undo step.
+
 ## [0.1.46.1] - 2026-10-22
 
 Roadmap slot `v0.Y.82.3` (remove the Pool codec).

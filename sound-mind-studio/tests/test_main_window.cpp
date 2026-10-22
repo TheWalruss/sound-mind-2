@@ -3544,6 +3544,8 @@ void MainWindowTest::paintingWhileRepeatIsOnWithDeltaScopeJumpsPlaybackToTheEdit
     window.setPaintModeEnabled(true);
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));  // ~1.5s.
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));
+    // v0.1.47.1: the edit's audio is prepared in the background.
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isPreparingEditPlayback(), 120000);
 
     // Delta scope jumps playback to the just-painted stroke's own start -
     // ~1.5s, not the "0:00" it started at.
@@ -3629,6 +3631,8 @@ void MainWindowTest::paintingWhileRepeatIsOnWithReviewScopeWrapsToTheTrackStartN
     window.setPaintModeEnabled(true);
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));  // ~1.5s.
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));
+    // v0.1.47.1: the edit's audio is prepared in the background.
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isPreparingEditPlayback(), 120000);
 
     // Review jumps to the edit's own start, same as Delta - confirmed
     // first, since the wrap-at-end behavior below only matters once this
@@ -3677,6 +3681,8 @@ void MainWindowTest::paintingWithRepeatOffAndDeltaScopeStartsAOneShotPlaybackAut
     window.setPaintModeEnabled(true);
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));  // ~1.5s.
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));
+    // v0.1.47.1: the edit's audio is prepared in the background.
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isPreparingEditPlayback(), 120000);
 
     QVERIFY(window.isPlaying());
     auto* panel = window.findChild<PlaybackPanel*>();
@@ -3717,6 +3723,8 @@ void MainWindowTest::oneShotDeltaPlaybackHaltsAtTheEditsEndWithoutLooping() {
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));
     QTest::mouseMove(canvas, QPoint(152, 10));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(152, 10));
+    // v0.1.47.1: the edit's audio is prepared in the background.
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isPreparingEditPlayback(), 120000);
     QVERIFY(window.isPlaying());
 
     // Repeat is off, so per docs/sound-mind-design.md's "it continues to
@@ -3752,6 +3760,8 @@ void MainWindowTest::paintingWithRepeatOffAndReviewScopeStartsAOneShotPlaybackAu
     window.setPaintModeEnabled(true);
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));  // ~1.5s.
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));
+    // v0.1.47.1: the edit's audio is prepared in the background.
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isPreparingEditPlayback(), 120000);
 
     QVERIFY(window.isPlaying());
     auto* panel = window.findChild<PlaybackPanel*>();
@@ -3767,6 +3777,40 @@ void MainWindowTest::paintingWithRepeatOffAndReviewScopeStartsAOneShotPlaybackAu
     window.seekPlayback(2.0);
     QVERIFY(!window.isPlaying());
 
+    window.stopPlayback();
+}
+
+// v0.1.47.1: Delta/Review composite and decode the edit's audio on a
+// background task, not on the UI thread; a newer edit replaces a pending one.
+void MainWindowTest::deltaPlaybackIsPreparedInTheBackgroundAndTheLatestEditWins() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-delta-background.wav";
+    writeTestWavFile(path);
+
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 200;
+    settings.canvasHeight = 50;
+    settings.binCount = 50;
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-delta-background.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(settings, projectPath));
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+    window.setPlaybackScope(PlaybackScope::Delta);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(200, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));  // ~0.2s.
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QVERIFY(window.isPreparingEditPlayback());  // the stroke returned before any compositing.
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));  // ~1.5s.
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));
+
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isPreparingEditPlayback(), 120000);
+    QVERIFY(window.isPlaying());
+    auto* label = window.findChild<PlaybackPanel*>()->findChild<QLabel*>(QStringLiteral("positionLabel"));
+    QCOMPARE(label->text(), QStringLiteral("0:01 / 0:02"));  // the second edit, not the first.
     window.stopPlayback();
 }
 
@@ -6328,6 +6372,23 @@ void MainWindowTest::commitRecordingAddsANamedRecordedLayer() {
     auto* combo = window.findChild<QComboBox*>(QStringLiteral("recordTargetCombo"));
     QVERIFY(combo != nullptr);
     QCOMPARE(combo->count(), 2);  // "New recording layer" + Vocals.
+}
+
+// v0.1.47.1: stopping a recording encodes and stores it on a background
+// task; the layer appears when that's done, and New Project waits for it.
+void MainWindowTest::commitRecordingAsyncSavesTheTakeInTheBackground() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    const std::size_t before = window.project()->layers().size();
+
+    window.commitRecordingAsync(recordedTone(0.5f));
+    QVERIFY(window.isSavingRecording());
+    QCOMPARE(window.project()->layers().size(), before);  // not on the UI thread.
+
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isSavingRecording(), 60000);
+    QCOMPARE(window.project()->layers().size(), before + 1);
+    QVERIFY(topmostNonEqualizerLayer(*window.project()).recorded());
+    QVERIFY(topmostNonEqualizerLayer(*window.project()).baseRecipe().contains("source"));
 }
 
 void MainWindowTest::commitRecordingOverwritesTheChosenRecordedLayerUndoably() {

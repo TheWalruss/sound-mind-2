@@ -152,6 +152,16 @@ public:
     void setPlayheadFraction(std::optional<double> fraction);
 
     /**
+     * @brief How many times anything has been projected onto the Sound
+     *        Flower (`rectToPolar()`) since this widget was made - for tests and
+     *        diagnostics (`v0.1.47.1`). Repaints that change nothing the
+     *        flower shows (the playhead, overlays, the mouse) reuse the
+     *        last projection.
+     * @return The count.
+     */
+    [[nodiscard]] std::uint64_t polarProjectionCount() const noexcept { return polarProjectionCount_; }
+
+    /**
      * @brief Enables or disables the Sound Flower polar view -
      *        `docs/sound-mind-design.md`'s "Polar Coordinates (Sound
      *        Flower)", `docs/sound-mind-roadmap.md`'s `v0.Y.53.1`.
@@ -1161,7 +1171,30 @@ private:
     ///        `layerStackSignature()`) - a layer added/removed/reordered,
     ///        shown/hidden/muted, or gaining/losing content. In-place edits
     ///        to existing content still need an explicit invalidate.
-    [[nodiscard]] std::optional<sound_mind::codec::RgbImage> currentComposite();
+    ///        Returns a pointer into the widget (`v0.1.47.1`), not a copy:
+    ///        valid until the next call or setFrameOverride().
+    [[nodiscard]] const sound_mind::codec::RgbImage* currentComposite();
+
+    /// @brief The Sound Flower projection of `image` at `diameter`, cached
+    ///        (`v0.1.47.1`): projected again only when the image shown
+    ///        changed (displayGeneration_) or the disk's size did, not on
+    ///        every repaint.
+    [[nodiscard]] const sound_mind::codec::RgbImage& polarProjection(const sound_mind::codec::RgbImage& image,
+                                                                      std::uint32_t diameter);
+
+    /// @brief One preview overlay's cached Sound Flower projection - see
+    ///        polarPreview().
+    struct PolarPreviewCache {
+        qint64 sourceKey = 0;               ///< The QImage::cacheKey() it was made from.
+        std::uint32_t diameter = 0;         ///< The disk size it was made at.
+        sound_mind::codec::RgbImage image;  ///< The projection.
+    };
+
+    /// @brief The MindWave/Equalizer preview `source` projected onto the
+    ///        disk, cached in `cache` until the preview or the disk's size
+    ///        changes (`v0.1.47.1`).
+    [[nodiscard]] const sound_mind::codec::RgbImage& polarPreview(const QImage& source, PolarPreviewCache& cache,
+                                                                   std::uint32_t diameter);
 
     /// @brief One entry per layer, bottom to top: its id, visible, muted,
     ///        and has-content flags - cheap enough to compare every paint.
@@ -1205,6 +1238,16 @@ private:
     std::optional<sound_mind::codec::StreamImage> liveOverlay_;
     /// See setFrameOverride().
     std::optional<sound_mind::codec::RgbImage> frameOverride_;
+    /// @brief Bumped whenever the image paintEvent() shows changes - a new
+    ///        composite, or a new override frame - keying polarCache_.
+    std::uint64_t displayGeneration_ = 0;
+    /// @brief See polarProjection().
+    sound_mind::codec::RgbImage polarCache_;
+    std::uint64_t polarCacheGeneration_ = static_cast<std::uint64_t>(-1);
+    std::uint32_t polarCacheDiameter_ = 0;
+    std::uint64_t polarProjectionCount_ = 0;
+    PolarPreviewCache mindWavePolarCache_;
+    PolarPreviewCache equalizerPolarCache_;
     std::optional<double> playheadFraction_;
     /// @brief See setPolarMode()'s own docs.
     bool polarMode_ = false;

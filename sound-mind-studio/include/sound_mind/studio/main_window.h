@@ -25,6 +25,7 @@
 #include "sound_mind/core/loop_engine.h"
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project.h"
+#include "sound_mind/core/project_sources.h"
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/branch_curve_session.h"
@@ -410,6 +411,14 @@ public slots:
     ///         compute finishes, one way or another.
     [[nodiscard]] bool isCompositingForPlayback() const noexcept;
 
+    /// @brief Whether Delta/Review playback of an edit is still being
+    ///        prepared (`v0.1.47.1`): the composite and decode run on a
+    ///        background task, so the edit itself returns at once; playback
+    ///        starts when it's ready. A newer edit replaces a pending one.
+    /// @return `true` from the edit until the result has been applied (or
+    ///         discarded).
+    [[nodiscard]] bool isPreparingEditPlayback() const noexcept;
+
     /// @brief Requests cancellation of the currently running playback
     /// composite - the actual work behind the status bar's own cancel
     /// button. A no-op if isCompositingForPlayback() is `false`.
@@ -636,8 +645,10 @@ public slots:
      * reasoning as toggleLoopMode()); does nothing (refuses to start) if
      * Loop Mode is currently running, or if no project is open. Creates a
      * new Normal layer ("Recording") once capture stops and something was
-     * actually captured; stopping with nothing captured (e.g. no input
-     * device was available) leaves the project unchanged.
+     * actually captured - encoded and saved in the background
+     * (commitRecordingAsync(), `v0.1.47.1`), so the layer appears a moment
+     * later; stopping with nothing captured (e.g. no input device was
+     * available) leaves the project unchanged.
      *
      * Marks hasUnsavedChanges() when a layer is actually added. Per the
      * Project Lifecycle milestone (`v0.Y.10.1`), New/Open/Close all refuse
@@ -1506,11 +1517,6 @@ public slots:
     std::optional<sound_mind::core::SourceId> storeAudioSource(const sound_mind::codec::AudioBuffer& audio,
                                                                const std::string& kind, const QString& name);
 
-    /// @brief A recording's base recipe, its audio saved as a source.
-    /// @param captured The recorded audio.
-    /// @return `{"kind": "record", "source": id}` (no source if saving failed).
-    nlohmann::json recordingRecipe(const sound_mind::codec::AudioBuffer& captured);
-
     /**
      * @brief File → Remaster... (`v0.1.43.4`): asks for new settings and
      *        replacement sources in a `RemasterDialog`, rebuilds the project
@@ -1872,6 +1878,22 @@ public slots:
      *         captured.
      */
     bool commitRecording(const sound_mind::codec::AudioBuffer& captured);
+
+    /**
+     * @brief commitRecording() with the slow part - encoding the take and
+     *        writing it to the project's sources as FLAC - on a background
+     *        task (`v0.1.47.1`), so stopping a long recording doesn't
+     *        freeze the window. What toggleRecording() uses when recording
+     *        stops; the layer appears when it's done. New/Open/Close wait
+     *        for it first (flushRecordingSave()), so a take is never lost.
+     * @param captured The recorded audio. Ignored (with a status message)
+     *        if nothing was captured or no project is open.
+     */
+    void commitRecordingAsync(sound_mind::codec::AudioBuffer captured);
+
+    /// @brief Whether commitRecordingAsync()'s save is still pending.
+    /// @return `true` until its result has been applied.
+    [[nodiscard]] bool isSavingRecording() const noexcept;
 
     /// @brief Gives the Record panel the project's current recorded layers
     ///        as targets.
@@ -3396,6 +3418,54 @@ private:
     /// re-runs if another change arrived meanwhile.
     void pollRepeatRefresh();
 
+    /// @brief Starts preparing Delta/Review playback of the latest edit on
+    ///        a background task (`v0.1.47.1`), or, if one is running,
+    ///        cancels it and marks a re-run - the latest edit wins.
+    void startEditPlaybackPreparation();
+
+    /// @brief editPlaybackTimer_'s slot: applies the prepared audio once
+    ///        the task finishes (applyEditPlayback()), re-runs it if another
+    ///        edit arrived meanwhile, or discards a cancelled result.
+    void pollEditPlayback();
+
+    /// @brief Loads `audio` and positions playback for the current scope
+    ///        and pendingEditBounds_ - Delta plays the edited region, Review
+    ///        from the edit to the end - then plays. UI thread only.
+    /// @param audio The decoded composite.
+    void applyEditPlayback(sound_mind::codec::AudioBuffer audio);
+
+    /// @brief recordingSaveTimer_'s slot: applies a finished
+    ///        commitRecordingAsync() save.
+    void pollRecordingSave();
+
+    /// @brief Waits for a pending commitRecordingAsync() save and applies
+    ///        it - before New/Open/Close, so the take is part of the project
+    ///        they ask about. A no-op when none is pending.
+    void flushRecordingSave();
+
+    /// @brief What a recording becomes once encoded and stored - the part
+    ///        of commitRecording() that's safe off the UI thread.
+    struct PreparedRecording {
+        sound_mind::codec::StreamImage content;                ///< The encoded take.
+        std::optional<sound_mind::core::ProjectSource> source;  ///< Its FLAC source, unregistered; empty if saving failed.
+    };
+
+    /// @brief Encodes `captured` and writes it as a source - thread-safe;
+    ///        touches no MainWindow state.
+    /// @param captured The recorded audio.
+    /// @param config The project's codec settings.
+    /// @param sourcesFolder The project's sources folder, if it has one.
+    /// @return The prepared recording.
+    [[nodiscard]] static PreparedRecording prepareRecording(const sound_mind::codec::AudioBuffer& captured,
+                                                            const sound_mind::codec::StreamCodecConfig& config,
+                                                            const std::optional<std::filesystem::path>& sourcesFolder);
+
+    /// @brief Adds a prepared recording to the project, where the Record
+    ///        panel says - the UI-thread half of commitRecording().
+    /// @param prepared The encoded take and its source.
+    /// @return `true` on success; a failure is reported in a dialog.
+    bool applyRecording(PreparedRecording prepared);
+
     /// @brief Starts a background render of the filter preview, or marks
     ///        one pending if a render is already running - see
     ///        setFilterPreviewEnabled(). A no-op while the preview is off.
@@ -3415,7 +3485,10 @@ private:
      *        `repeatEnabled_` and `playbackScope_` together - see the two
      *        cases below.
      *
-     * Re-renders the project's own current composite and reloads it
+     * Track scope re-prepares in the background (scheduleRepeatRefresh()).
+     * Delta/Review (`v0.1.47.1`) record the edited bounds and prepare the
+     * composite's audio on a background task (startEditPlaybackPreparation()),
+     * so the edit returns at once; applyEditPlayback() then reloads it
      * (`PlaybackController::load()` stops playback first, per its own
      * docs - "audible restart on edit", confirmed with the user over
      * building genuine seamless live double-buffering into
@@ -4134,6 +4207,24 @@ private:
     QTimer* refreshTimer_ = nullptr;
     /// @brief A change arrived while refreshTask_ was running.
     bool refreshDirty_ = false;
+
+    /// @brief Delta/Review edit playback (`v0.1.47.1`) - see
+    ///        startEditPlaybackPreparation(). The result is declared before
+    ///        the task so the task is destroyed first.
+    std::optional<sound_mind::codec::AudioBuffer> editPlaybackResult_;
+    std::unique_ptr<sound_mind::core::BackgroundTask> editPlaybackTask_;
+    QTimer* editPlaybackTimer_ = nullptr;
+    /// @brief Another edit arrived while editPlaybackTask_ was running.
+    bool editPlaybackDirty_ = false;
+    /// @brief The edited region applyEditPlayback() positions playback on.
+    std::optional<sound_mind::core::TimeFrequencyRect> pendingEditBounds_;
+
+    /// @brief commitRecordingAsync()'s save (`v0.1.47.1`); result first,
+    ///        so the task is destroyed before it.
+    std::optional<PreparedRecording> recordingSaveResult_;
+    QString recordingSaveError_;
+    std::unique_ptr<sound_mind::core::BackgroundTask> recordingSaveTask_;
+    QTimer* recordingSaveTimer_ = nullptr;
 
     /// @brief The filter preview's own looping engine, created on first use
     ///        with audioDeviceMode_ - see setFilterPreviewEnabled().

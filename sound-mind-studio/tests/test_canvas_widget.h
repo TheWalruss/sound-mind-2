@@ -111,4 +111,6 @@ private slots:
     void aPitchOverlayIsDrawnOverTheCanvas();
     void aLoudnessOverlayIsDrawnOverTheCanvas();
     void aStereoOverlayIsDrawnOverTheCanvas();
+    void theSoundFlowerIsProjectedOnceUntilSomethingChanges();
+    void anOverrideFrameIsProjectedOncePerFrame();
 };

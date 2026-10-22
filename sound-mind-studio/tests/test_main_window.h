@@ -189,6 +189,7 @@ private slots:
     void paintingWithRepeatOffAndReviewScopeStartsAOneShotPlaybackAutomatically();
 
     // Basic Painting (v0.Y.24.1)
+    void deltaPlaybackIsPreparedInTheBackgroundAndTheLatestEditWins();
     void paintModeIsOffByDefault();
     void toolDropdownDefaultsToPanAndItsLabelSaysSo();
     void setPaintModeEnabledTogglesTheCanvasToolMode();
@@ -322,6 +323,7 @@ private slots:
     void decimalSeparatorMenuSetsTheProjectSettingAndEveryNumericField();
     void imageModeFitsTheCanvasWithSquareCells();
     void commitRecordingAddsANamedRecordedLayer();
+    void commitRecordingAsyncSavesTheTakeInTheBackground();
     void commitRecordingOverwritesTheChosenRecordedLayerUndoably();
     void filterPreviewLoopsARenderOfThePanelConfiguration();
     void filterPreviewRerendersAfterAnEditKeepingItsLength();

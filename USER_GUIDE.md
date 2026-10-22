@@ -1890,7 +1890,10 @@ The **Scope** drop-down decides how an edit affects playback, and
 - **Delta** - painting (or any other edit) jumps playback to whatever you
   just edited and plays through just that region - automatically, even if
   nothing was playing yet and even with **Repeat** unchecked, so you hear
-  a fresh brush stroke immediately without pressing Play yourself. With
+  a fresh brush stroke without pressing Play yourself. The sound is
+  prepared in the background, so you can keep painting; it starts a
+  moment later (longer for a big project), and if you edit again before
+  then, you hear the newer edit. With
   **Repeat** checked it then loops that region repeatedly; unchecked, it
   plays through once and stops right there.
 - **Review** - jumps to the edit like Delta (same automatic, no-Play-
@@ -1923,7 +1926,10 @@ recording goes:
 
 Recording captures from the input device chosen in [Configure
 Devices](#configure-devices), encoded the same way an imported file would
-be, the moment you stop. While recording, the playback position bar moves
+be when you stop. That happens in the background - the status bar says
+"Saving the recording..." - and the layer appears when it's done, so a
+long take doesn't freeze the window. New Project, Open Project and
+closing the Studio wait for it, so a take is never lost. While recording, the playback position bar moves
 across the canvas to show how far you've got. That input device (and its
 Gain) can't be changed while recording is in progress.
 
