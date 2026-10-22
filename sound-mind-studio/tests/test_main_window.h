@@ -348,6 +348,8 @@ private slots:
     void analysisOverlaysReachTheCanvas();
     void pitchSpikeFilterIsRemembered();
     void mindWaveAndFilterEditsMarkAnalysisAndPlaybackStale();
+    void editingAnUnusedMindWaveLeavesPlaybackAndAnalysisAlone();
+    void editingAMindWaveReRendersTheStrokesBoundToIt();
     void pitchVoiceCountReanalyzesAndIsRemembered();
     void canvasMousePositionFeedsThePitchReadout();
 };

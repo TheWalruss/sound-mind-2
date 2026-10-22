@@ -1,5 +1,9 @@
 #pragma once
 
+#include <map>
+#include <string>
+
+#include <QImage>
 #include <QObject>
 #include <QString>
 
@@ -191,6 +195,13 @@ signals:
     ///        `MainWindow`'s own cue to mark `hasUnsavedChanges()`.
     void mindWavesChanged();
 
+    /// @brief A MindWave's field changed - edited, drawn, removed, or
+    ///        restored by undo/redo (`v0.1.47.4`) - so whatever uses it
+    ///        must be re-rendered (see `core::mindWaveDependents()`).
+    ///        Emitted before mindWavesChanged().
+    /// @param id The MindWave.
+    void mindWaveEdited(sound_mind::core::MindWaveId id);
+
 private:
     /**
      * @brief Pushes (or clears) the currently selected library entry's own
@@ -263,6 +274,14 @@ private:
     /// @param description What the user did.
     void commit(const QString& description);
     sound_mind::core::Project* project_ = nullptr;
+    /// @brief Each MindWave's panel thumbnail, with the JSON (and canvas
+    ///        size) it was rendered from (`v0.1.47.4`): only a changed
+    ///        MindWave's thumbnail is rendered again, not every one.
+    struct CachedThumbnail {
+        std::string key;  ///< The MindWave's JSON plus the canvas size.
+        QImage image;     ///< Its thumbnail.
+    };
+    std::map<sound_mind::core::MindWaveId, CachedThumbnail> thumbnailCache_;
 };
 
 }  // namespace sound_mind::studio

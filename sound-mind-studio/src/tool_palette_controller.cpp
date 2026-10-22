@@ -261,6 +261,10 @@ void ToolPaletteController::redo() { paintController_->redo(); }
 
 void ToolPaletteController::invalidateContentCaches() { paintController_->invalidateContentCaches(); }
 
+void ToolPaletteController::invalidateContentCache(sound_mind::core::LayerId layer) {
+    paintController_->invalidateContentCache(layer);
+}
+
 void ToolPaletteController::deleteSelection() { pickController_->deleteSelection(); }
 
 void ToolPaletteController::deleteOperations(const std::vector<sound_mind::core::OperationId>& ids,

@@ -81,6 +81,11 @@ public:
      */
     void invalidateContentCaches();
 
+    /// @brief invalidateContentCaches() for one layer (`v0.1.47.4`) - a
+    ///        MindWave its strokes use changed; the others stay cached.
+    /// @param layer The layer.
+    void invalidateContentCache(sound_mind::core::LayerId layer);
+
     /// @brief The tool configuration new strokes are painted with.
     /// @return The configuration currently in effect.
     [[nodiscard]] const sound_mind::core::ToolConfiguration& toolConfiguration() const noexcept {

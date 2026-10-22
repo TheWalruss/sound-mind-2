@@ -2998,6 +2998,36 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
         - background compositing shows the previous picture until the new one arrives;
         - edits during a run end on the newest (compared against a synchronous canvas);
         - a finished stroke stays drawn until its composite arrives.
+275. **Responsiveness pass, installment D: MindWave dependency tracking.** Settled in `v0.1.47.4`, completing the planned steps of roadmap slot `v0.Y.82.4`.
+    - **Before:** any MindWave change, even adding or renaming one, did the same three things:
+      - invalidated every composite (`invalidateCompositeAll()`);
+      - invalidated every layer's paint-replay cache, without rebuilding anything;
+      - dropped prepared playback.
+
+      So bound strokes stayed stale (a real bug), and an unused MindWave still cost a full recomposite. `refreshMindWavesPanel()` also re-evaluated a full-canvas field for every MindWave on each change.
+    - **`core::mindWaveDependents(project, id)` (new, `mind_wave_dependencies.h`):**
+      - Walks each layer's JSON, minus `baseRecipe` (a generated layer's content is baked).
+      - Walks each active operation's JSON, minus pastes (no bindings, large clips).
+      - Uses `jsonRefersToMindWave()`: any key ending in `MindWaveId`/`MindWave` whose value is the id. Every binding follows this convention, so new bindings are found without code changes.
+      - Returns the dependent layers, the painted subset, and the lowest stack index. MindWaves don't reference each other by id (a warp source is embedded), so there's no transitive closure.
+    - **`MindWaveController::mindWaveEdited(id)`:**
+      - New signal, emitted on edit, draw and removal (references stay, and read as unbound).
+      - On a History restore of the MindWaves collection it's emitted for every MindWave, since the entry doesn't say which one changed. `mindWavesChanged()` still follows.
+    - **`MainWindow::handleMindWaveEdited()`:**
+      - Nothing to do if nothing depends on it.
+      - Otherwise it invalidates and replays each painted dependent (`PaintController::invalidateContentCache(layer)`, new; the replay cascades to Mind Grain users), refolds the composite from the lowest dependent, and invalidates playback.
+      - The replays don't trigger Delta/Review (`replayingForMindWave_`), as MindWave edits never did.
+      - The `mindWavesChanged()` handler keeps only the unsaved flag and the History panel.
+    - **Thumbnails:** cached per MindWave, keyed by its JSON and the canvas size, so only a changed MindWave is re-rendered.
+    - **Tests:**
+      - Core `test_mind_wave_dependencies.cpp`, 4 cases:
+        - the key convention;
+        - dependents by opacity, stroke and filter, but not an unrelated binding;
+        - a generated layer's recipe doesn't count;
+        - an undone stroke stops counting.
+      - `MindWaveControllerTest` +1: edit, undo and remove each say which MindWave.
+      - `MainWindowTest` +2: an unused MindWave's edit leaves prepared playback; a tremolo-bound stroke re-renders on edit (failed before: nothing rebuilt it).
+      - `mindWaveAndFilterEditsMarkAnalysisAndPlaybackStale` now binds the MindWave first. It had edited an unused one, which now rightly changes nothing.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

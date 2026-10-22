@@ -241,6 +241,10 @@ public:
     ///        library - see that method's own docs.
     void invalidateContentCaches();
 
+    /// @brief Forwards to `PaintController::invalidateContentCache()`.
+    /// @param layer The layer whose replay cache is stale.
+    void invalidateContentCache(sound_mind::core::LayerId layer);
+
     /// @brief Deletes the currently Picked object - forwards to
     ///        `PickController::deleteSelection()`.
     void deleteSelection();

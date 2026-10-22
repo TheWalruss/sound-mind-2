@@ -13,6 +13,7 @@ private slots:
     void removeMindWaveNoOpsForUnknownId();
     void renameMindWaveToRenamesAndRejectsEmptyNameOrUnknownId();
     void updateMindWaveWritesBackTheGivenWave();
+    void editingRemovingAndUndoingSayWhichMindWaveChanged();
     void updateMindWaveIsUndoableAndRedoable();
     void setDrawnPathSwitchesTypeToDrawnAndCapturesThePathPreservingOtherFields();
     void setDrawnPathWithNoProjectOrUnknownIdIsANoOp();

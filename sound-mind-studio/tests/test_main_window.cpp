@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <numbers>
 #include <optional>
 #include <vector>
 
@@ -7088,6 +7089,11 @@ void MainWindowTest::mindWaveAndFilterEditsMarkAnalysisAndPlaybackStale() {
     controller->load(recordedTone(0.1f));  // as if playback had been prepared.
     QVERIFY(controller->isLoaded());
     const auto& named = window.project()->mindWaves().back();
+    // v0.1.47.4: only a MindWave something uses makes anything stale - bind
+    // it to the recorded layer's opacity first.
+    window.setLayerOpacityMindWave(topmostNonEqualizerLayer(*window.project()).id(), named.id);
+    analyzeNow();
+    controller->load(recordedTone(0.1f));
     sound_mind::core::MindWave edited = named.wave;
     edited.setInverted(!edited.inverted());
     window.updateMindWave(named.id, edited);
@@ -7116,6 +7122,65 @@ void MainWindowTest::mindWaveAndFilterEditsMarkAnalysisAndPlaybackStale() {
 }
 
 // v0.1.40.11
+// v0.1.47.4: editing a MindWave nothing uses redoes nothing - prepared
+// playback and the analysis stay current.
+void MainWindowTest::editingAnUnusedMindWaveLeavesPlaybackAndAnalysisAlone() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.commitRecording(recordedTone(0.5f)));
+    window.addMindWave();
+    auto* controller = window.findChild<sound_mind::studio::PlaybackController*>();
+    controller->load(recordedTone(0.1f));
+    const auto& named = window.project()->mindWaves().back();
+    sound_mind::core::MindWave edited = named.wave;
+    edited.setInverted(!edited.inverted());
+    window.updateMindWave(named.id, edited);
+    QVERIFY(controller->isLoaded());
+}
+
+// v0.1.47.4: a stroke bound to a MindWave is re-rendered when the MindWave
+// changes (it used to wait for something else to rebuild its layer).
+void MainWindowTest::editingAMindWaveReRendersTheStrokesBoundToIt() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    window.addMindWave();
+    const auto waveId = window.project()->mindWaves().back().id;
+    // Always at its baseline: a tremolo at full depth silences the stroke.
+    sound_mind::core::MindWave baseline;
+    baseline.setPeriodicWaveform(sound_mind::core::PeriodicWaveform::Square);
+    baseline.setPeriod(1'000'000.0);
+    baseline.setPhaseRadians(std::numbers::pi_v<double>);
+    window.updateMindWave(waveId, baseline);
+
+    const sound_mind::core::LayerId layer = window.project()->layers().front().id();
+    auto tool = std::make_unique<sound_mind::core::InstrumentConfiguration>();
+    tool->setHarmonicStrengths({1.0});
+    tool->setSize(0.05);
+    auto stop = tool->defaultGradient().stops().front();
+    stop.leftIntensity = -10.0f;
+    stop.rightIntensity = -10.0f;
+    stop.leftOpacity = 1.0f;
+    stop.rightOpacity = 1.0f;
+    tool->defaultGradient().setStopValues(0, stop);
+    tool->defaultGradient().setStopValues(1, stop);
+    tool->setTremoloDepth(1.0);
+    tool->setTremoloMindWave(waveId);
+    sound_mind::core::Path path;
+    sound_mind::core::PathNode a;
+    a.anchor = sound_mind::core::TimeFrequencyPoint{0.3, 500.0};
+    path.addNode(a);
+    path.gradient() = tool->defaultGradient();
+    auto& log = const_cast<sound_mind::core::Project*>(window.project())->operationLog();
+    log.append(std::make_unique<sound_mind::core::PaintOperation>(log.reserveId(), layer, path, std::move(tool)));
+    window.findChild<sound_mind::studio::ToolPaletteController*>()->rebuildLayerContent(layer);
+    const auto silenced = window.project()->layers().front().content()->leftMagnitudeDb;
+
+    sound_mind::core::MindWave ceiling = baseline;
+    ceiling.setPhaseRadians(0.0);  // baseline -> ceiling: the stroke sounds.
+    window.updateMindWave(waveId, ceiling);
+    QVERIFY(window.project()->layers().front().content()->leftMagnitudeDb != silenced);
+}
+
 void MainWindowTest::pitchVoiceCountReanalyzesAndIsRemembered() {
     {
         TestMainWindow window;

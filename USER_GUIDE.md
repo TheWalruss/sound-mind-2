@@ -2386,6 +2386,10 @@ genuinely cost more than others. None of this is a setting you need to
 tune up front - it's here for when something feels slower than
 expected, so you know what's actually driving it.
 
+- **MindWave edits redo only what uses them**: changing a MindWave
+  re-renders just the layers bound to it (through opacity, a filter
+  setting or a stroke). A MindWave nothing uses can be tweaked freely
+  without disturbing playback.
 - **The canvas never waits for an edit.** After an edit, the new picture
   is made in the background while the window stays responsive: you see
   the previous picture (and the stroke you just drew) until the new one

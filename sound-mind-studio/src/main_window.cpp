@@ -16,6 +16,7 @@
 #include <string>
 
 #include <QRegularExpression>
+#include <QScopedValueRollback>
 #include <QThread>
 #include <QProgressDialog>
 #include <QApplication>
@@ -72,6 +73,7 @@
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/project_export.h"
 #include "sound_mind/core/mind_grain.h"
+#include "sound_mind/core/mind_wave_dependencies.h"
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/project_settings.h"
@@ -817,35 +819,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
                                                   toolConfigurationPanel_, canvas_, &history_, this);
     connect(mindWaveController_, &MindWaveController::mindWavesChanged, this, [this]() {
         hasUnsavedChanges_ = true;
-        // v0.Y.49.1 (Macro Mode) Installment B - updateMindWave() now
-        // commits a History entry, so the History Panel needs to
-        // reflect it too, the same reasoning layerController_'s own
-        // layersChanged() connection already gives.
+        // updateMindWave() commits a History entry, so the History Panel
+        // needs to reflect it too (v0.Y.49.1 Installment B).
         refreshHistoryPanel();
-        // v0.1.7.1 (docs/sound-mind-roadmap.md's targeted-invalidation
-        // raster cache) - a MindWave's own value can feed any number of
-        // layers' opacity or Filter layers' own parameters, with nothing
-        // here tracking which, so a coarse "everything's stale" is this
-        // cache's own deliberate answer for this one case - see
-        // CanvasWidget::invalidateCompositeAll()'s own docs. Also fixes a
-        // real, if minor, pre-existing gap: before this cache existed,
-        // nothing here ever told the canvas to actually repaint after a
-        // MindWave edit either - only some *other*, unrelated repaint
-        // happened to make a bound layer's updated field visible.
-        canvas_->invalidateCompositeAll();
-        // v0.1.8.1 (docs/sound-mind-roadmap.md's within-a-layer operation-
-        // replay cache) - the same coarse reasoning as the composite
-        // invalidation just above, extended to a layer's own painted
-        // content: an InstrumentConfiguration's vibrato/tremolo, or a
-        // FilterOperation's own bound parameter, might be using this
-        // MindWave too, with nothing here tracking which layer's paint
-        // history actually does.
-        toolPaletteController_->invalidateContentCaches();
-        // v0.1.40.10: a MindWave can drive any layer's gain or any filter
-        // parameter, so prepared playback no longer matches the project
-        // (which also marks the analysis out of date - see invalidated()).
-        playbackController_->invalidate();
     });
+    // v0.1.47.4: only what uses the edited MindWave is redone.
+    connect(mindWaveController_, &MindWaveController::mindWaveEdited, this, &MainWindow::handleMindWaveEdited);
 
     // The Resource Browser panel's own Project reads/mutations
     // (docs/sound-mind-roadmap.md's v0.Y.57.1 Installment C) - see its own
@@ -5474,8 +5453,31 @@ void MainWindow::pollTestInputLevel() {
     landingPage_->deviceConfiguration()->setInputLevel(level);
 }
 
-void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer) {
+void MainWindow::handleMindWaveEdited(sound_mind::core::MindWaveId id) {
     if (!project_) {
+        return;
+    }
+    const sound_mind::core::MindWaveDependents dependents = sound_mind::core::mindWaveDependents(*project_, id);
+    if (dependents.layers.empty()) {
+        return;  // nothing seen or heard uses it.
+    }
+    {
+        const QScopedValueRollback<bool> replaying(replayingForMindWave_, true);
+        for (const sound_mind::core::LayerId layer : dependents.paintedLayers) {
+            // Strokes resolve their MindWaves live, so their replay cache is
+            // stale; replaying refreshes the layer (and its Mind Grain users).
+            toolPaletteController_->invalidateContentCache(layer);
+            toolPaletteController_->rebuildLayerContent(layer);
+        }
+    }
+    canvas_->invalidateCompositeFrom(*dependents.lowestStackIndex);
+    // Prepared playback no longer matches (which also marks the analysis
+    // out of date - see PlaybackController::invalidated()).
+    playbackController_->invalidate();
+}
+
+void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer) {
+    if (!project_ || replayingForMindWave_) {
         return;
     }
     // Repeat ON only reacts to an edit while a session is already playing -

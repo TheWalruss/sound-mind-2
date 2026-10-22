@@ -81,6 +81,13 @@ MindWaveController::MindWaveController(MindWavesPanel* mindWavesPanel, LayersPan
     if (history_ != nullptr) {
         connect(history_, &ProjectHistory::changed, this, [this](const sound_mind::core::HistoryChange& change) {
             if (change.resources.contains("mindWaves") || change.resources.contains("resonanceProfiles")) {
+                if (project_ != nullptr && change.resources.contains("mindWaves")) {
+                    // Which one changed isn't recorded; what depends on each
+                    // decides what gets redone (v0.1.47.4).
+                    for (const NamedMindWave& entry : project_->mindWaves()) {
+                        emit mindWaveEdited(entry.id);
+                    }
+                }
                 emit mindWavesChanged();
                 refreshMindWavesPanel();
             }
@@ -157,13 +164,23 @@ void MindWaveController::refreshMindWavesPanel() {
             // layer's own thumbnail - see renderLayerThumbnail()'s own
             // docs). Computed once per entry, reused by both panels
             // rather than each recomputing its own copy.
-            const auto field =
-                sound_mind::core::evaluateMindWaveField(entry.wave, config, project_->settings().canvasWidth);
-            const auto grayscale =
-                sound_mind::codec::toGrayscaleImage(field, project_->settings().canvasWidth, config.binCount);
-            const auto downsampled =
-                sound_mind::codec::downsampleAveraged(grayscale, kMindWavePreviewWidth, kMindWavePreviewHeight);
-            previewImages[entry.id] = toQImageView(downsampled).copy();
+            // Rendered again only when this MindWave (or the canvas size)
+            // changed (v0.1.47.4): every edit refreshes this panel, and a
+            // full-canvas field per MindWave was most of its cost.
+            const std::string key = nlohmann::json(entry.wave).dump() + "@" +
+                                    std::to_string(project_->settings().canvasWidth) + "x" +
+                                    std::to_string(config.binCount);
+            CachedThumbnail& cached = thumbnailCache_[entry.id];
+            if (cached.key != key || cached.image.isNull()) {
+                const auto field =
+                    sound_mind::core::evaluateMindWaveField(entry.wave, config, project_->settings().canvasWidth);
+                const auto grayscale =
+                    sound_mind::codec::toGrayscaleImage(field, project_->settings().canvasWidth, config.binCount);
+                const auto downsampled =
+                    sound_mind::codec::downsampleAveraged(grayscale, kMindWavePreviewWidth, kMindWavePreviewHeight);
+                cached = CachedThumbnail{key, toQImageView(downsampled).copy()};
+            }
+            previewImages[entry.id] = cached.image;
         }
     }
     mindWavesPanel_->setMindWaves(rows);
@@ -195,7 +212,9 @@ void MindWaveController::removeMindWave(MindWaveId id) {
     if (project_ == nullptr || !project_->removeMindWave(id)) {
         return;
     }
+    thumbnailCache_.erase(id);
     commit(tr("Removed MindWave"));
+    emit mindWaveEdited(id);  // what was bound to it now reads it as unbound.
     emit mindWavesChanged();
     refreshMindWavesPanel();
 }
@@ -233,6 +252,7 @@ void MindWaveController::applyMindWaveTo(MindWaveId id, const MindWave& wave) {
         return;
     }
     entry->wave = wave;
+    emit mindWaveEdited(id);
     emit mindWavesChanged();
     refreshMindWavesPanel();
 }
@@ -248,6 +268,7 @@ void MindWaveController::setDrawnPath(MindWaveId id, const sound_mind::core::Pat
     entry->wave.setType(sound_mind::core::GeneratorType::Drawn);
     entry->wave.setDrawnPath(path);
     commit(tr("Drew MindWave"));
+    emit mindWaveEdited(id);
     emit mindWavesChanged();
     refreshMindWavesPanel();
 }

@@ -3542,6 +3542,18 @@ private:
     void handleContentChangedForPlayback(sound_mind::core::LayerId layer);
 
     /**
+     * @brief Re-renders what MindWave `id` affects, and only that
+     *        (`v0.1.47.4`; it used to invalidate every layer's composite and
+     *        paint cache): replays the strokes bound to it, refolds the
+     *        composite from the lowest dependent layer up, and marks
+     *        prepared playback stale - nothing at all if nothing uses it.
+     *        The replays don't trigger Delta/Review playback, as MindWave
+     *        edits never have.
+     * @param id The MindWave that changed.
+     */
+    void handleMindWaveEdited(sound_mind::core::MindWaveId id);
+
+    /**
      * @brief Pushes `repeatRangeStartSeconds_`/`repeatRangeEndSeconds_`/
      *        `repeatLoopBackSeconds_`/`repeatEnabled_` down into
      *        `playbackController_`'s own `PlaybackEngine`, so a loop-back
@@ -4144,6 +4156,9 @@ private:
 
     /// @brief A change arrived while refreshJob_ was running.
     bool refreshDirty_ = false;
+    /// @brief Set while handleMindWaveEdited() replays strokes, so those
+    ///        replays don't start Delta/Review playback.
+    bool replayingForMindWave_ = false;
     /// @brief Another edit arrived while editPlaybackJob_ was running.
     bool editPlaybackDirty_ = false;
     /// @brief The edited region applyEditPlayback() positions playback on.

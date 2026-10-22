@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.47.4] - 2026-10-22
+
+Roadmap slot `v0.Y.82.4` (responsiveness and modularity), installment D - completes the slot's planned steps.
+
+### Changed
+
+- **Editing a MindWave only redoes what uses it.** Tweaking a MindWave used to recompute every layer and throw away prepared playback; now only the layers bound to it (by opacity, a filter setting, or a stroke) are redone, and a MindWave nothing uses changes nothing. The MindWaves panel also no longer redraws every MindWave's thumbnail on each change - only the one you edited.
+
+### Fixed
+
+- **Strokes bound to a MindWave now follow it at once.** A stroke whose size, opacity, colour, vibrato or tremolo is bound to a MindWave kept its old look after the MindWave was edited, until something else redrew its layer.
+
 ## [0.1.47.3] - 2026-10-22
 
 Roadmap slot `v0.Y.82.4` (responsiveness and modularity), installment C.

@@ -48,6 +48,12 @@ void PaintController::invalidateContentCaches() {
     }
 }
 
+void PaintController::invalidateContentCache(sound_mind::core::LayerId layer) {
+    if (const auto it = contentCache_.find(layer); it != contentCache_.end()) {
+        it->second.invalidateAll();
+    }
+}
+
 void PaintController::beginStroke(sound_mind::core::LayerId targetLayer, sound_mind::core::TimeFrequencyPoint point) {
     if (project_ == nullptr || strokeInProgress_ || !canPaintOn(targetLayer)) {
         return;

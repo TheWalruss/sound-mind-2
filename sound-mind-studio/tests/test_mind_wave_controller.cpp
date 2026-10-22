@@ -152,6 +152,28 @@ void MindWaveControllerTest::updateMindWaveWritesBackTheGivenWave() {
     QCOMPARE(project.mindWaves().front().wave.period(), 5.0);
 }
 
+// v0.1.47.4: says which MindWave changed, so only its users are redone.
+void MindWaveControllerTest::editingRemovingAndUndoingSayWhichMindWaveChanged() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    fixture.controller.addMindWave();
+    const MindWaveId id = project.mindWaves().front().id;
+    QSignalSpy edited(&fixture.controller, &MindWaveController::mindWaveEdited);
+
+    MindWave wave;
+    wave.setPeriod(5.0);
+    fixture.controller.updateMindWave(id, wave);
+    QCOMPARE(edited.count(), 1);
+    QCOMPARE(edited.at(0).at(0).value<MindWaveId>(), id);
+
+    fixture.undoStack.undo();  // restored by History: every MindWave is re-checked.
+    QCOMPARE(edited.count(), 2);
+
+    fixture.controller.removeMindWave(id);
+    QCOMPARE(edited.last().at(0).value<MindWaveId>(), id);
+}
+
 void MindWaveControllerTest::updateMindWaveIsUndoableAndRedoable() {
     // v0.Y.49.1 made MindWave edits undoable; since v0.1.43.1 they're
     // History entries like any other edit.
