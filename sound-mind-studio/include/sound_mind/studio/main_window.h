@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include <cstddef>
 #include <filesystem>
 #include <functional>
@@ -49,6 +51,7 @@
 #include "sound_mind/studio/tool_palette_controller.h"
 #include "sound_mind/studio/project_history.h"
 #include "sound_mind/studio/remaster.h"
+#include "sound_mind/codec/video_options.h"
 #include "sound_mind/core/macro_renderer.h"
 
 class QAction;
@@ -2986,9 +2989,10 @@ public:
     bool exportCompositeVideoNow(const std::filesystem::path& path, QString* errorMessage = nullptr);
 
     /**
-     * @brief Starts an asynchronous MP4 video export of the whole project -
-     *        the real work behind the interactive exportVideo() slot, split
-     *        out so tests can drive it without a `QFileDialog`.
+     * @brief Starts an asynchronous video export of the whole project - the
+     *        real work behind the interactive exportVideo() slot (whose
+     *        `VideoExportDialog` chooses the options), split out so tests can
+     *        drive it without a dialog.
      *
      * Checks synchronously that some visible, unmuted, non-filter layer has
      * content (otherwise `QMessageBox::critical()`, nothing started). Then a
@@ -3000,13 +3004,28 @@ public:
      *
      * Returns once the task has started - see isExportRunning()/
      * cancelExport(). An internal `QTimer` polls for completion: success
-     * shows a status bar message naming the destination; cancellation
-     * (during compositing or encoding) removes the partial file and says
-     * so; a genuine failure shows `QMessageBox::critical()`.
+     * shows a status bar message naming the destination (and opens the
+     * file if asked); cancellation (during compositing or encoding)
+     * removes the partial file and says so; a genuine failure shows
+     * `QMessageBox::critical()`. While it runs, the status bar shows the
+     * percentage done (`v0.1.45.1`).
      *
      * @param path Destination path.
+     * @param options Format, size, frame rate, animation, playhead, polar.
+     * @param openWhenDone Open the file in the system's player when done.
      */
-    void exportCompositeVideoAsync(const std::filesystem::path& path);
+    void exportCompositeVideoAsync(const std::filesystem::path& path,
+                                   const sound_mind::codec::VideoExportOptions& options = {},
+                                   bool openWhenDone = false);
+
+    /**
+     * @brief Where an exported video goes by default: beside the project
+     *        file, named after it plus `suffix`, with characters Windows
+     *        doesn't allow in file names replaced.
+     * @param suffix Appended to the project's name ("_export").
+     * @return The path (`.mp4`; the export dialog fixes the extension).
+     */
+    [[nodiscard]] std::filesystem::path suggestedVideoPath(const QString& suffix) const;
 
     /**
      * @brief Starts an asynchronous compressed-audio export of the whole
@@ -3034,8 +3053,12 @@ public:
      *        and cancel button). The open project is never touched.
      * @param path Destination path.
      * @param id The Macro.
+     * @param options Format, size, frame rate, animation, playhead, polar
+     *        (`v0.1.45.1`).
+     * @param openWhenDone Open the file when done.
      */
-    void exportMacroVideoAsync(const std::filesystem::path& path, sound_mind::core::MacroId id);
+    void exportMacroVideoAsync(const std::filesystem::path& path, sound_mind::core::MacroId id,
+                               const sound_mind::codec::VideoExportOptions& options = {}, bool openWhenDone = false);
 
     /**
      * @brief A renderer for a recorded Macro, set up on the UI thread with
@@ -4214,6 +4237,13 @@ private:
     /// writing to - pollExportProgress()'s own docs on why this is deleted
     /// rather than kept on cancellation.
     std::filesystem::path exportPath_;
+
+    /// @brief How far the running video export is, `0` to `1` - written by
+    ///        its worker, shown by pollExportProgress() (`v0.1.45.1`).
+    std::atomic<double> exportProgress_{0.0};
+
+    /// @brief Whether to open the running video export's file when done.
+    bool exportOpenWhenDone_ = false;
 
     /// @brief exportTask_'s own work function's outcome, written just
     /// before it returns and read by pollExportProgress() only after

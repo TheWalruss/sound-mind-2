@@ -8,6 +8,7 @@
 #include "sound_mind/codec/audio_buffer.h"
 #include "sound_mind/codec/audio_export.h"
 #include "sound_mind/codec/rgb_image.h"
+#include "sound_mind/codec/video_options.h"
 #include "sound_mind/core/project.h"
 
 namespace sound_mind::core {
@@ -66,14 +67,15 @@ bool exportProjectAudio(const Project& project, const std::filesystem::path& pat
                         std::optional<float> limiterCeilingDb = kDefaultLimiterCeilingDb);
 
 /**
- * @brief Exports the whole project as an MP4 video: the composite canvas
+ * @brief Exports the whole project as a video: the composite canvas
  *        animated with a playhead synced to the composite audio (see
- *        renderProjectForExport()).
+ *        renderProjectForExport()), in the format, size and animation
+ *        `options` ask for (`v0.1.45.1`).
  *
  * @param project The project to export.
  * @param path Destination path.
- * @param frameRate Video frame rate, in frames per second - see
- *        `sound_mind::codec::exportVideo()`.
+ * @param options Format, size, frame rate, animation, playhead, polar - see
+ *        `sound_mind::codec::VideoExportOptions`.
  * @param shouldCancel Consulted while compositing and while encoding.
  * @param limiterCeilingDb Runs the audio through the master limiter at this
  *        ceiling before encoding (`applyMasterLimiter()`, Pre-Beta Plan
@@ -85,9 +87,13 @@ bool exportProjectAudio(const Project& project, const std::filesystem::path& pat
  * @throws CompositeCancelled or sound_mind::codec::ExportCancelled if
  *         `shouldCancel` returns `true` during compositing or encoding
  *         respectively.
+ * @param progress Told the fraction of the video encoded, `0` to `1`;
+ *        may be empty.
  */
-bool exportProjectVideo(const Project& project, const std::filesystem::path& path, int frameRate = 30,
+bool exportProjectVideo(const Project& project, const std::filesystem::path& path,
+                        const sound_mind::codec::VideoExportOptions& options = {},
                         const std::function<bool()>& shouldCancel = nullptr,
-                        std::optional<float> limiterCeilingDb = kDefaultLimiterCeilingDb);
+                        std::optional<float> limiterCeilingDb = kDefaultLimiterCeilingDb,
+                        const std::function<void(double)>& progress = nullptr);
 
 }  // namespace sound_mind::core

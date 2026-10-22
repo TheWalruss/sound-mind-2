@@ -68,6 +68,7 @@ add_executable(sound-mind-studio-tests
     test_tool_palette_controller.cpp
     test_project_history.cpp
     test_remaster.cpp
+    test_video_export_dialog.cpp
     test_waveform_preview_widget.cpp
 )
 

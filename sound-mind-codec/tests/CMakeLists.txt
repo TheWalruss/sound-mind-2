@@ -15,6 +15,7 @@ add_executable(sound-mind-codec-tests
     test_audio_export.cpp
     test_audio_file.cpp
     test_video_export.cpp
+    test_video_frame_renderer.cpp
 )
 
 target_include_directories(sound-mind-codec-tests

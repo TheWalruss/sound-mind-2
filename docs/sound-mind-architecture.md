@@ -393,7 +393,7 @@ Text pastes replay from their `TextSource`. They depend on the font being instal
   - between consecutive events, composites the project once and renders the canvas image and the audio for the playhead span the segment covers, following wraps and seeks;
   - emits segments (image, audio, start and duration).
 
-  Two consumers: the video encoder (the existing `exportSegmentedVideo()`, with the playhead taken from the playhead track instead of sweeping linearly) and the Studio's Play Macro. Play Macro renders ahead and starts when a buffer threshold is reached, then plays the segment audio continuously while showing the segment images.
+  Two consumers: the video encoder (`StreamedVideoWriter`, with the playhead taken from the playhead track instead of sweeping linearly; `exportSegmentedVideo()` was removed in `v0.1.45.1`, Decision #270) and the Studio's Play Macro. Play Macro renders ahead and starts when a buffer threshold is reached, then plays the segment audio continuously while showing the segment images.
 - **User decisions (2026-10-21):**
   - changes appear at commit, with no progressive stroke drawing and no viewport following;
   - dragged controls record only their final value;
@@ -2835,6 +2835,65 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **Tests:**
       - core `test_playback_engine.cpp` +2: a stream plays only what was appended, waiting silently with position held, and drops overflow; loading ordinary audio makes it all available.
       - Studio `MacroPlayerTest`, 5 cases: starts once buffered and shows rendered frames; stop clears the canvas and signals; reaching the end finishes; a render failure is reported; the project is never touched.
+270. **Video export overhaul, modelled on the legacy Studio.** Settled in `v0.1.45.1`, roadmap slot `v0.Y.82.2`. User request: "review and improve the video export functionality ... the legacy version ... was excellent".
+    - **Review:** before this, both video exports were MPEG-4 Part 2 only, at the canvas's own size, 30 fps, the whole canvas with a thin line playhead, with no dialog (only a save-file prompt), and only "Exporting video..." without progress. The legacy Studio (`dialogs/video_export_dialog.py`, `views/video_renderer.py`, `workers/video_export_worker.py`) offered formats, resolution presets including vertical and square ones, frame rate, quality, Whole/Scrolling animation with a window length, a polar ray or turning flower, letterboxing, a shadowed yellow playhead, open-when-done and percentage progress. All of that is rebuilt here except WebM/VP9 and the retry button.
+    - **`codec::VideoExportOptions` (`video_options.h`):** codec, quality, width/height (0 = the canvas's size, rounded up to even), frame rate, animation, window seconds, show playhead, polar.
+      - **Codecs.** x264/x265 are GPL, so they aren't used. H.264 and HEVC go through FFmpeg's `h264_mf`/`hevc_mf`, Windows' Media Foundation encoders, which the vcpkg FFmpeg already enables and which keep the LGPL. `prores_ks` and `mpeg4` are FFmpeg-native. VP9 would need libvpx, a new dependency, so it isn't offered.
+      - `availableVideoCodecs()` probes each encoder once (`std::call_once`) by opening it at a small size, **on a worker thread**: the MF encoders initialize COM themselves, and doing so on the Qt GUI thread's apartment fails. On this Arm64 machine: H.264, ProRes and MPEG-4 are available; HEVC isn't.
+      - `preferredVideoCodec()` is H.264 when available, else MPEG-4. `videoFileExtension()` is `mov` for ProRes, `mp4` otherwise.
+      - **Encoder settings:**
+        - MF encoders: a bit rate of bits-per-pixel × w × h × fps (0.065/0.13/0.26 for Low/Medium/High; HEVC ×0.6), tagged `hvc1` for HEVC.
+        - `mpeg4`: qscale 6/3/2.
+        - ProRes: profile LT/Standard/HQ, `yuv422p10le`, with PCM audio in a MOV. The other formats use AAC 256k in an MP4.
+        - GOP 2 s, no B-frames.
+    - **`codec::VideoFrameRenderer`** (new) renders one output frame from the canvas and the playhead fraction (or none):
+      - **Letterbox:** fit inside, keeping the aspect ratio; scaled by swscale, area when shrinking, bicubic otherwise.
+      - **Whole:** the scaled canvas is computed once per `setCanvas()`; the playhead is drawn at `round(fraction × (fitWidth − 1))`.
+      - **Scrolling:** a window of `round(windowSeconds / projectSeconds × W)` columns, starting at `round(fraction × (W − window))`. The playhead crosses the window at the same fraction, reaching the end together.
+      - **Polar whole:** `rectToPolar()` once, with a ray at angle fraction × 2π, clockwise from twelve o'clock.
+      - **Polar scrolling:** the flower turned by the playhead's angle under a fixed ray at twelve o'clock. `rectToPolar()`'s per-pixel mapping is precomputed once, and each frame samples it bilinearly with the column offset by `fraction × W`, wrapping round, using `parallelFor` over rows. Calling `rectToPolar()` on a shifted canvas every frame cost 205.8 s for 20 s of 1080p; the precomputed mapping takes 27.0 s, about 7.6x faster (debug build).
+      - **Playhead:** the legacy's (255, 220, 60) yellow, `max(1, round(height / 540))` pixels thick, with a one-pixel dark shadow each side. The polar ray has a shadow pass 2 pixels wider.
+    - **`codec::StreamedVideoWriter`** takes the options and project length, and renders through the renderer; `setShouldCancel()` is checked per frame.
+      - `exportVideo(path, canvas, audio, options, shouldCancel, progress)` drives it one second at a time, reporting progress.
+      - **`exportSegmentedVideo()` is removed.** Its only remaining use was `exportVideo()` itself, and the streamed writer, which `exportMacroVideo()` already used, replaces it.
+      - `core::exportProjectVideo()` and `core::exportMacroVideo()` take the options.
+    - **Studio `VideoExportDialog`:**
+      - Output path with Browse; only the available formats; 9 resolution presets (the legacy's list, plus "Canvas size" and Custom).
+      - fps, quality, Whole/Scrolling with the window length, show playhead, a polar banner when the view is polar, open when done.
+      - It checks the folder is writable on accept, and remembers its choices in the app's ini `QSettings`, group `videoExport`.
+      - Export Video and Export Macro Video both use it.
+      - `MainWindow` keeps `exportProgress_` (atomic) for the status bar's percentage and opens the file through `QDesktopServices` when asked.
+    - **Timings** (debug build, Arm64, 20 s of 1080p H.264 from a 2048×512 canvas):
+
+      | Mode | Time | Speed |
+      |---|---|---|
+      | Whole | 4.4 s | 4.5x realtime |
+      | Polar whole | 11.2 s | 1.8x realtime |
+      | Scrolling | 8.1 s | 2.5x realtime |
+      | Polar scrolling | 27.0 s | 0.7x realtime |
+
+      Scaling a fresh window every frame dominates scrolling. Release builds are several times faster. A GPU path isn't warranted at these speeds.
+    - **Tests:**
+      - Codec `test_video_frame_renderer.cpp`, 8 cases:
+        - size rounding;
+        - letterbox;
+        - sweep, shadow and hidden playhead;
+        - thickness;
+        - scrolling pan;
+        - polar ray;
+        - polar scrolling;
+        - errors.
+      - Codec `test_video_export.cpp`: the segmented cases are gone, and 4 new cases cover:
+        - availability and extensions;
+        - every available format writing the right video and audio codecs;
+        - progress reaching 1.0;
+        - an unavailable format refused.
+      - Studio `VideoExportDialogTest`, 5 cases:
+        - available formats, with H.264 preferred;
+        - the extension following the format;
+        - presets, canvas size and custom size;
+        - scrolling and the polar banner;
+        - choices remembered.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

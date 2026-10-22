@@ -137,7 +137,9 @@ TEST_CASE("exportProjectVideo writes a real file for a project with content", "[
     addToneLayer(project, 1000.0f);
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-project-export.mp4";
 
-    const bool exported = exportProjectVideo(project, path, /*frameRate=*/24);
+    sound_mind::codec::VideoExportOptions options;
+    options.frameRate = 24;
+    const bool exported = exportProjectVideo(project, path, options);
     const bool exists = std::filesystem::exists(path);
     std::filesystem::remove(path);
 

@@ -181,8 +181,9 @@ std::optional<MacroSegment> MacroRenderer::next(std::string* error) {
     return segment;
 }
 
-bool exportMacroVideo(MacroRenderer& renderer, const std::filesystem::path& path, int frameRate,
-                      const std::function<void(double)>& progress, std::string* error) {
+bool exportMacroVideo(MacroRenderer& renderer, const std::filesystem::path& path,
+                      const sound_mind::codec::VideoExportOptions& options, const std::function<void(double)>& progress,
+                      std::string* error) {
     std::unique_ptr<sound_mind::codec::StreamedVideoWriter> writer;
     const double projectSeconds = renderer.projectSeconds();
     const Macro& macro = renderer.macro();
@@ -196,7 +197,8 @@ bool exportMacroVideo(MacroRenderer& renderer, const std::filesystem::path& path
         while (auto segment = renderer.next(error)) {
             if (!writer) {
                 writer = std::make_unique<sound_mind::codec::StreamedVideoWriter>(
-                    path, segment->canvas.width, segment->canvas.height, segment->audio.sampleRateHz, frameRate);
+                    path, segment->canvas.width, segment->canvas.height, projectSeconds, segment->audio.sampleRateHz,
+                    options);
             }
             writer->addVideo(segment->canvas, segment->durationSeconds, playheadAt);
             writer->addAudio(segment->audio);

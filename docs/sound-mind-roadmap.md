@@ -1195,7 +1195,8 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.80.3` | Licensing and beta groundwork (inserted 2026-10-21) | `0.1.42.1` (follow-up `0.1.42.2`: Microsoft Store MSIX) | #260, #261 |
 | `v0.Y.81.1` | History: every action recorded, sources in the project, Remaster (redesigned 2026-10-21) | `0.1.43.1`-`0.1.43.4` | #262-#266 |
 | `v0.Y.82.1` | Macros: record, play and export a performance (redesigned 2026-10-21) | `0.1.44.1`-`0.1.44.3` | #262, #267-#269 |
-| - | Beta readiness check | *(after `v0.Y.82.1`)* | |
+| `v0.Y.82.2` | Video export overhaul, modelled on the legacy Studio (inserted 2026-10-22) | `0.1.45.1` | #270 |
+| - | Beta readiness check | *(after `v0.Y.82.2`)* | |
 
 **Standing decision (2026-10-15): disregard file-format and backward-compatibility concerns completely until after Beta.** Old projects don't need to keep loading, so there are no lenient-read shims, migration paths or load-time notices for changes made before Beta. This overrides the usual "ask on file-format compatibility" stance for this period only.
 
@@ -1441,6 +1442,14 @@ Replaces the `v0.1.2.x` Macro implementation. **Depends on `v0.Y.81.1`.**
   - Render ahead, start once buffered, seamless playback showing the rendered canvas.
   - Cancellable; the live project is untouched.
 - **Not planned:** a Macro timeline editor, progressive stroke drawing, viewport following, and gesture automation (see Decision #262).
+
+#### ✅ `v0.Y.82.2` - Video export overhaul (S) - inserted 2026-10-22; settled in `v0.1.45.1`, Decision #270
+
+User request (2026-10-22): review and improve video export, taking the legacy Studio's export as the guide.
+- An export dialog for Export Video and Export Macro Video: format, resolution presets, frame rate, quality, Whole/Scrolling animation, show playhead, open when done; choices remembered.
+- The legacy frame rendering: letterboxing, scrolling window, polar ray and turning flower, the yellow shadowed playhead.
+- H.264/HEVC through Windows' Media Foundation encoders (LGPL-safe), ProRes, MPEG-4; percentage progress.
+- **Not planned:** WebM/VP9 (needs libvpx, a new dependency); the legacy's retry button (a failed export is simply started again).
 
 #### Then: Beta readiness check
 

@@ -3,11 +3,14 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <mutex>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 #include "ffmpeg_audio_encoder.h"
 #include "ffmpeg_raii.h"
+#include "sound_mind/codec/video_frame_renderer.h"
 
 namespace sound_mind::codec {
 
@@ -15,37 +18,47 @@ namespace {
 
 using namespace detail;  // NOLINT(google-build-using-namespace) - this file's own ffmpeg detail helpers.
 
-/// @brief Playhead line color (opaque white) - a simple, always-visible
-/// choice regardless of the active color mapping/light-or-dark mode
-/// baked into `canvas` (see exportVideo()'s docs: the canvas itself
-/// already reflects whichever of those was active at export time).
-constexpr std::uint8_t kPlayheadR = 255;
-constexpr std::uint8_t kPlayheadG = 255;
-constexpr std::uint8_t kPlayheadB = 255;
-
-/// @brief Rounds `value` up to the nearest even number - AV_PIX_FMT_YUV420P
-/// (mpeg4's pixel format) needs even width/height, since its chroma planes
-/// are half-resolution.
-std::uint32_t roundUpToEven(std::uint32_t value) { return (value % 2 == 0) ? value : value + 1; }
-
-/// @brief Creates and opens an mpeg4 video encoder sized to `paddedWidth` x
-/// `paddedHeight`, adds its stream to `formatCtx`, and returns the codec
-/// context plus the pixel format it needs frames converted to. Must be
-/// called before avformat_write_header(), matching createAudioEncoder()'s
-/// two-phase split.
+/// @brief An opened video encoder, its muxer stream (if any) and the pixel
+/// format frames must be converted to.
 struct VideoEncoder {
     AVCodecContextPtr codecCtx;
     AVStream* stream = nullptr;
     AVPixelFormat pixelFormat = AV_PIX_FMT_YUV420P;
 };
 
-VideoEncoder createVideoEncoder(AVFormatContext& formatCtx, std::uint32_t paddedWidth, std::uint32_t paddedHeight,
-                                 int frameRate) {
-    const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
-    if (codec == nullptr) {
-        throw std::runtime_error("ffmpeg has no encoder registered for mpeg4");
+/// @brief The FFmpeg encoder for `codec`, or `nullptr` if this build has
+/// none. H.264/HEVC are Windows' Media Foundation encoders - the build is
+/// LGPL, without x264/x265.
+const AVCodec* findVideoEncoder(VideoCodec codec) {
+    switch (codec) {
+        case VideoCodec::H264:
+            return avcodec_find_encoder_by_name("h264_mf");
+        case VideoCodec::Hevc:
+            return avcodec_find_encoder_by_name("hevc_mf");
+        case VideoCodec::ProRes:
+            return avcodec_find_encoder_by_name("prores_ks");
+        case VideoCodec::Mpeg4:
+            return avcodec_find_encoder(AV_CODEC_ID_MPEG4);
     }
+    return nullptr;
+}
 
+/// @brief Data rate per pixel per frame for the Media Foundation encoders,
+/// by quality - 1080p at 30 fps gives about 4, 8 and 16 Mbit/s for H.264.
+double bitsPerPixel(VideoCodec codec, VideoQuality quality) {
+    const double h264 = quality == VideoQuality::Low ? 0.065 : quality == VideoQuality::Medium ? 0.13 : 0.26;
+    return codec == VideoCodec::Hevc ? h264 * 0.6 : h264;
+}
+
+/// @brief Creates and opens a video encoder; with a `formatCtx`, also adds
+/// its stream. Throws if the encoder is missing or won't open (which is how
+/// availableVideoCodecs() probes).
+VideoEncoder createVideoEncoder(AVFormatContext* formatCtx, VideoCodec videoCodec, VideoQuality quality,
+                                std::uint32_t width, std::uint32_t height, int frameRate) {
+    const AVCodec* codec = findVideoEncoder(videoCodec);
+    if (codec == nullptr) {
+        throw std::runtime_error("this video format isn't available on this computer");
+    }
     VideoEncoder encoder;
     encoder.codecCtx.reset(avcodec_alloc_context3(codec));
     if (!encoder.codecCtx) {
@@ -56,219 +69,111 @@ VideoEncoder createVideoEncoder(AVFormatContext& formatCtx, std::uint32_t padded
     const AVPixelFormat* pixFmts = nullptr;
     int numPixFmts = 0;
     checkFfmpeg(avcodec_get_supported_config(&ctx, codec, AV_CODEC_CONFIG_PIX_FORMAT, 0,
-                                              reinterpret_cast<const void**>(&pixFmts), &numPixFmts),
+                                             reinterpret_cast<const void**>(&pixFmts), &numPixFmts),
                 "could not query the encoder's supported pixel formats");
     encoder.pixelFormat = (pixFmts != nullptr && numPixFmts > 0) ? pixFmts[0] : AV_PIX_FMT_YUV420P;
+    if (videoCodec == VideoCodec::ProRes) {
+        encoder.pixelFormat = AV_PIX_FMT_YUV422P10LE;  // ProRes 422.
+    }
 
-    ctx.width = static_cast<int>(paddedWidth);
-    ctx.height = static_cast<int>(paddedHeight);
+    ctx.width = static_cast<int>(width);
+    ctx.height = static_cast<int>(height);
     ctx.pix_fmt = encoder.pixelFormat;
     ctx.time_base = AVRational{1, frameRate};
     ctx.framerate = AVRational{frameRate, 1};
-    ctx.gop_size = 12;      // a keyframe every half-second at 24-30fps: reasonable for a static-canvas-plus-line video.
-    ctx.max_b_frames = 0;   // keeps encode order == display order - simpler, and B-frames buy little here.
-    // A flat data-rate target scaled to resolution and frame rate - generous
-    // enough to keep spectrogram detail legible without hand-tuning per
-    // canvas size; not user-configurable yet (see exportVideo()'s docs).
-    ctx.bit_rate = static_cast<std::int64_t>(paddedWidth) * paddedHeight * frameRate / 6;
+    ctx.gop_size = frameRate * 2;
+    ctx.max_b_frames = 0;  // encode order == display order; B-frames buy little for a mostly static picture.
 
-    if ((formatCtx.oformat->flags & AVFMT_GLOBALHEADER) != 0) {
+    switch (videoCodec) {
+        case VideoCodec::Mpeg4: {
+            // Constant quality: quantizer 6/3/2 (lower is better).
+            const int q = quality == VideoQuality::Low ? 6 : quality == VideoQuality::Medium ? 3 : 2;
+            ctx.flags |= AV_CODEC_FLAG_QSCALE;
+            ctx.global_quality = FF_QP2LAMBDA * q;
+            break;
+        }
+        case VideoCodec::H264:
+        case VideoCodec::Hevc:
+            ctx.bit_rate = static_cast<std::int64_t>(bitsPerPixel(videoCodec, quality) * width * height * frameRate);
+            break;
+        case VideoCodec::ProRes:
+            av_opt_set(ctx.priv_data, "profile",
+                       quality == VideoQuality::Low ? "lt" : quality == VideoQuality::Medium ? "standard" : "hq", 0);
+            break;
+    }
+
+    if (formatCtx != nullptr && (formatCtx->oformat->flags & AVFMT_GLOBALHEADER) != 0) {
         ctx.flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
-
     checkFfmpeg(avcodec_open2(&ctx, codec, nullptr), "could not open the video encoder");
 
-    encoder.stream = avformat_new_stream(&formatCtx, nullptr);
-    if (encoder.stream == nullptr) {
-        throw std::runtime_error("could not create a video stream");
+    if (formatCtx != nullptr) {
+        encoder.stream = avformat_new_stream(formatCtx, nullptr);
+        if (encoder.stream == nullptr) {
+            throw std::runtime_error("could not create a video stream");
+        }
+        checkFfmpeg(avcodec_parameters_from_context(encoder.stream->codecpar, &ctx),
+                    "could not copy video codec parameters to the stream");
+        if (videoCodec == VideoCodec::Hevc) {
+            encoder.stream->codecpar->codec_tag = MKTAG('h', 'v', 'c', '1');  // what Apple players expect.
+        }
+        encoder.stream->time_base = ctx.time_base;
     }
-    checkFfmpeg(avcodec_parameters_from_context(encoder.stream->codecpar, &ctx),
-                "could not copy video codec parameters to the stream");
-    encoder.stream->time_base = ctx.time_base;
-
     return encoder;
-}
-
-/// @brief `canvas`, right/bottom-padded with black pixels to `paddedWidth` x
-/// `paddedHeight` if needed (see roundUpToEven()), as packed RGB24 rows.
-std::vector<std::uint8_t> padCanvasToRgb24(const RgbImage& canvas, std::uint32_t paddedWidth,
-                                            std::uint32_t paddedHeight) {
-    std::vector<std::uint8_t> padded(std::size_t{paddedWidth} * paddedHeight * 3, 0);
-    for (std::uint32_t y = 0; y < canvas.height; ++y) {
-        const auto* srcRow = canvas.pixels.data() + std::size_t{y} * canvas.width * 3;
-        auto* dstRow = padded.data() + std::size_t{y} * paddedWidth * 3;
-        std::copy_n(srcRow, std::size_t{canvas.width} * 3, dstRow);
-    }
-    return padded;
-}
-
-/// @brief Draws the playhead: a 1px-wide vertical line at horizontal
-/// position `x` over `frameRgb24` (packed RGB24, `width` x `height`).
-void drawPlayheadLine(std::vector<std::uint8_t>& frameRgb24, std::uint32_t width, std::uint32_t height,
-                       std::uint32_t x) {
-    if (x >= width) {
-        return;
-    }
-    for (std::uint32_t y = 0; y < height; ++y) {
-        std::uint8_t* pixel = frameRgb24.data() + (std::size_t{y} * width + x) * 3;
-        pixel[0] = kPlayheadR;
-        pixel[1] = kPlayheadG;
-        pixel[2] = kPlayheadB;
-    }
-}
-
-/// @brief Renders every video frame (static canvas + moving playhead line,
-/// see exportVideo()'s docs) through `sws`, encoding+writing each one. The
-/// canvas cuts to `segments[i + 1]`'s own once `playheadSeconds` reaches
-/// its `startTimeSeconds` - see exportSegmentedVideo()'s own docs. A plain
-/// `exportVideo()` call arrives here as a single-element segment list.
-void encodeVideoTrack(AVFormatContext& formatCtx, VideoEncoder& encoder, const std::vector<VideoSegment>& segments,
-                       std::uint32_t paddedWidth, std::uint32_t paddedHeight, double durationSeconds, int frameRate,
-                       const std::function<bool()>& shouldCancel) {
-    AVCodecContext& ctx = *encoder.codecCtx;
-    AVStream& stream = *encoder.stream;
-
-    SwsContextPtr sws(sws_getContext(static_cast<int>(paddedWidth), static_cast<int>(paddedHeight), AV_PIX_FMT_RGB24,
-                                      static_cast<int>(paddedWidth), static_cast<int>(paddedHeight),
-                                      encoder.pixelFormat, SWS_BILINEAR, nullptr, nullptr, nullptr));
-    if (!sws) {
-        throw std::runtime_error("could not create an RGB24->YUV converter");
-    }
-
-    // Every segment's own base frame, padded once up front rather than
-    // per-video-frame - the same "pad once, reuse" optimization the
-    // original single-canvas version already made.
-    std::vector<std::vector<std::uint8_t>> baseFrames;
-    baseFrames.reserve(segments.size());
-    for (const VideoSegment& segment : segments) {
-        baseFrames.push_back(padCanvasToRgb24(segment.canvas, paddedWidth, paddedHeight));
-    }
-
-    const auto totalFrames = static_cast<std::int64_t>(std::ceil(durationSeconds * frameRate));
-    std::size_t activeSegment = 0;
-
-    for (std::int64_t frameIndex = 0; frameIndex < totalFrames; ++frameIndex) {
-        if (shouldCancel && shouldCancel()) {
-            throw ExportCancelled{};
-        }
-
-        const double playheadSeconds = static_cast<double>(frameIndex) / frameRate;
-
-        // Forward-only scan (never resets to 0) - segments are ordered by
-        // their own strictly-increasing startTimeSeconds, so this whole
-        // pass stays O(totalFrames + segments.size()), not O(totalFrames *
-        // segments.size()).
-        while (activeSegment + 1 < segments.size() &&
-               segments[activeSegment + 1].startTimeSeconds <= playheadSeconds) {
-            ++activeSegment;
-        }
-
-        std::vector<std::uint8_t> frameRgb24 = baseFrames[activeSegment];
-
-        // The playhead's own sweep is always relative to the *whole*
-        // video's duration, never reset at a segment boundary - see
-        // exportSegmentedVideo()'s/VideoSegment's own docs.
-        const double playheadFraction =
-            durationSeconds > 0.0 ? std::clamp(playheadSeconds / durationSeconds, 0.0, 1.0) : 0.0;
-        const auto playheadX = static_cast<std::uint32_t>(playheadFraction * paddedWidth);
-        drawPlayheadLine(frameRgb24, paddedWidth, paddedHeight, playheadX);
-
-        AVFramePtr frame(av_frame_alloc());
-        if (!frame) {
-            throw std::runtime_error("could not allocate a video AVFrame");
-        }
-        frame->format = encoder.pixelFormat;
-        frame->width = static_cast<int>(paddedWidth);
-        frame->height = static_cast<int>(paddedHeight);
-        checkFfmpeg(av_frame_get_buffer(frame.get(), 0), "could not allocate a video frame buffer");
-
-        const std::uint8_t* srcSlices[1] = {frameRgb24.data()};
-        const int srcStride[1] = {static_cast<int>(paddedWidth) * 3};
-        checkFfmpeg(sws_scale(sws.get(), srcSlices, srcStride, 0, static_cast<int>(paddedHeight), frame->data,
-                               frame->linesize),
-                    "RGB24->YUV conversion failed");
-
-        frame->pts = frameIndex;
-        encodeFrameAndWritePackets(formatCtx, ctx, stream, frame.get());
-    }
-
-    encodeFrameAndWritePackets(formatCtx, ctx, stream, nullptr);  // flush.
 }
 
 }  // namespace
 
-void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, const AudioBuffer& audio, int frameRate,
-                  const std::function<bool()>& shouldCancel) {
-    exportSegmentedVideo(path, {VideoSegment{canvas, 0.0}}, audio, frameRate, shouldCancel);
+const std::vector<VideoCodec>& availableVideoCodecs() {
+    static std::once_flag once;
+    static std::vector<VideoCodec> available;
+    std::call_once(once, []() {
+        // A thread of its own: Media Foundation initializes COM for itself,
+        // which fails on a thread (like Qt's UI thread) already set up
+        // differently.
+        std::thread probe([]() {
+            for (const VideoCodec codec : {VideoCodec::H264, VideoCodec::Hevc, VideoCodec::ProRes, VideoCodec::Mpeg4}) {
+                try {
+                    (void)createVideoEncoder(nullptr, codec, VideoQuality::Medium, 640, 360, 30);
+                    available.push_back(codec);
+                } catch (const std::exception&) {
+                    // Not on this computer.
+                }
+            }
+        });
+        probe.join();
+    });
+    return available;
 }
 
-void exportSegmentedVideo(const std::filesystem::path& path, const std::vector<VideoSegment>& segments,
-                           const AudioBuffer& audio, int frameRate, const std::function<bool()>& shouldCancel) {
-    if (segments.empty()) {
-        throw std::runtime_error("cannot export video with no segments");
-    }
-    const RgbImage& firstCanvas = segments.front().canvas;
-    if (firstCanvas.width == 0 || firstCanvas.height == 0) {
-        throw std::runtime_error("cannot export video for an empty canvas");
-    }
-    for (const VideoSegment& segment : segments) {
-        if (segment.canvas.width != firstCanvas.width || segment.canvas.height != firstCanvas.height) {
-            throw std::runtime_error("every segment's own canvas must share the same dimensions");
-        }
-    }
-    if (frameRate <= 0) {
-        throw std::runtime_error("frameRate must be positive");
-    }
+bool isVideoCodecAvailable(VideoCodec codec) {
+    const auto& available = availableVideoCodecs();
+    return std::find(available.begin(), available.end(), codec) != available.end();
+}
 
-    const std::uint32_t paddedWidth = roundUpToEven(firstCanvas.width);
-    const std::uint32_t paddedHeight = roundUpToEven(firstCanvas.height);
-    const double durationSeconds =
-        audio.sampleRateHz > 0 ? static_cast<double>(audio.frameCount()) / audio.sampleRateHz : 0.0;
+std::string videoFileExtension(VideoCodec codec) { return codec == VideoCodec::ProRes ? "mov" : "mp4"; }
 
-    AVFormatContext* formatCtxRaw = nullptr;
-    checkFfmpeg(avformat_alloc_output_context2(&formatCtxRaw, nullptr, "mp4", path.string().c_str()),
-                "could not determine an output format for this path");
-    AVFormatContextOutputPtr formatCtx(formatCtxRaw);
-
-    VideoEncoder videoEncoder = createVideoEncoder(*formatCtx, paddedWidth, paddedHeight, frameRate);
-    AudioEncoder audioEncoder = createAudioEncoder(*formatCtx, AV_CODEC_ID_AAC, audio, /*bitRate=*/192000);
-
-    checkFfmpeg(avio_open(&formatCtx->pb, path.string().c_str(), AVIO_FLAG_WRITE),
-                "could not open output file for writing: " + path.string());
-    checkFfmpeg(avformat_write_header(formatCtx.get(), nullptr), "could not write the MP4 file header");
-
-    // Muxer order doesn't need to match temporal order - av_interleaved_write_frame()
-    // (used by both encode*Track() helpers) buffers and reorders packets across
-    // streams by dts as needed, so encoding the whole video track and then the
-    // whole audio track is just as correct as interleaving them here, and simpler.
-    encodeVideoTrack(*formatCtx, videoEncoder, segments, paddedWidth, paddedHeight, durationSeconds, frameRate,
-                      shouldCancel);
-    encodeAudioTrack(*formatCtx, audioEncoder, audio, shouldCancel);
-
-    checkFfmpeg(av_write_trailer(formatCtx.get()), "could not finalize the MP4 file");
+VideoCodec preferredVideoCodec() {
+    return isVideoCodecAvailable(VideoCodec::H264) ? VideoCodec::H264 : VideoCodec::Mpeg4;
 }
 
 /// @brief Everything an open StreamedVideoWriter holds - the muxer, both
-///        encoders and the converters feeding them.
+///        encoders, the frame renderer and the converters feeding them.
 struct StreamedVideoWriter::State {
-    /// @brief The MP4 muxer.
+    /// @brief The muxer.
     AVFormatContextOutputPtr formatCtx;
     /// @brief The video encoder and its stream.
     VideoEncoder video;
     /// @brief The audio encoder and its stream.
     AudioEncoder audio;
-    /// @brief RGB24 to the encoder's pixel format.
+    /// @brief Canvas plus playhead to finished frames.
+    std::unique_ptr<VideoFrameRenderer> renderer;
+    /// @brief RGB24 frames to the encoder's pixel format.
     SwsContextPtr sws;
     /// @brief Planar float stereo to the encoder's sample format and rate.
     SwrContextPtr swr;
     /// @brief Resampled audio waiting to fill whole encoder frames.
     AVAudioFifoPtr fifo;
-    /// @brief The canvas size, padded to even.
-    std::uint32_t paddedWidth = 0;
-    /// @brief See paddedWidth.
-    std::uint32_t paddedHeight = 0;
-    /// @brief The input audio's sample rate.
-    std::uint32_t sampleRateHz = 0;
     /// @brief Video frames per second.
     int frameRate = 30;
     /// @brief Samples per encoder frame.
@@ -277,6 +182,8 @@ struct StreamedVideoWriter::State {
     std::int64_t framesWritten = 0;
     /// @brief Audio samples encoded so far.
     std::int64_t samplesEncoded = 0;
+    /// @brief Checked before every frame.
+    std::function<bool()> shouldCancel;
     /// @brief Whether finish() ran.
     bool finished = false;
 
@@ -331,35 +238,46 @@ struct StreamedVideoWriter::State {
     }
 };
 
-StreamedVideoWriter::StreamedVideoWriter(const std::filesystem::path& path, std::uint32_t width, std::uint32_t height,
-                                         std::uint32_t sampleRateHz, int frameRate)
+StreamedVideoWriter::StreamedVideoWriter(const std::filesystem::path& path, std::uint32_t canvasWidth,
+                                         std::uint32_t canvasHeight, double projectSeconds,
+                                         std::uint32_t sampleRateHz, const VideoExportOptions& options)
     : state_(std::make_unique<State>()) {
-    if (width == 0 || height == 0 || frameRate <= 0 || sampleRateHz == 0) {
-        throw std::runtime_error("cannot write a video with an empty canvas, frame rate or sample rate");
+    if (canvasWidth == 0 || canvasHeight == 0) {
+        throw std::runtime_error("cannot export video for an empty canvas");
+    }
+    if (options.frameRate <= 0) {
+        throw std::runtime_error("frameRate must be positive");
+    }
+    if (sampleRateHz == 0) {
+        throw std::runtime_error("cannot export video without an audio sample rate");
     }
     State& st = *state_;
-    st.paddedWidth = roundUpToEven(width);
-    st.paddedHeight = roundUpToEven(height);
-    st.sampleRateHz = sampleRateHz;
-    st.frameRate = frameRate;
+    st.frameRate = options.frameRate;
+    st.renderer = std::make_unique<VideoFrameRenderer>(options, canvasWidth, canvasHeight, projectSeconds);
+    const std::uint32_t width = st.renderer->width();
+    const std::uint32_t height = st.renderer->height();
 
+    const char* container = options.codec == VideoCodec::ProRes ? "mov" : "mp4";
     AVFormatContext* formatCtxRaw = nullptr;
-    checkFfmpeg(avformat_alloc_output_context2(&formatCtxRaw, nullptr, "mp4", path.string().c_str()),
+    checkFfmpeg(avformat_alloc_output_context2(&formatCtxRaw, nullptr, container, path.string().c_str()),
                 "could not determine an output format for this path");
     st.formatCtx.reset(formatCtxRaw);
-    st.video = createVideoEncoder(*st.formatCtx, st.paddedWidth, st.paddedHeight, frameRate);
+    st.video = createVideoEncoder(st.formatCtx.get(), options.codec, options.quality, width, height,
+                                  options.frameRate);
     AudioBuffer rateOnly;
     rateOnly.sampleRateHz = sampleRateHz;
-    st.audio = createAudioEncoder(*st.formatCtx, AV_CODEC_ID_AAC, rateOnly, /*bitRate=*/192000);
+    st.audio = createAudioEncoder(*st.formatCtx,
+                                  options.codec == VideoCodec::ProRes ? AV_CODEC_ID_PCM_S16LE : AV_CODEC_ID_AAC,
+                                  rateOnly, /*bitRate=*/256000);
     checkFfmpeg(avio_open(&st.formatCtx->pb, path.string().c_str(), AVIO_FLAG_WRITE),
                 "could not open output file for writing: " + path.string());
-    checkFfmpeg(avformat_write_header(st.formatCtx.get(), nullptr), "could not write the MP4 file header");
+    checkFfmpeg(avformat_write_header(st.formatCtx.get(), nullptr), "could not write the video file header");
 
-    st.sws.reset(sws_getContext(static_cast<int>(st.paddedWidth), static_cast<int>(st.paddedHeight), AV_PIX_FMT_RGB24,
-                                static_cast<int>(st.paddedWidth), static_cast<int>(st.paddedHeight),
-                                st.video.pixelFormat, SWS_BILINEAR, nullptr, nullptr, nullptr));
+    st.sws.reset(sws_getContext(static_cast<int>(width), static_cast<int>(height), AV_PIX_FMT_RGB24,
+                                static_cast<int>(width), static_cast<int>(height), st.video.pixelFormat,
+                                SWS_BICUBIC | SWS_ACCURATE_RND, nullptr, nullptr, nullptr));
     if (!st.sws) {
-        throw std::runtime_error("could not create an RGB24->YUV converter");
+        throw std::runtime_error("could not create an RGB24 to video pixel format converter");
     }
     const AVCodecContext& audioCtx = *st.audio.codecCtx;
     AVChannelLayout inLayout = AV_CHANNEL_LAYOUT_STEREO;
@@ -387,35 +305,44 @@ double StreamedVideoWriter::videoSeconds() const noexcept {
     return static_cast<double>(state_->framesWritten) / state_->frameRate;
 }
 
+std::uint32_t StreamedVideoWriter::frameWidth() const noexcept { return state_->renderer->width(); }
+
+std::uint32_t StreamedVideoWriter::frameHeight() const noexcept { return state_->renderer->height(); }
+
+void StreamedVideoWriter::setShouldCancel(std::function<bool()> shouldCancel) {
+    state_->shouldCancel = std::move(shouldCancel);
+}
+
 void StreamedVideoWriter::addVideo(const RgbImage& canvas, double seconds, const PlayheadAt& playheadAt) {
     State& st = *state_;
     if (st.finished || seconds <= 0.0) {
         return;
     }
-    const std::vector<std::uint8_t> base = padCanvasToRgb24(canvas, st.paddedWidth, st.paddedHeight);
+    st.renderer->setCanvas(canvas);
     const double end = videoSeconds() + seconds;
+    const std::uint32_t width = st.renderer->width();
+    const std::uint32_t height = st.renderer->height();
     AVCodecContext& ctx = *st.video.codecCtx;
     while (static_cast<double>(st.framesWritten) / st.frameRate < end - 1e-9) {
-        std::vector<std::uint8_t> frameRgb24 = base;
-        if (playheadAt) {
-            if (const auto fraction = playheadAt(static_cast<double>(st.framesWritten) / st.frameRate)) {
-                const auto x = static_cast<std::uint32_t>(std::clamp(*fraction, 0.0, 1.0) * st.paddedWidth);
-                drawPlayheadLine(frameRgb24, st.paddedWidth, st.paddedHeight, x);
-            }
+        if (st.shouldCancel && st.shouldCancel()) {
+            throw ExportCancelled{};
         }
+        const double at = static_cast<double>(st.framesWritten) / st.frameRate;
+        const RgbImage rgb = st.renderer->render(playheadAt ? playheadAt(at) : std::nullopt);
+
         AVFramePtr frame(av_frame_alloc());
         if (!frame) {
             throw std::runtime_error("could not allocate a video AVFrame");
         }
         frame->format = st.video.pixelFormat;
-        frame->width = static_cast<int>(st.paddedWidth);
-        frame->height = static_cast<int>(st.paddedHeight);
+        frame->width = static_cast<int>(width);
+        frame->height = static_cast<int>(height);
         checkFfmpeg(av_frame_get_buffer(frame.get(), 0), "could not allocate a video frame buffer");
-        const std::uint8_t* srcSlices[1] = {frameRgb24.data()};
-        const int srcStride[1] = {static_cast<int>(st.paddedWidth) * 3};
-        checkFfmpeg(sws_scale(st.sws.get(), srcSlices, srcStride, 0, static_cast<int>(st.paddedHeight), frame->data,
+        const std::uint8_t* srcSlices[1] = {rgb.pixels.data()};
+        const int srcStride[1] = {static_cast<int>(width) * 3};
+        checkFfmpeg(sws_scale(st.sws.get(), srcSlices, srcStride, 0, static_cast<int>(height), frame->data,
                               frame->linesize),
-                    "RGB24->YUV conversion failed");
+                    "RGB24 to video pixel format conversion failed");
         frame->pts = st.framesWritten++;
         encodeFrameAndWritePackets(*st.formatCtx, ctx, *st.video.stream, frame.get());
     }
@@ -446,7 +373,45 @@ void StreamedVideoWriter::finish() {
     st.resample(nullptr, 0);
     st.drainAudio(/*all=*/true);
     encodeFrameAndWritePackets(*st.formatCtx, *st.audio.codecCtx, *st.audio.stream, nullptr);
-    checkFfmpeg(av_write_trailer(st.formatCtx.get()), "could not finalize the MP4 file");
+    checkFfmpeg(av_write_trailer(st.formatCtx.get()), "could not finalize the video file");
+}
+
+void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, const AudioBuffer& audio,
+                 const VideoExportOptions& options, const std::function<bool()>& shouldCancel,
+                 const std::function<void(double)>& progress) {
+    const double duration =
+        audio.sampleRateHz > 0 ? static_cast<double>(audio.frameCount()) / audio.sampleRateHz : 0.0;
+    StreamedVideoWriter writer(path, canvas.width, canvas.height, duration, audio.sampleRateHz, options);
+    writer.setShouldCancel(shouldCancel);
+    const auto playheadAt = [duration](double seconds) -> std::optional<double> {
+        return duration > 0.0 ? std::optional(seconds / duration) : std::nullopt;
+    };
+    // A second at a time, video and audio together, so the muxer never has
+    // to hold one stream's whole track waiting for the other.
+    const std::size_t samplesPerSecond = audio.sampleRateHz;
+    for (std::size_t first = 0; first < audio.frameCount(); first += samplesPerSecond) {
+        const std::size_t count = std::min(samplesPerSecond, audio.frameCount() - first);
+        writer.addVideo(canvas, static_cast<double>(first + count) / audio.sampleRateHz - writer.videoSeconds(),
+                        playheadAt);
+        AudioBuffer slice;
+        slice.sampleRateHz = audio.sampleRateHz;
+        slice.left.assign(audio.left.begin() + static_cast<std::ptrdiff_t>(first),
+                          audio.left.begin() + static_cast<std::ptrdiff_t>(first + count));
+        slice.right.assign(audio.right.begin() + static_cast<std::ptrdiff_t>(first),
+                           audio.right.begin() + static_cast<std::ptrdiff_t>(first + count));
+        writer.addAudio(slice);
+        if (progress && duration > 0.0) {
+            progress(std::min(1.0, writer.videoSeconds() / duration));
+        }
+    }
+    writer.finish();
+}
+
+void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, const AudioBuffer& audio, int frameRate,
+                 const std::function<bool()>& shouldCancel) {
+    VideoExportOptions options;
+    options.frameRate = frameRate;
+    exportVideo(path, canvas, audio, options, shouldCancel);
 }
 
 }  // namespace sound_mind::codec

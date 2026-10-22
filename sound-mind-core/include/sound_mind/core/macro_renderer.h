@@ -9,6 +9,7 @@
 
 #include "sound_mind/codec/audio_buffer.h"
 #include "sound_mind/codec/rgb_image.h"
+#include "sound_mind/codec/video_options.h"
 #include "sound_mind/core/history.h"
 #include "sound_mind/core/history_replay.h"
 #include "sound_mind/core/macro.h"
@@ -127,18 +128,20 @@ private:
 };
 
 /**
- * @brief Renders a whole Macro to an MP4 video (`v0.1.44.2`): the canvas
- *        cutting to each new state, a playhead line following the recorded
- *        playhead, and the audio as played - via
- *        `codec::StreamedVideoWriter`, one segment in memory at a time.
+ * @brief Renders a whole Macro to a video (`v0.1.44.2`; format, size and
+ *        animation since `v0.1.45.1`): the canvas cutting to each new state,
+ *        the playhead following the recorded playhead, and the audio as
+ *        played - via `codec::StreamedVideoWriter`, one segment in memory at
+ *        a time. A scrolling window follows the playhead too.
  * @param renderer A prepared renderer.
  * @param path Destination path.
- * @param frameRate Video frame rate.
+ * @param options Format, size, frame rate, animation, playhead, polar.
  * @param progress Told the Macro seconds rendered so far; may be empty.
  * @param error Receives the reason on failure.
  * @return `true` if written.
  */
-bool exportMacroVideo(MacroRenderer& renderer, const std::filesystem::path& path, int frameRate,
-                      const std::function<void(double)>& progress, std::string* error);
+bool exportMacroVideo(MacroRenderer& renderer, const std::filesystem::path& path,
+                      const sound_mind::codec::VideoExportOptions& options, const std::function<void(double)>& progress,
+                      std::string* error);
 
 }  // namespace sound_mind::core

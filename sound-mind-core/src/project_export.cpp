@@ -30,8 +30,9 @@ bool exportProjectAudio(const Project& project, const std::filesystem::path& pat
     return true;
 }
 
-bool exportProjectVideo(const Project& project, const std::filesystem::path& path, int frameRate,
-                        const std::function<bool()>& shouldCancel, std::optional<float> limiterCeilingDb) {
+bool exportProjectVideo(const Project& project, const std::filesystem::path& path,
+                        const sound_mind::codec::VideoExportOptions& options, const std::function<bool()>& shouldCancel,
+                        std::optional<float> limiterCeilingDb, const std::function<void(double)>& progress) {
     auto media = renderProjectForExport(project, shouldCancel);
     if (!media.has_value()) {
         return false;
@@ -39,7 +40,7 @@ bool exportProjectVideo(const Project& project, const std::filesystem::path& pat
     if (limiterCeilingDb.has_value()) {
         applyMasterLimiter(media->audio, *limiterCeilingDb);
     }
-    sound_mind::codec::exportVideo(path, media->canvas, media->audio, frameRate, shouldCancel);
+    sound_mind::codec::exportVideo(path, media->canvas, media->audio, options, shouldCancel, progress);
     return true;
 }
 

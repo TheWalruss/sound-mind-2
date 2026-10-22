@@ -6,6 +6,30 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.45.1] - 2026-10-22
+
+Roadmap slot `v0.Y.82.2` (video export overhaul), modelled on the legacy Studio's export.
+
+### Added
+
+- **Export Video...** and **Export Macro Video...** now open an export dialog, which remembers your choices for next time:
+  - **Format:** H.264 MP4 (recommended), HEVC MP4 where Windows provides an encoder, ProRes MOV for editing, or MPEG-4 MP4. Only the formats that work on your computer are listed, and the file name's extension follows the format.
+  - **Resolution:** 1080p, 4K, 1440p, 720p, vertical (1080×1920, 720×1280) for TikTok, Reels and Shorts, square (1080×1080), the canvas's own size, or a custom size. The canvas keeps its proportions, with black bars where the shapes differ.
+  - **Frame rate** 24, 30 or 60, and **quality** Low, Medium or High.
+  - **Animation:** **Whole canvas**, with the playhead sweeping across it, or **Scrolling**, a window of a chosen number of seconds that pans along with the playhead. **Show playhead** turns the line on or off.
+  - In **Sound Flower (polar) view** the video is the flower: a ray turns clockwise round it, or, when scrolling, the flower turns under a fixed ray.
+  - **Open the video when the export finishes.**
+- The status bar shows the export's progress as a percentage.
+
+### Changed
+
+- The playhead in a video is the legacy Studio's: bright yellow with a dark outline, thicker at higher resolutions.
+- Videos are H.264 by default where Windows provides it (smaller files, playable everywhere), instead of always MPEG-4.
+
+### Removed
+
+- The internal multi-segment video export, replaced by the streamed writer the Macro export already used.
+
 ## [0.1.44.3] - 2026-10-21
 
 Roadmap slot `v0.Y.82.1` (Macros), installment C - completes the slot and the pre-Beta plan's feature work.

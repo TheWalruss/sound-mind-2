@@ -96,6 +96,7 @@
 #include "test_tool_palette_controller.h"
 #include "test_project_history.h"
 #include "test_remaster.h"
+#include "test_video_export_dialog.h"
 #include "test_waveform_preview_widget.h"
 
 namespace {
@@ -120,6 +121,7 @@ const std::array kTestClasses{
     SM_TEST_CLASS_ENTRY(MainWindowTest),
     SM_TEST_CLASS_ENTRY(RecentProjectsTest),
     SM_TEST_CLASS_ENTRY(RotaryDialWidgetTest),
+    SM_TEST_CLASS_ENTRY(VideoExportDialogTest),
     SM_TEST_CLASS_ENTRY(WaveformPreviewWidgetTest),
     SM_TEST_CLASS_ENTRY(ThemeTest),
     SM_TEST_CLASS_ENTRY(CreateProjectWizardTest),

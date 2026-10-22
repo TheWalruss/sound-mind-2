@@ -208,7 +208,7 @@ TEST_CASE("exportMacroVideo writes an MP4 of the performance", "[core][macro_ren
     std::filesystem::remove(path);
     double reached = 0.0;
     std::string error;
-    REQUIRE(sound_mind::core::exportMacroVideo(renderer, path, 30, [&](double seconds) { reached = seconds; }, &error));
+    REQUIRE(sound_mind::core::exportMacroVideo(renderer, path, {}, [&](double seconds) { reached = seconds; }, &error));
     REQUIRE(error.empty());
     REQUIRE(reached == 0.8);
     REQUIRE(std::filesystem::file_size(path) > 1000);

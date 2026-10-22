@@ -2010,7 +2010,8 @@ do to it while it plays. It's kept with the project.
   length and event count, to **Rename...** or **Delete** them.
 
 - **Macro → Export Macro Video...** renders a Macro (you pick which, if
-  there are several) to an MP4: the whole canvas, changing at each moment
+  there are several) to a video, set up with the same dialog as
+  [Export Video](#exporting): the canvas, changing at each moment
   you changed something - complete at once, however long it took live -
   with the playhead line where yours was and the audio it played. It's
   rendered from a copy, so you can keep working; the status bar shows it
@@ -2102,8 +2103,37 @@ pooling had never been started.
 layer, with filters applied, exactly what Playback plays - as FLAC, Ogg
 Vorbis, or MP3 (pick the format via the save dialog's file type).
 
-**File → Export Video...** saves it as an MP4: the composite spectrogram,
-animated with the mixed audio played alongside it.
+**File → Export Video...** saves it as a video: the composite spectrogram,
+animated with the mixed audio played alongside it. A dialog sets it up,
+and remembers your choices for next time:
+
+- **Output file** - with **Browse...**; the extension follows the format.
+- **Format** - **H.264 (MP4)**, recommended: small files that play
+  everywhere. **HEVC (MP4)**: smaller still, listed only where Windows
+  provides an HEVC encoder. **ProRes (MOV)**: very large files, for further
+  editing. **MPEG-4 (MP4)**: works everywhere, larger files. Only formats
+  that work on your computer are listed.
+- **Resolution** - 1080p, 4K, 1440p, 720p, vertical 1080×1920 or 720×1280
+  (TikTok, Reels, Shorts), square 1080×1080, the canvas's own size, or a
+  custom width and height. The canvas keeps its proportions, with black
+  bars where the shapes differ.
+- **Frame rate** - 24, 30 (the default) or 60 frames a second.
+- **Quality** - Low, Medium (the default) or High: bigger files at higher
+  quality.
+- **Animation** - **Whole canvas**: the whole canvas is shown throughout,
+  with the playhead sweeping across it. **Scrolling**: a window a chosen
+  number of seconds wide pans from the start of the canvas to its end,
+  with the playhead crossing it. **Show playhead** turns the line (bright
+  yellow, with a dark outline) on or off.
+- In [Sound Flower (polar) view](#sound-flower-polar-view) the video is
+  the flower, and the dialog says so. With Whole canvas a ray turns
+  clockwise from twelve o'clock; with Scrolling the flower itself turns,
+  bringing the moment being played under a fixed ray at twelve o'clock.
+  A scrolling polar video takes longer to make than the others.
+- **Open the video when the export finishes** - opens it in your video
+  player.
+
+The status bar shows how far the export has got, as a percentage.
 
 Both run the audio through the master limiter first if it's on in
 [Configure Devices](#configure-devices), so a mix that goes over full scale
@@ -2513,8 +2543,12 @@ those are all still to come.
 
 **Macros** (see [Macros](#macros)): there's no timeline view to inspect or
 edit what a Macro recorded, strokes appear whole rather than being drawn
-in, and the video always shows the whole canvas (it doesn't follow your
-zoom or scrolling).
+in, and the video doesn't follow your zoom or scrolling (it shows the
+whole canvas, or the export dialog's Scrolling window).
+
+**Video export**: WebM/VP9 isn't offered (it would need an extra encoder
+library), and HEVC is only listed where Windows itself provides an HEVC
+encoder.
 
 
 **Analysis Tools**: the [Analysis](#analysis) panel's loudness meter and

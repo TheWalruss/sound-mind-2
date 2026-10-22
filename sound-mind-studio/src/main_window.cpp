@@ -15,6 +15,7 @@
 #include <stdexcept>
 #include <string>
 
+#include <QRegularExpression>
 #include <QThread>
 #include <QProgressDialog>
 #include <QApplication>
@@ -59,6 +60,7 @@
 #include "sound_mind/studio/remaster.h"
 #include "sound_mind/studio/remaster_dialog.h"
 #include "sound_mind/studio/base_recipes.h"
+#include "sound_mind/studio/video_export_dialog.h"
 #include "sound_mind/studio/macro_manager_dialog.h"
 #include "sound_mind/studio/macro_player.h"
 #include "sound_mind/studio/text_controller.h"
@@ -2998,13 +3000,24 @@ void MainWindow::exportAudio() {
     exportCompositeAudioAsync(path, *format);
 }
 
+std::filesystem::path MainWindow::suggestedVideoPath(const QString& suffix) const {
+    QString stem = currentPath_ ? QString::fromStdWString(currentPath_->stem().wstring()) : tr("Untitled");
+    stem += suffix;
+    stem.replace(QRegularExpression(QStringLiteral(R"([\\/:*?"<>|])")), QStringLiteral("_"));
+    const std::filesystem::path folder = currentPath_ ? currentPath_->parent_path() : std::filesystem::path();
+    return folder / std::filesystem::path((stem + QStringLiteral(".mp4")).toStdWString());
+}
+
 void MainWindow::exportVideo() {
-    const QString fileName =
-        QFileDialog::getSaveFileName(this, tr("Export Video"), QString(), tr(kExportVideoFileFilter));
-    if (fileName.isEmpty()) {
+    if (!project_) {
         return;
     }
-    exportCompositeVideoAsync(std::filesystem::path(fileName.toStdString()));
+    VideoExportDialog dialog(tr("Export Video"), suggestedVideoPath(tr("_export")), canvas_->polarMode(),
+                             project_->settings().canvasWidth, project_->settings().canvasHeight, this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    exportCompositeVideoAsync(dialog.outputPath(), dialog.options(), dialog.openWhenDone());
 }
 
 void MainWindow::exportMacroVideo() {
@@ -3012,12 +3025,15 @@ void MainWindow::exportMacroVideo() {
     if (!id) {
         return;
     }
-    const QString fileName =
-        QFileDialog::getSaveFileName(this, tr("Export Macro Video"), QString(), tr(kExportVideoFileFilter));
-    if (fileName.isEmpty()) {
+    const sound_mind::core::Macro* macro = project_->macroById(*id);
+    VideoExportDialog dialog(tr("Export Macro Video"),
+                             suggestedVideoPath(QStringLiteral("_") + QString::fromStdString(macro->name)),
+                             canvas_->polarMode(), project_->settings().canvasWidth,
+                             project_->settings().canvasHeight, this);
+    if (dialog.exec() != QDialog::Accepted) {
         return;
     }
-    exportMacroVideoAsync(std::filesystem::path(fileName.toStdWString()), *id);
+    exportMacroVideoAsync(dialog.outputPath(), *id, dialog.options(), dialog.openWhenDone());
 }
 
 std::unique_ptr<sound_mind::core::MacroRenderer> MainWindow::macroRendererFor(sound_mind::core::MacroId id,
@@ -3088,7 +3104,8 @@ bool MainWindow::hasExportableContent() const {
     });
 }
 
-void MainWindow::exportCompositeVideoAsync(const std::filesystem::path& path) {
+void MainWindow::exportCompositeVideoAsync(const std::filesystem::path& path,
+                                           const sound_mind::codec::VideoExportOptions& options, bool openWhenDone) {
     if (isExportRunning()) {
         statusBar()->showMessage(tr("Already exporting - wait for it to finish, or cancel it, first."), 5000);
         return;
@@ -3100,6 +3117,8 @@ void MainWindow::exportCompositeVideoAsync(const std::filesystem::path& path) {
     }
 
     exportKind_ = ExportKind::Video;
+    exportOpenWhenDone_ = openWhenDone;
+    exportProgress_ = 0.0;
     exportPath_ = path;
     exportOutcome_ = ExportOutcome::Success;
     exportErrorMessage_.clear();
@@ -3107,12 +3126,12 @@ void MainWindow::exportCompositeVideoAsync(const std::filesystem::path& path) {
     // project_ copied by value - the background thread composites its own
     // independent copy, so later edits on the UI thread can't race it.
     exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, projectCopy = *project_,
+        [this, path, options, projectCopy = *project_,
          limiterCeiling = limiterEnabled_ ? std::optional<float>(static_cast<float>(limiterCeilingDb_)) : std::nullopt](sound_mind::core::CancellationToken& token) {
             const auto shouldCancel = [&token]() { return token.cancellationRequested(); };
             try {
-                if (!sound_mind::core::exportProjectVideo(projectCopy, path, /*frameRate=*/30, shouldCancel,
-                                                          limiterCeiling)) {
+                if (!sound_mind::core::exportProjectVideo(projectCopy, path, options, shouldCancel, limiterCeiling,
+                                                          [this](double done) { exportProgress_ = done; })) {
                     exportOutcome_ = ExportOutcome::Failed;
                     exportErrorMessage_ = tr("Nothing to export - no visible, unmuted layer has content.");
                 }
@@ -3175,7 +3194,8 @@ void MainWindow::exportCompositeAudioAsync(const std::filesystem::path& path,
     exportProgressTimer_->start();
 }
 
-void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path, sound_mind::core::MacroId id) {
+void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path, sound_mind::core::MacroId id,
+                                       const sound_mind::codec::VideoExportOptions& options, bool openWhenDone) {
     if (isExportRunning()) {
         statusBar()->showMessage(tr("Already exporting - wait for it to finish, or cancel it, first."), 5000);
         return;
@@ -3188,17 +3208,23 @@ void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path, sound_
     }
 
     exportKind_ = ExportKind::MacroVideo;
+    exportOpenWhenDone_ = openWhenDone;
+    exportProgress_ = 0.0;
+    const double macroSeconds = std::max(renderer->durationSeconds(), 1e-9);
     exportPath_ = path;
     exportOutcome_ = ExportOutcome::Success;
     exportErrorMessage_.clear();
     exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, renderer](sound_mind::core::CancellationToken& token) {
+        [this, path, renderer, options, macroSeconds](sound_mind::core::CancellationToken& token) {
             // Rendered on a project of the renderer's own: the open one is
             // never touched (v0.1.44.2).
             renderer->setShouldCancel([&token]() { return token.cancellationRequested(); });
             std::string failure;
             const bool written = renderer->prepare(&failure) &&
-                                 sound_mind::core::exportMacroVideo(*renderer, path, /*frameRate=*/30, {}, &failure);
+                                 sound_mind::core::exportMacroVideo(
+                                     *renderer, path, options,
+                                     [this, macroSeconds](double seconds) { exportProgress_ = seconds / macroSeconds; },
+                                     &failure);
             if (token.cancellationRequested()) {
                 exportOutcome_ = ExportOutcome::Cancelled;
             } else if (!written) {
@@ -3222,6 +3248,11 @@ void MainWindow::cancelExport() {
 
 void MainWindow::pollExportProgress() {
     if (exportTask_->isRunning()) {
+        if (exportKind_ != ExportKind::Audio) {
+            statusBar()->showMessage(tr("Exporting %1... %2%")
+                                         .arg(exportKind_ == ExportKind::Video ? tr("video") : tr("macro video"))
+                                         .arg(static_cast<int>(std::lround(exportProgress_.load() * 100.0))));
+        }
         return;
     }
     exportProgressTimer_->stop();
@@ -3233,7 +3264,10 @@ void MainWindow::pollExportProgress() {
     switch (exportOutcome_) {
         case ExportOutcome::Success:
             statusBar()->showMessage(
-                tr("Exported %1 to \"%2\".").arg(kindLabel, QString::fromStdString(exportPath_.string())), 5000);
+                tr("Exported %1 to \"%2\".").arg(kindLabel, QString::fromStdWString(exportPath_.wstring())), 5000);
+            if (exportOpenWhenDone_ && exportKind_ != ExportKind::Audio) {
+                QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdWString(exportPath_.wstring())));
+            }
             break;
         case ExportOutcome::Cancelled:
             // Rolls back the partial file ExportCancelled itself

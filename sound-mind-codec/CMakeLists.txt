@@ -57,6 +57,7 @@ add_library(sound-mind-codec
     src/audio_export.cpp
     src/audio_file.cpp
     src/video_export.cpp
+    src/video_frame_renderer.cpp
 )
 
 target_include_directories(sound-mind-codec
