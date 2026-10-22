@@ -1,5 +1,6 @@
 #include "test_canvas_widget.h"
 
+#include <algorithm>
 #include <optional>
 
 #include <QContextMenuEvent>
@@ -2157,4 +2158,103 @@ void CanvasWidgetTest::anOverrideFrameIsProjectedOncePerFrame() {
     widget.setFrameOverride(frame);  // the next frame of a performance
     (void)widget.grab();
     QCOMPARE(widget.polarProjectionCount(), std::uint64_t{2});
+}
+
+namespace {
+
+/// A project whose one layer is a uniform level, so its canvas colour says
+/// which version is shown.
+Project uniformProject(float levelDb) {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    StreamImage content = sound_mind::core::silentContentFor(project.settings());
+    std::fill(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(), levelDb);
+    std::fill(content.rightMagnitudeDb.begin(), content.rightMagnitudeDb.end(), levelDb);
+    project.layers().front().setBaseContent(content);
+    return project;
+}
+
+void setUniformLevel(Project& project, float levelDb) {
+    StreamImage content = *project.layers().front().content();
+    std::fill(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(), levelDb);
+    std::fill(content.rightMagnitudeDb.begin(), content.rightMagnitudeDb.end(), levelDb);
+    project.layers().front().setContent(content);
+}
+
+}  // namespace
+
+// v0.1.47.3: with background compositing on (MainWindow's setting), an
+// edit returns at once; the canvas keeps showing the last finished picture
+// until the new composite arrives.
+void CanvasWidgetTest::backgroundCompositingShowsThePreviousPictureUntilTheNewOneArrives() {
+    Project project = uniformProject(-60.0f);
+    CanvasWidget widget;
+    widget.setBackgroundCompositing(true);
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    (void)widget.grab();
+    widget.finishCompositing();
+    const QColor quiet = widget.grab().toImage().pixelColor(50, 25);
+
+    setUniformLevel(project, -6.0f);
+    widget.invalidateCompositeAll();
+    (void)widget.grab();  // starts the new composite...
+    QCOMPARE(widget.grab().toImage().pixelColor(50, 25), quiet);  // ...still showing the old picture.
+    widget.finishCompositing();
+    QVERIFY(!widget.isCompositing());
+    QVERIFY(widget.grab().toImage().pixelColor(50, 25) != quiet);
+}
+
+void CanvasWidgetTest::editsDuringABackgroundCompositeEndOnTheNewest() {
+    Project project = uniformProject(-60.0f);
+    CanvasWidget widget;
+    widget.setBackgroundCompositing(true);
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    (void)widget.grab();
+    widget.finishCompositing();
+
+    for (const float level : {-40.0f, -20.0f, -6.0f}) {
+        setUniformLevel(project, level);
+        widget.invalidateCompositeAll();
+        (void)widget.grab();
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(!widget.isCompositing(), 10000);
+    (void)widget.grab();  // a still-pending generation starts its run here.
+    QTRY_VERIFY_WITH_TIMEOUT(!widget.isCompositing(), 10000);
+    const QColor shown = widget.grab().toImage().pixelColor(50, 25);
+
+    CanvasWidget reference;  // synchronous: the newest state directly.
+    reference.setProject(&project);
+    reference.resize(100, 50);
+    QCOMPARE(shown, reference.grab().toImage().pixelColor(50, 25));
+}
+
+void CanvasWidgetTest::aFinishedStrokeStaysDrawnUntilItsCompositeArrives() {
+    Project project = uniformProject(-90.0f);
+    CanvasWidget widget;
+    widget.setBackgroundCompositing(true);
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    (void)widget.grab();
+    widget.finishCompositing();
+    const QImage before = widget.grab().toImage();
+
+    Path stroke;
+    PathNode a;
+    a.anchor = TimeFrequencyPoint{0.2, 500.0};
+    PathNode b;
+    b.anchor = TimeFrequencyPoint{0.8, 500.0};
+    stroke.addNode(a);
+    stroke.addNode(b);
+    widget.setPaintPreviewPath(stroke);
+    setUniformLevel(project, -89.0f);  // the stroke's paint lands...
+    widget.invalidateCompositeAll();
+    widget.setPaintPreviewPath(Path{});  // ...and the live preview is cleared.
+
+    QVERIFY(widget.grab().toImage() != before);  // the stroke is still drawn while compositing.
+    widget.finishCompositing();
+    (void)widget.grab();
+    widget.finishCompositing();
+    QVERIFY(!widget.isCompositing());
+    QVERIFY(widget.settlingPathShown() == false);
 }

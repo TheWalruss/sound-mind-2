@@ -228,6 +228,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     });
 
     canvas_ = new CanvasWidget(this);
+    // v0.1.47.3: an edit under a heavy filter layer never stalls the window -
+    // see CanvasWidget::setBackgroundCompositing().
+    canvas_->setBackgroundCompositing(true);
 
     // Canvas Navigation's own Zoom feature (docs/sound-mind-design.md) -
     // canvas_ needs to be able to grow larger than the visible area once
@@ -4818,7 +4821,7 @@ void MainWindow::startPlayback() {
         // project_ itself once backgrounded, so the background thread has
         // nothing shared to synchronize against - see startPlayback()'s
         // own docs.
-        compositeJob_->start([this, projectCopy = *project_](
+        compositeJob_->start([this, projectCopy = project_->renderSnapshot()](
                                  sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
             auto audio = std::make_shared<std::optional<sound_mind::codec::AudioBuffer>>();
             double lufs = -70.0;
@@ -5022,7 +5025,7 @@ void MainWindow::scheduleLoopBacking() {
     }
     loopBackingDirty_ = false;
 
-    sound_mind::core::Project projectCopy = *project_;
+    sound_mind::core::Project projectCopy = project_->renderSnapshot();
     if (sound_mind::core::Layer* loopLayer = projectCopy.layerById(*loopLayerId_)) {
         loopLayer->setMuted(true);  // the engine mixes the live take in itself.
     }
@@ -5533,7 +5536,7 @@ void MainWindow::startEditPlaybackPreparation() {
         return;
     }
     editPlaybackDirty_ = false;
-    editPlaybackJob_->start([this, projectCopy = *project_](
+    editPlaybackJob_->start([this, projectCopy = project_->renderSnapshot()](
                                 sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
         auto audio = std::make_shared<std::optional<sound_mind::codec::AudioBuffer>>();
         try {
@@ -5631,7 +5634,7 @@ void MainWindow::scheduleRepeatRefresh() {
         return;
     }
     refreshDirty_ = false;
-    refreshJob_->start([this, projectCopy = *project_](
+    refreshJob_->start([this, projectCopy = project_->renderSnapshot()](
                            sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
         auto audio = std::make_shared<std::optional<sound_mind::codec::AudioBuffer>>();
         double lufs = -70.0;

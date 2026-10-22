@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <tuple>
 #include <vector>
@@ -17,6 +18,7 @@
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/studio/axis_labels.h"
+#include "sound_mind/studio/background_job.h"
 #include "sound_mind/studio/grid_config.h"
 
 class QContextMenuEvent;
@@ -160,6 +162,38 @@ public:
      * @return The count.
      */
     [[nodiscard]] std::uint64_t polarProjectionCount() const noexcept { return polarProjectionCount_; }
+
+    /**
+     * @brief Composites on a background thread instead of inside
+     *        paintEvent() (`v0.1.47.3`) - what MainWindow uses, so an edit
+     *        under a heavy filter layer never stalls the window.
+     *
+     * While a new composite is being made, the canvas keeps showing the
+     * last finished one; when it arrives, the canvas repaints (and starts
+     * the next one at once if more edits arrived meanwhile - the newest
+     * edit always ends up shown). A stroke's path stays drawn until the
+     * composite that includes its paint arrives (see setPaintPreviewPath()).
+     * The worker composites a Project::renderSnapshot(), through this
+     * widget's prefix cache; invalidations that arrive mid-run are applied
+     * before the next one. Off by default: a standalone canvas composites
+     * synchronously, as before.
+     * @param enabled Whether to composite in the background.
+     */
+    void setBackgroundCompositing(bool enabled);
+
+    /// @brief Whether a background composite is running.
+    /// @return `true` while one is being made.
+    [[nodiscard]] bool isCompositing() const noexcept { return compositeJob_ && compositeJob_->isRunning(); }
+
+    /// @brief Waits for a running background composite and shows it at
+    ///        once - for tests, and anything that needs the canvas current.
+    ///        A no-op when none is running.
+    void finishCompositing();
+
+    /// @brief Whether a finished stroke's path is still drawn while its
+    ///        composite is made (see setPaintPreviewPath()) - for tests.
+    /// @return `true` while one is.
+    [[nodiscard]] bool settlingPathShown() const noexcept { return !settlingPreviewPath_.nodes().empty(); }
 
     /**
      * @brief Enables or disables the Sound Flower polar view -
@@ -1204,11 +1238,37 @@ private:
     ///        project).
     [[nodiscard]] LayerStackSignature layerStackSignature() const;
 
+    /// @brief Starts a background composite of the current generation, or
+    ///        does nothing if one is running (its completion starts the next
+    ///        one) - see setBackgroundCompositing().
+    void startBackgroundComposite();
+
+    /// @brief Invalidates the prefix cache from `fromLayer` (everything if
+    ///        `std::nullopt`) - at once while no background composite is
+    ///        using it, otherwise recorded and applied before the next one.
+    /// @param fromLayer The lowest stack position to invalidate.
+    void invalidateCache(std::optional<std::size_t> fromLayer);
+
+    /// @brief Whether the picture shown is older than the project: a
+    ///        composite is running or not yet started.
+    /// @return `true` if so.
+    [[nodiscard]] bool compositePending() const noexcept;
+
     const sound_mind::core::Project* project_ = nullptr;
     /// @brief `v0.1.7.1` (`docs/sound-mind-roadmap.md`'s targeted-
     ///        invalidation raster cache) - see `invalidateCompositeFrom()`/
     ///        `invalidateCompositeAll()`'s own docs.
-    sound_mind::core::CompositePrefixCache compositeCache_;
+    /// @brief Shared with the background composite while it runs, which
+    ///        then has it to itself (see invalidateCache()).
+    std::shared_ptr<sound_mind::core::CompositePrefixCache> compositeCache_ =
+        std::make_shared<sound_mind::core::CompositePrefixCache>();
+    /// @brief See setBackgroundCompositing().
+    bool backgroundCompositing_ = false;
+    /// @brief Invalidations recorded while a background composite ran.
+    bool pendingInvalidateAll_ = false;
+    std::optional<std::size_t> pendingInvalidateFrom_;
+    /// @brief A finished stroke's path, drawn until its composite arrives.
+    sound_mind::core::Path settlingPreviewPath_;
     /// @brief Bumped by `invalidateCompositeFrom()`/`invalidateCompositeAll()` -
     ///        `renderComposite()`'s own "did anything actually change
     ///        since the last paint" signal, letting it skip even the
@@ -1324,6 +1384,10 @@ private:
     double zoomTime_ = 1.0;
     /// @brief The frequency-axis counterpart to zoomTime_ - pixels per bin.
     double zoomFrequency_ = 1.0;
+
+    /// @brief The background composite (`v0.1.47.3`); declared last, so it
+    ///        is cancelled and waited for before anything it uses goes away.
+    std::unique_ptr<BackgroundJob> compositeJob_;
 };
 
 }  // namespace sound_mind::studio

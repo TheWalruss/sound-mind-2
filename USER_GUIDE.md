@@ -2386,6 +2386,12 @@ genuinely cost more than others. None of this is a setting you need to
 tune up front - it's here for when something feels slower than
 expected, so you know what's actually driving it.
 
+- **The canvas never waits for an edit.** After an edit, the new picture
+  is made in the background while the window stays responsive: you see
+  the previous picture (and the stroke you just drew) until the new one
+  is ready, usually a split second - longer under a heavy filter layer
+  or with many layers. If you keep editing meanwhile, the newest version
+  is always the one that ends up shown.
 - **Hardware Acceleration** (the checkbox in the **View** menu, also
   mentioned under [The Main Window](#the-main-window)) lets several of
   the heavier operations below run on the GPU instead of the CPU when

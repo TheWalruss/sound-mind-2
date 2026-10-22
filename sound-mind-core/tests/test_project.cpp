@@ -1410,3 +1410,27 @@ TEST_CASE("setDecimalSeparator changes only the project's decimal separator sett
     CHECK(project.settings().canvasWidth == before.canvasWidth);
     CHECK(project.settings().principalMode == before.principalMode);
 }
+
+// v0.1.47.3: background compositing copies only what it reads.
+TEST_CASE("A render snapshot keeps settings, layers, MindWaves and kernels, and nothing else", "[core][project]") {
+    Project project = Project::createNew(sound_mind::core::ProjectSettings{});
+    project.layers().front().setBaseContent(sound_mind::core::silentContentFor(project.settings()));
+    const MindWaveId wave = project.addMindWave("Wave", MindWave{});
+    Clip clip;
+    clip.frameCount = 1;
+    clip.binCount = 1;
+    clip.leftMagnitudeDb = {-10.0f};
+    clip.rightMagnitudeDb = {-10.0f};
+    clip.sharedPhaseRadians = {0.0f};
+    project.addMindShot("Shot", clip);
+    project.macros().emplace_back();
+
+    const Project snapshot = project.renderSnapshot();
+    CHECK(snapshot.settings().canvasWidth == project.settings().canvasWidth);
+    REQUIRE(snapshot.layers().size() == project.layers().size());
+    CHECK(&*snapshot.layers().front().content() == &*project.layers().front().content());  // shared, not copied.
+    CHECK(snapshot.mindWaveById(wave) != nullptr);
+    CHECK(snapshot.mindShots().empty());
+    CHECK(snapshot.macros().empty());
+    CHECK(snapshot.history().size() == 0);
+}

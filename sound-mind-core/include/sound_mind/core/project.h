@@ -95,6 +95,16 @@ public:
      */
     Project(const Project& other);
 
+    /**
+     * @brief Just what compositing and decoding read - settings, layers,
+     *        MindWaves and convolution kernels - for a background job that
+     *        only composites (`v0.1.47.3`). Cheap: layers share their
+     *        images (LayerContent); Mind Shots, Macros, sources and the
+     *        History aren't copied at all.
+     * @return The snapshot; its other libraries are empty.
+     */
+    [[nodiscard]] Project renderSnapshot() const;
+
     /// @brief Copy-assigns a Project - see the copy constructor's own docs
     ///        for why the result's `operationLog()` is empty, not a copy
     ///        of `other`'s.

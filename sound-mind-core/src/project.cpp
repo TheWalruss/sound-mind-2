@@ -89,6 +89,16 @@ Project::Project(const Project& other)
     // this constructor's own docs.
 }
 
+Project Project::renderSnapshot() const {
+    Project snapshot;
+    snapshot.settings_ = settings_;
+    snapshot.layers_ = layers_;
+    snapshot.nextLayerId_ = nextLayerId_;
+    snapshot.mindWaves_ = mindWaves_;
+    snapshot.convolutionKernels_ = convolutionKernels_;
+    return snapshot;
+}
+
 Project& Project::operator=(const Project& other) {
     if (this != &other) {
         settings_ = other.settings_;

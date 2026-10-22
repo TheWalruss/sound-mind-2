@@ -91,7 +91,7 @@ void Layer::setBaseContent(sound_mind::codec::StreamImage content, nlohmann::jso
     if (!displaced_.has_value()) {
         displaced_ = releaseBase();
     }
-    content_ = std::move(content);
+    content_ = LayerContent(std::make_shared<const sound_mind::codec::StreamImage>(std::move(content)));
     base_.reset();
     baseRecipe_ = std::move(recipe);
     baseRevision_ = nextBaseRevision();
@@ -102,7 +102,7 @@ LayerBase Layer::releaseBase() {
     if (base_) {
         released.stream = std::move(base_);
     } else if (content_) {
-        released.stream = std::make_shared<const sound_mind::codec::StreamImage>(std::move(*content_));
+        released.stream = content_.shared();
     }
     released.recipe = std::move(baseRecipe_);
     released.revision = baseRevision_;
@@ -114,11 +114,7 @@ LayerBase Layer::releaseBase() {
 
 void Layer::restoreBase(const LayerBase& base) {
     base_ = base.stream;
-    if (base.stream) {
-        content_ = *base.stream;
-    } else {
-        content_.reset();
-    }
+    content_ = LayerContent(base.stream);  // shared with the base until something is rendered on top.
     baseRecipe_ = base.recipe;
     // A base remade by replaying the history comes without a revision of
     // its own: it's a new one as far as anything caching on it knows.

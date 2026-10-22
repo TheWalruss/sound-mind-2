@@ -66,6 +66,57 @@ NLOHMANN_JSON_SERIALIZE_ENUM(LayerType, {
 }
 
 /**
+ * @brief A layer's content, held as a shared, immutable image
+ *        (`v0.1.47.3`) - read like a `std::optional<StreamImage>`.
+ *
+ * Copying a layer (and so a Project - every background job copies one)
+ * shares the image instead of duplicating it; the image is never changed
+ * in place, only replaced (Layer::setContent()/setBaseContent()), so a
+ * copy can be read on another thread while the original moves on.
+ *
+ * @note Thread-safety: the image itself is immutable; the handle is an
+ *       ordinary value, like `std::shared_ptr`.
+ */
+class LayerContent {
+public:
+    /// @brief No content.
+    LayerContent() = default;
+    /// @brief Shares `image` (which may be null: no content).
+    /// @param image The image.
+    explicit LayerContent(std::shared_ptr<const sound_mind::codec::StreamImage> image) : image_(std::move(image)) {}
+
+    /// @brief Whether there is content.
+    /// @return `true` if there is.
+    [[nodiscard]] bool has_value() const noexcept { return image_ != nullptr; }
+    /// @brief Whether there is content.
+    /// @return has_value().
+    explicit operator bool() const noexcept { return has_value(); }
+    /// @brief The image; there must be one.
+    /// @return It.
+    [[nodiscard]] const sound_mind::codec::StreamImage& operator*() const noexcept { return *image_; }
+    /// @brief The image; there must be one.
+    /// @return A pointer to it.
+    [[nodiscard]] const sound_mind::codec::StreamImage* operator->() const noexcept { return image_.get(); }
+    /// @brief The image.
+    /// @return It.
+    /// @throws std::bad_optional_access if there is none.
+    [[nodiscard]] const sound_mind::codec::StreamImage& value() const {
+        if (!image_) {
+            throw std::bad_optional_access();
+        }
+        return *image_;
+    }
+    /// @brief The shared image itself (null if none).
+    /// @return It.
+    [[nodiscard]] const std::shared_ptr<const sound_mind::codec::StreamImage>& shared() const noexcept { return image_; }
+    /// @brief Drops the content.
+    void reset() noexcept { image_.reset(); }
+
+private:
+    std::shared_ptr<const sound_mind::codec::StreamImage> image_;
+};
+
+/**
  * @brief A layer's base content and how it was made (`v0.1.43.1`) - what
  *        the project's `History` keeps to undo replacing it.
  *
@@ -339,7 +390,7 @@ public:
      *       JSON project file; `Project::save()`/`load()` are what read and
      *       write that file, deriving its name from this layer's id.
      */
-    [[nodiscard]] const std::optional<sound_mind::codec::StreamImage>& content() const noexcept { return content_; }
+    [[nodiscard]] const LayerContent& content() const noexcept { return content_; }
 
     /**
      * @brief Sets this layer's *rendered* content - its base content with
@@ -354,7 +405,7 @@ public:
      */
     void setContent(sound_mind::codec::StreamImage content) {
         splitBase();
-        content_ = std::move(content);
+        content_ = LayerContent(std::make_shared<const sound_mind::codec::StreamImage>(std::move(content)));
     }
 
     /**
@@ -369,7 +420,7 @@ public:
      * @return The base content, or `nullptr` for a layer with none.
      */
     [[nodiscard]] const sound_mind::codec::StreamImage* baseContent() const noexcept {
-        return base_ ? base_.get() : (content_ ? &*content_ : nullptr);
+        return base_ ? base_.get() : content_.shared().get();
     }
 
     /**
@@ -513,7 +564,7 @@ private:
     bool muted_ = false;
     std::int64_t translationColumns_ = 0;
     double rescaleFactor_ = 1.0;
-    std::optional<sound_mind::codec::StreamImage> content_;
+    LayerContent content_;
     /// The base, once something is rendered on top of it - see baseContent().
     std::shared_ptr<const sound_mind::codec::StreamImage> base_;
     std::uint64_t baseRevision_ = 0;
@@ -527,7 +578,7 @@ private:
     ///        overwritten with a render - see baseContent().
     void splitBase() {
         if (!base_ && content_) {
-            base_ = std::make_shared<const sound_mind::codec::StreamImage>(*content_);
+            base_ = content_.shared();  // shared, not copied: the image never changes in place.
         }
     }
 };

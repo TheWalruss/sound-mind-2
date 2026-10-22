@@ -284,3 +284,27 @@ TEST_CASE("A Layer is not marked as recorded by default, and the mark round-trip
 
     CHECK(restored.recorded());
 }
+
+// v0.1.47.3: a layer's image is shared, not duplicated, when the layer is
+// copied - and replacing it on one copy leaves the other alone.
+TEST_CASE("Copying a layer shares its content image until either copy replaces it", "[core][layer]") {
+    Layer original(1, "Layer", LayerType::Normal);
+    StreamImage image;
+    image.config.binCount = 4;
+    image.frameCount = 2;
+    image.leftMagnitudeDb.assign(8, -10.0f);
+    image.rightMagnitudeDb.assign(8, -10.0f);
+    image.sharedPhaseRadians.assign(8, 0.0f);
+    original.setBaseContent(image);
+
+    const Layer copy = original;
+    REQUIRE(copy.content().has_value());
+    CHECK(&*copy.content() == &*original.content());  // shared.
+
+    StreamImage painted = image;
+    painted.leftMagnitudeDb[0] = -1.0f;
+    original.setContent(painted);
+    CHECK(original.content()->leftMagnitudeDb[0] == -1.0f);
+    CHECK(copy.content()->leftMagnitudeDb[0] == -10.0f);  // the copy kept the old image.
+    CHECK(original.baseContent() == &*copy.content());     // the base is still that shared image.
+}

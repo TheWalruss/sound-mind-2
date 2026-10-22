@@ -113,4 +113,7 @@ private slots:
     void aStereoOverlayIsDrawnOverTheCanvas();
     void theSoundFlowerIsProjectedOnceUntilSomethingChanges();
     void anOverrideFrameIsProjectedOncePerFrame();
+    void backgroundCompositingShowsThePreviousPictureUntilTheNewOneArrives();
+    void editsDuringABackgroundCompositeEndOnTheNewest();
+    void aFinishedStrokeStaysDrawnUntilItsCompositeArrives();
 };

@@ -6,6 +6,15 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.47.3] - 2026-10-22
+
+Roadmap slot `v0.Y.82.4` (responsiveness and modularity), installment C.
+
+### Changed
+
+- **The canvas is drawn in the background.** After an edit - a stroke, a slider, a filter change - the window no longer waits for the whole picture to be recomputed (which under a heavy filter layer could take a noticeable moment). The previous picture stays up, with the stroke you just drew, until the new one is ready; if you keep editing meanwhile, the newest version always ends up shown.
+- **Starting playback, Repeat and Loop refreshes, and Delta/Review start sooner on big projects.** Preparing them used to copy the whole project, layer images included; layers now share their images, so that copy is almost free.
+
 ## [0.1.47.2] - 2026-10-22
 
 Roadmap slot `v0.Y.82.4` (responsiveness and modularity), installment B.

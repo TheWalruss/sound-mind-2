@@ -115,7 +115,11 @@ void CanvasWidget::setProject(const sound_mind::core::Project* project) {
     // explicitly here is simpler than relying on it, and also resets
     // currentComposite()'s own generation-based "nothing changed" shortcut,
     // which that signature check alone wouldn't touch.
-    compositeCache_.invalidateAll();
+    if (compositeJob_) {
+        compositeJob_->requestCancel();  // its picture is of the old project.
+    }
+    settlingPreviewPath_ = sound_mind::core::Path{};
+    invalidateCache(std::nullopt);
     ++compositeGeneration_;
     // A previous project's own zoom level means nothing for a different
     // one (a coincidentally-similar canvas size aside) - the same
@@ -167,8 +171,87 @@ QColor CanvasWidget::guidePathColor(bool branching) {
 }
 
 void CanvasWidget::setPaintPreviewPath(sound_mind::core::Path path) {
+    // A finished stroke's path stays drawn until the composite with its
+    // paint arrives, so it doesn't vanish and reappear (v0.1.47.3).
+    if (path.nodes().empty() && !paintPreviewPath_.nodes().empty() && backgroundCompositing_ && compositePending()) {
+        settlingPreviewPath_ = paintPreviewPath_;
+    }
     paintPreviewPath_ = std::move(path);
     update();
+}
+
+void CanvasWidget::setBackgroundCompositing(bool enabled) {
+    if (enabled == backgroundCompositing_) {
+        return;
+    }
+    if (!enabled && compositeJob_) {
+        compositeJob_->finishNow();
+    }
+    backgroundCompositing_ = enabled;
+    if (enabled && !compositeJob_) {
+        compositeJob_ = std::make_unique<BackgroundJob>(nullptr, std::chrono::milliseconds(8));
+    }
+    update();
+}
+
+void CanvasWidget::finishCompositing() {
+    if (compositeJob_) {
+        compositeJob_->finishNow();
+    }
+}
+
+bool CanvasWidget::compositePending() const noexcept {
+    return isCompositing() || lastRenderedGeneration_ != compositeGeneration_;
+}
+
+void CanvasWidget::invalidateCache(std::optional<std::size_t> fromLayer) {
+    if (isCompositing()) {
+        if (!fromLayer.has_value()) {
+            pendingInvalidateAll_ = true;
+        } else {
+            pendingInvalidateFrom_ = std::min(pendingInvalidateFrom_.value_or(*fromLayer), *fromLayer);
+        }
+        return;
+    }
+    if (fromLayer.has_value()) {
+        compositeCache_->invalidateFrom(*fromLayer);
+    } else {
+        compositeCache_->invalidateAll();
+    }
+}
+
+void CanvasWidget::startBackgroundComposite() {
+    if (project_ == nullptr || isCompositing()) {
+        return;  // a running composite's completion starts the next one.
+    }
+    if (pendingInvalidateAll_) {
+        compositeCache_->invalidateAll();
+    } else if (pendingInvalidateFrom_.has_value()) {
+        compositeCache_->invalidateFrom(*pendingInvalidateFrom_);
+    }
+    pendingInvalidateAll_ = false;
+    pendingInvalidateFrom_.reset();
+    const std::uint64_t generation = compositeGeneration_;
+    compositeJob_->start([this, snapshot = project_->renderSnapshot(), cache = compositeCache_,
+                          markClipped = clipIndicatorEnabled_, overlay = liveOverlay_,
+                          generation](sound_mind::core::CancellationToken&) -> BackgroundJob::Completion {
+        auto rgb = std::make_shared<std::optional<sound_mind::codec::RgbImage>>(
+            renderComposite(snapshot, *cache, markClipped, overlay));
+        return [this, rgb, generation](bool cancelled) {
+            if (cancelled) {
+                return;  // another project's picture.
+            }
+            lastRenderedComposite_ = std::move(*rgb);
+            lastRenderedGeneration_ = generation;
+            ++displayGeneration_;
+            if (lastRenderedGeneration_ != compositeGeneration_) {
+                startBackgroundComposite();  // edits arrived meanwhile: the newest wins.
+            } else {
+                settlingPreviewPath_ = sound_mind::core::Path{};
+            }
+            update();
+        };
+    });
 }
 
 void CanvasWidget::setPreviewSelectedNodeIndex(std::optional<std::size_t> index) {
@@ -509,14 +592,19 @@ const sound_mind::codec::RgbImage* CanvasWidget::currentComposite() {
     }
     auto signature = layerStackSignature();
     if (signature != lastRenderedSignature_) {
-        compositeCache_.invalidateAll();
+        invalidateCache(std::nullopt);
         ++compositeGeneration_;
+        lastRenderedSignature_ = std::move(signature);
     }
     if (lastRenderedGeneration_ != compositeGeneration_) {
-        lastRenderedComposite_ = renderComposite(*project_, compositeCache_, clipIndicatorEnabled_, liveOverlay_);
-        lastRenderedGeneration_ = compositeGeneration_;
-        lastRenderedSignature_ = std::move(signature);
-        ++displayGeneration_;
+        if (backgroundCompositing_) {
+            startBackgroundComposite();  // shows the last finished picture meanwhile.
+        } else {
+            lastRenderedComposite_ =
+                renderComposite(*project_, *compositeCache_, clipIndicatorEnabled_, liveOverlay_);
+            lastRenderedGeneration_ = compositeGeneration_;
+            ++displayGeneration_;
+        }
     }
     return lastRenderedComposite_.has_value() ? &*lastRenderedComposite_ : nullptr;
 }
@@ -556,7 +644,7 @@ CanvasWidget::LayerStackSignature CanvasWidget::layerStackSignature() const {
 }
 
 void CanvasWidget::invalidateCompositeFrom(std::size_t layerIndex) {
-    compositeCache_.invalidateFrom(layerIndex);
+    invalidateCache(layerIndex);
     ++compositeGeneration_;
     update();
 }
@@ -591,7 +679,7 @@ void CanvasWidget::setClipIndicatorEnabled(bool enabled) {
 }
 
 void CanvasWidget::invalidateCompositeAll() {
-    compositeCache_.invalidateAll();
+    invalidateCache(std::nullopt);
     ++compositeGeneration_;
     update();
 }
@@ -735,6 +823,14 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     // least one of the two always contrasts, on any background color or
     // pattern - the same "halo" technique drawPreviewPathNodes() below
     // uses for the nodes/handles themselves.
+    if (project_ != nullptr && !settlingPreviewPath_.nodes().empty() && !polarMode_) {
+        // A finished stroke whose composite is still on its way.
+        const QPainterPath settlingPath = toPainterPath(settlingPreviewPath_);
+        painter.setPen(QPen(Qt::black, 3));
+        painter.drawPath(settlingPath);
+        painter.setPen(QPen(Qt::white, 1));
+        painter.drawPath(settlingPath);
+    }
     if (project_ != nullptr && !paintPreviewPath_.nodes().empty()) {
         const QPainterPath previewPath = toPainterPath(paintPreviewPath_);
         painter.setPen(QPen(Qt::black, 3));
