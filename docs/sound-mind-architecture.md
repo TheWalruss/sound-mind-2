@@ -3130,6 +3130,26 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Track scope without Repeat ignores edits.
 
       The 53 `MainWindowTest` playback/Repeat/Delta/Review cases pass unchanged.
+280. **Modularity pass, installment E: `AnalysisController`.** Settled in `v0.1.48.5`.
+    - **`studio::AnalysisController` (new, `QObject`)** owns:
+      - the analysis `BackgroundJob`;
+      - Auto-update's 300 ms debounce (`kAutoAnalyzeDelayMs`, moved from `MainWindow`);
+      - the stale, reanalysis and cancelled-count state;
+      - the voice count, plus the spike filter and Auto-update remembered in `QSettings`;
+      - the panel's Analyze, Auto-update, voice-count and spike-filter wiring.
+
+      Methods: `analyze()`, `noteProjectChanged()`, `requestReanalysis()`, `setAutoAnalyze()`, `projectChanged()`, `isAnalyzing()` and `cancelledCount()`.
+    - **No dependency on `MainWindow`.** It's given the panel, a project accessor and the settings. The panel's overlays draw on the canvas, so their wiring stays in `MainWindow`.
+    - **`MainWindow`:**
+      - Its analysis API forwards. `noteProjectChangedForAnalysis()` forwards once the controller exists; it's called during construction too.
+      - Removed: `autoAnalyzeTimer_`, `autoAnalyze_`, `analysisStale_`, `reanalyzeRequested_`, `cancelledAnalyses_`, `pitchVoiceCount_`, `requestReanalysis()`, `kAutoAnalyzeDelayMs` and the analysis job.
+    - **Tests:** Studio `AnalysisControllerTest`, 4 cases, about 4 s:
+      - analyzing shows a report;
+      - an edit during Auto-update cancels (counted) and re-analyzes;
+      - another project drops the report;
+      - Auto-update is remembered.
+
+      The 12 `MainWindowTest` analysis cases pass unchanged.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

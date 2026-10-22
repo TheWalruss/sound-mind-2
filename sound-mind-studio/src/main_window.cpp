@@ -64,6 +64,7 @@
 #include "sound_mind/studio/export_controller.h"
 #include "sound_mind/studio/import_controller.h"
 #include "sound_mind/studio/playback_preparer.h"
+#include "sound_mind/studio/analysis_controller.h"
 #include "sound_mind/studio/base_recipes.h"
 #include "sound_mind/studio/video_export_dialog.h"
 #include "sound_mind/studio/macro_manager_dialog.h"
@@ -521,7 +522,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         playbackController_, statusBar());
     recordingSaveJob_ = std::make_unique<BackgroundJob>();
     filterPreviewJob_ = std::make_unique<BackgroundJob>();
-    loudnessJob_ = std::make_unique<BackgroundJob>(nullptr, std::chrono::milliseconds(50));
     loopBackingJob_ = std::make_unique<BackgroundJob>();
     connect(playbackController_, &PlaybackController::invalidated, this, &MainWindow::scheduleRepeatRefresh);
     // Anything that changes what's heard also changes what the analysis
@@ -866,7 +866,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     analysisPanel_ = new AnalysisPanel(this);
     analysisPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, analysisPanel_);
-    connect(analysisPanel_, &AnalysisPanel::analyzeRequested, this, &MainWindow::analyzeLoudness);
     connect(analysisPanel_, &AnalysisPanel::pitchOverlayToggled, this,
             [this](bool, const std::vector<std::vector<float>>& tracks) { canvas_->setPitchOverlay(tracks); });
     // The canvas's horizontal mouse position feeds the Pitch tab's "At mouse" (v0.1.40.11).
@@ -884,35 +883,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             [this](bool, const std::vector<float>& correlation, const std::vector<float>& width) {
                 canvas_->setStereoOverlay(correlation, width, sound_mind::core::kLoudnessStepSeconds);
             });
-    connect(analysisPanel_, &AnalysisPanel::autoAnalyzeToggled, this, &MainWindow::setAutoAnalyze);
-    autoAnalyzeTimer_ = new QTimer(this);
-    autoAnalyzeTimer_->setSingleShot(true);
-    autoAnalyzeTimer_->setInterval(kAutoAnalyzeDelayMs);
-    connect(autoAnalyzeTimer_, &QTimer::timeout, this, [this]() {
-        if ((!autoAnalyze_ && !reanalyzeRequested_) || !project_) {
-            return;
-        }
-        if (loudnessJob_->isRunning()) {
-            autoAnalyzeTimer_->start();  // a cancelled run is still winding down: try again shortly.
-            return;
-        }
-        analyzeLoudness();
-    });
-    setAutoAnalyze(settings_.value(QStringLiteral("analysisAutoUpdate"), false).toBool());
-    analysisPanel_->setPitchSpikeFilterMs(settings_.value(QStringLiteral("pitchSpikeFilterMs"), 0.0).toDouble());
-    pitchVoiceCount_ = std::clamp(settings_.value(QStringLiteral("pitchVoiceCount"), 1).toInt(), 1,
-                                  sound_mind::core::kMaxPitchVoices);
-    analysisPanel_->setPitchVoiceCount(pitchVoiceCount_);
-    connect(analysisPanel_, &AnalysisPanel::pitchVoiceCountChanged, this, [this](int voices) {
-        pitchVoiceCount_ = voices;
-        settings_.setValue(QStringLiteral("pitchVoiceCount"), voices);
-        if (analysisPanel_->hasReport() || loudnessJob_->isRunning()) {
-            requestReanalysis();  // the report's pitch tracks no longer match.
-        }
-    });
-    connect(analysisPanel_, &AnalysisPanel::pitchSpikeFilterChanged, this, [this](double milliseconds) {
-        settings_.setValue(QStringLiteral("pitchSpikeFilterMs"), milliseconds);
-    });
+    // Analyze, Auto-update and the report's settings live in their own
+    // controller since v0.1.48.5 - see AnalysisController. (The overlays
+    // above draw on the canvas, so they stay here.)
+    analysisController_ = std::make_unique<AnalysisController>(
+        analysisPanel_, [this]() -> const sound_mind::core::Project* { return project_ ? &*project_ : nullptr; },
+        &settings_);
 
     loopPanel_ = new LoopPanel(this);
     loopPanel_->hide();  // also needs setProject() - loopEngine_ doesn't exist until then.
@@ -2135,13 +2111,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // see its own docs), so this is always safe regardless of caller.
     setFilterPreviewEnabled(false);
     playbackPreparer_->projectChanged();  // pending edit playback is the old project's.
-    loudnessJob_->requestCancel();  // its result is for the old project: the completion drops it.
-    analysisPanel_->clearReport();
-    analysisStale_ = false;
-    autoAnalyzeTimer_->stop();
-    if (autoAnalyze_) {
-        autoAnalyzeTimer_->start();  // analyze the newly opened project once it's in place.
-    }
+    analysisController_->projectChanged();
     loopUpdateTimer_->stop();
     if (loopEngine_) {
         loopEngine_->stop();
@@ -3085,75 +3055,15 @@ void MainWindow::applyNormalizationGain() {
 }
 
 void MainWindow::noteProjectChangedForAnalysis() {
-    if (analysisPanel_ == nullptr || autoAnalyzeTimer_ == nullptr) {
-        return;  // still constructing: nothing analyzed yet.
-    }
-    analysisStale_ = true;
-    analysisPanel_->setStale();
-    if (!autoAnalyze_) {
-        return;
-    }
-    if (loudnessJob_->isRunning() && !loudnessJob_->cancelRequested()) {
-        loudnessJob_->requestCancel();  // its result would already be out of date.
-        ++cancelledAnalyses_;
-    }
-    autoAnalyzeTimer_->start();  // restarts the wait on each change.
-}
-
-void MainWindow::requestReanalysis() {
-    if (loudnessJob_->isRunning() && !loudnessJob_->cancelRequested()) {
-        loudnessJob_->requestCancel();
-        ++cancelledAnalyses_;
-    }
-    reanalyzeRequested_ = true;
-    autoAnalyzeTimer_->start();
-}
-
-void MainWindow::setAutoAnalyze(bool enabled) {
-    autoAnalyze_ = enabled;
-    settings_.setValue(QStringLiteral("analysisAutoUpdate"), enabled);
-    analysisPanel_->setAutoAnalyze(enabled);
-    if (!enabled) {
-        autoAnalyzeTimer_->stop();
-        return;
-    }
-    if (project_ && (!analysisPanel_->hasReport() || analysisStale_)) {
-        analyzeLoudness();
+    if (analysisController_) {  // still constructing: nothing analyzed yet.
+        analysisController_->noteProjectChanged();
     }
 }
 
-void MainWindow::analyzeLoudness() {
-    if (!project_ || loudnessJob_->isRunning()) {
-        return;
-    }
-    analysisStale_ = false;
-    reanalyzeRequested_ = false;
-    analysisPanel_->setAnalyzing(true);
-    if (!autoAnalyze_) {
-        analysisPanel_->show();  // an explicit request; Auto-update never pops the panel up by itself.
-    }
-    loudnessJob_->start([this, projectCopy = *project_, voices = pitchVoiceCount_](
-                            sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
-        std::optional<sound_mind::core::ProjectLoudnessReport> report;
-        try {
-            report = sound_mind::core::analyzeProjectLoudness(
-                projectCopy, [&token]() { return token.cancellationRequested(); }, voices);
-        } catch (const std::exception&) {
-            report.reset();  // cancelled or failed - nothing to show.
-        }
-        auto shared = std::make_shared<std::optional<sound_mind::core::ProjectLoudnessReport>>(std::move(report));
-        return [this, shared](bool cancelled) {
-            analysisPanel_->setAnalyzing(false);
-            if (cancelled || !shared->has_value()) {
-                return;  // stale (an edit, or another project) or failed.
-            }
-            analysisPanel_->setReport(**shared);
-            if (analysisStale_) {
-                analysisPanel_->setStale();  // a change landed after this run had already finished.
-            }
-        };
-    });
-}
+
+void MainWindow::setAutoAnalyze(bool enabled) { analysisController_->setAutoAnalyze(enabled); }
+
+void MainWindow::analyzeLoudness() { analysisController_->analyze(); }
 
 void MainWindow::flushPickedTextEdit() {
     pickedTextEditTimer_->stop();

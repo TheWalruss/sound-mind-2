@@ -32,6 +32,7 @@
 #include "sound_mind/studio/export_controller.h"
 #include "sound_mind/studio/import_controller.h"
 #include "sound_mind/studio/playback_preparer.h"
+#include "sound_mind/studio/analysis_controller.h"
 #include "sound_mind/studio/branch_curve_session.h"
 #include "sound_mind/studio/project_change.h"
 #include "sound_mind/studio/analysis_panel.h"
@@ -1459,7 +1460,7 @@ public slots:
 
     /// @brief Whether a loudness analysis is running.
     /// @return `true` from analyzeLoudness() until its report arrives.
-    [[nodiscard]] bool isAnalyzingLoudness() const noexcept { return loudnessJob_->isRunning(); }
+    [[nodiscard]] bool isAnalyzingLoudness() const noexcept { return analysisController_->isAnalyzing(); }
 
     /**
      * @brief Turns the Analysis panel's Auto-update on or off (`v0.1.40.7`).
@@ -1477,7 +1478,7 @@ public slots:
     /// @brief How many running analyses a change has cancelled - a test
     ///        hook for setAutoAnalyze().
     /// @return The count since this window was built.
-    [[nodiscard]] int cancelledAnalysisCount() const noexcept { return cancelledAnalyses_; }
+    [[nodiscard]] int cancelledAnalysisCount() const noexcept { return analysisController_->cancelledCount(); }
 
     /**
      * @brief Undoes the latest History entry, if any - the actual work
@@ -3680,10 +3681,9 @@ private:
     void noteLoadedPlaybackLoudness(double lufs);
     /// @brief Every project change the analysis report could depend on:
     ///        marks it out of date and, with Auto-update on, cancels a
-    ///        running analysis and (re)starts autoAnalyzeTimer_.
+    ///        running analysis and restarts the debounce - see
+    ///        AnalysisController::noteProjectChanged().
     void noteProjectChangedForAnalysis();
-    /// @brief How long Auto-update waits after the last change, ms - see setAutoAnalyze().
-    static constexpr int kAutoAnalyzeDelayMs = 300;
     /// @brief Text panel edits to the Picked text, applied after a short
     ///        pause (`v0.1.40.13`): typing a word is one undo step, not one
     ///        per letter. See pickedTextEditTimer_.
@@ -3694,23 +3694,6 @@ private:
     static constexpr int kPickedTextEditDelayMs = 400;
     /// @brief Applies pendingPickedTextSettings_ to the Picked text now.
     void flushPickedTextEdit();
-    /// @brief See setAutoAnalyze().
-    bool autoAnalyze_ = false;
-    /// @brief The Analysis panel's "Voices" (`v0.1.40.11`), passed to each
-    ///        analysis; remembered as `pitchVoiceCount`.
-    int pitchVoiceCount_ = 1;
-    /// @brief A re-analysis was asked for regardless of Auto-update (a new
-    ///        voice count) - honored when autoAnalyzeTimer_ fires.
-    bool reanalyzeRequested_ = false;
-    /// @brief Cancels a running analysis and starts a fresh one shortly,
-    ///        via autoAnalyzeTimer_ - for a setting the report depends on.
-    void requestReanalysis();
-    /// @brief The report on screen no longer matches the project.
-    bool analysisStale_ = false;
-    /// @brief Auto-update's debounce - see setAutoAnalyze().
-    QTimer* autoAnalyzeTimer_ = nullptr;
-    /// @brief See cancelledAnalysisCount().
-    int cancelledAnalyses_ = 0;
     /// @brief The Text tool's panel - see `TextToolPanel`.
     TextToolPanel* textToolPanel_ = nullptr;
 
@@ -3982,7 +3965,7 @@ private:
     std::unique_ptr<PlaybackPreparer> playbackPreparer_;  ///< Play's composite, Repeat, Delta/Review (`v0.1.48.4`).
     std::unique_ptr<BackgroundJob> recordingSaveJob_;  ///< Saving a stopped recording.
     std::unique_ptr<BackgroundJob> filterPreviewJob_;  ///< Filter preview renders.
-    std::unique_ptr<BackgroundJob> loudnessJob_;       ///< The Analysis panel's run.
+    std::unique_ptr<AnalysisController> analysisController_;  ///< The Analysis panel's runs (`v0.1.48.5`).
     std::unique_ptr<BackgroundJob> loopBackingJob_;    ///< Loop Mode's backing audio.
     /// @}
 };
