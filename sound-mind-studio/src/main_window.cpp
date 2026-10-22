@@ -63,6 +63,7 @@
 #include "sound_mind/studio/background_job.h"
 #include "sound_mind/studio/export_controller.h"
 #include "sound_mind/studio/import_controller.h"
+#include "sound_mind/studio/playback_preparer.h"
 #include "sound_mind/studio/base_recipes.h"
 #include "sound_mind/studio/video_export_dialog.h"
 #include "sound_mind/studio/macro_manager_dialog.h"
@@ -508,17 +509,16 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
 
     // Finding #12, Installment H - see startPlayback()'s own docs. A
     // third, independent slot - not shared with export's/import's own.
-    compositeCancelButton_ = new QPushButton(tr("✕"));  // "✕".
-    compositeCancelButton_->setObjectName(QStringLiteral("compositeCancelButton"));
-    compositeCancelButton_->setToolTip(tr("Cancel"));
-    compositeCancelButton_->setFixedWidth(24);
-    compositeCancelButton_->hide();
-    statusBar()->addPermanentWidget(compositeCancelButton_);
-    compositeJob_ = std::make_unique<BackgroundJob>();
-    compositeJob_->setCancelButton(compositeCancelButton_);
-
-    refreshJob_ = std::make_unique<BackgroundJob>();
-    editPlaybackJob_ = std::make_unique<BackgroundJob>(nullptr, std::chrono::milliseconds(15));
+    // Preparing audio for Playback, Repeat and Delta/Review lives in its own
+    // controller since v0.1.48.4 - see PlaybackPreparer.
+    playbackPreparer_ = std::make_unique<PlaybackPreparer>(
+        PlaybackPreparer::Context{
+            [this]() -> const sound_mind::core::Project* { return project_ ? &*project_ : nullptr; },
+            [this]() { return currentPlaybackPositionSeconds_; },
+            [this](double lufs) { noteLoadedPlaybackLoudness(lufs); },
+            [this]() { noteMacroPlayhead(); },
+            [this](const QString& title, const QString& message) { QMessageBox::critical(this, title, message); }},
+        playbackController_, statusBar());
     recordingSaveJob_ = std::make_unique<BackgroundJob>();
     filterPreviewJob_ = std::make_unique<BackgroundJob>();
     loudnessJob_ = std::make_unique<BackgroundJob>(nullptr, std::chrono::milliseconds(50));
@@ -2134,9 +2134,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // no-op when already stopped, or when loopEngine_ doesn't exist yet -
     // see its own docs), so this is always safe regardless of caller.
     setFilterPreviewEnabled(false);
-    editPlaybackDirty_ = false;
-    editPlaybackJob_->requestCancel();  // its completion drops the old project's audio.
-    pendingEditBounds_.reset();
+    playbackPreparer_->projectChanged();  // pending edit playback is the old project's.
     loudnessJob_->requestCancel();  // its result is for the old project: the completion drops it.
     analysisPanel_->clearReport();
     analysisStale_ = false;
@@ -4380,57 +4378,7 @@ void MainWindow::startPlayback() {
     }
 
     if (!playbackController_->isLoaded()) {
-        if (isCompositingForPlayback()) {
-            statusBar()->showMessage(
-                tr("Already preparing playback - wait for it to finish, or cancel it, first."), 5000);
-            return;
-        }
-
-        // Cheap synchronous pre-check, mirroring compositeProject()'s own
-        // pre-pass (see its docs): is there anything to composite at all?
-        // Kept synchronous (not backgrounded) so the no-content case stays
-        // an instant no-op, exactly as before - only a real composite
-        // attempt is worth backgrounding.
-        const auto& layers = project_->layers();
-        const bool anyContributor =
-            std::any_of(layers.begin(), layers.end(), [](const sound_mind::core::Layer& layer) {
-                return layer.visible() && !layer.muted() && layer.content().has_value() &&
-                       !sound_mind::core::isFilterLayerType(layer.type());
-            });
-        if (!anyContributor) {
-            return;
-        }
-
-        // project_ copied by value - compositeProject() never touches
-        // project_ itself once backgrounded, so the background thread has
-        // nothing shared to synchronize against - see startPlayback()'s
-        // own docs.
-        compositeJob_->start([this, projectCopy = project_->renderSnapshot()](
-                                 sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
-            auto audio = std::make_shared<std::optional<sound_mind::codec::AudioBuffer>>();
-            double lufs = -70.0;
-            CompositeOutcome outcome = CompositeOutcome::Success;
-            QString error;
-            try {
-                const auto composite = sound_mind::core::compositeProject(
-                    projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
-                if (composite.has_value()) {
-                    // Decoded and measured here, off the GUI thread.
-                    *audio = sound_mind::codec::decode(*composite);
-                    lufs = sound_mind::core::integratedLoudnessLufs(**audio);
-                }
-            } catch (const sound_mind::core::CompositeCancelled&) {
-                outcome = CompositeOutcome::Cancelled;
-            } catch (const std::exception& e) {
-                outcome = CompositeOutcome::Failed;
-                error = QString::fromStdString(e.what());
-            }
-            return [this, audio, lufs, outcome, error](bool cancelled) {
-                finishPlaybackComposite(cancelled ? CompositeOutcome::Cancelled : outcome, error, std::move(*audio),
-                                        lufs);
-            };
-        });
-        statusBar()->showMessage(tr("Preparing playback..."));
+        playbackPreparer_->prepareAndPlay();  // composites in the background, then plays.
         return;
     }
 
@@ -4477,10 +4425,7 @@ void MainWindow::seekPlayback(double positionSeconds) {
     // setPlaybackRepeat(false)'s own docs give, so a subsequent edit's own
     // Delta/Review jump isn't fighting a range the user just moved away
     // from by hand.
-    repeatRangeStartSeconds_ = 0.0;
-    repeatRangeEndSeconds_ = playbackController_->totalSeconds();
-    repeatLoopBackSeconds_ = 0.0;
-    syncPlaybackRangeToEngine();
+    playbackPreparer_->widenToWholeTrack();
 }
 
 void MainWindow::setPlaybackOutputDevice(const QString& deviceName) {
@@ -4519,27 +4464,9 @@ void MainWindow::applyGridSnapping() {
         gridPanel_->timingGridConfig());
 }
 
-void MainWindow::setPlaybackRepeat(bool enabled) {
-    repeatEnabled_ = enabled;
-    if (!enabled && playbackController_->isLoaded()) {
-        // Widen back to the whole track immediately - see this method's
-        // own docs on why nothing about a stale Delta/Review range should
-        // linger once Repeat is unchecked.
-        repeatRangeStartSeconds_ = 0.0;
-        repeatRangeEndSeconds_ = playbackController_->totalSeconds();
-        repeatLoopBackSeconds_ = 0.0;
-    }
-    // Unconditional (not just inside the widen branch above) - a toggle
-    // needs to reach the engine immediately even when the range itself
-    // doesn't change, since syncPlaybackRangeToEngine() is also what
-    // carries repeatEnabled_ itself down to PlaybackEngine's own
-    // loopEnabled flag.
-    syncPlaybackRangeToEngine();
-}
+void MainWindow::setPlaybackRepeat(bool enabled) { playbackPreparer_->setRepeat(enabled); }
 
-void MainWindow::setPlaybackScope(sound_mind::studio::PlaybackScope scope) {
-    playbackScope_ = scope;
-}
+void MainWindow::setPlaybackScope(sound_mind::studio::PlaybackScope scope) { playbackPreparer_->setScope(scope); }
 
 void MainWindow::toggleLoopMode() {
     if (!loopEngine_) {
@@ -5114,205 +5041,15 @@ void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer
     if (!project_ || replayingForMindWave_) {
         return;
     }
-    // Repeat ON only reacts to an edit while a session is already playing -
-    // "works in principle just like Loop Mode", which never auto-starts
-    // itself either. Repeat OFF, on the other hand, is a fresh one-shot
-    // preview per docs/sound-mind-design.md's "Repeat Playback" section:
-    // Delta/Review's own "restarts audio playback... the moment the canvas
-    // is updated" is driven by Scope alone, independent of Repeat and of
-    // whether anything was already playing - Track has no such behavior at
-    // all (it isn't "the edit" in the Track case, there's no narrower
-    // region to preview).
-    const bool deltaOrReview = playbackScope_ == sound_mind::studio::PlaybackScope::Delta ||
-                                playbackScope_ == sound_mind::studio::PlaybackScope::Review;
-    if (repeatEnabled_) {
-        if (!playbackController_->isPlaying()) {
-            return;
-        }
-        if (playbackScope_ == sound_mind::studio::PlaybackScope::Track) {
-            // Playback keeps going uninterrupted; the fresh audio is
-            // prepared in the background and swapped in at the next
-            // loop-back - see scheduleRepeatRefresh().
-            scheduleRepeatRefresh();
-            return;
-        }
-    } else if (!deltaOrReview) {
-        return;
-    }
-
-    // The edited region, for Delta/Review - layer's own most recently
-    // active operation is a practical approximation of "what just
-    // changed": exact for a fresh paint/fill/paste/sequence stamp
-    // (that operation is always the newest active one on its own layer),
-    // and still reasonable for an undo/redo (neither appends a fresh
-    // operation of its own - the layer's own now-different "most recently
-    // active" operation is the closest available stand-in for what the
-    // user just saw change).
-    std::optional<sound_mind::core::TimeFrequencyRect> editedBounds;
-    const auto operations = project_->operationLog().activeOperationsTargeting(layer);
-    if (!operations.empty()) {
-        editedBounds = operations.back()->bounds();
-    }
-
-    pendingEditBounds_ = editedBounds;
-    // v0.1.47.1: composited and decoded on a background task - the edit
-    // returns at once, and playback starts when the audio is ready.
-    startEditPlaybackPreparation();
+    playbackPreparer_->contentChanged(layer);
 }
 
-bool MainWindow::isPreparingEditPlayback() const noexcept { return editPlaybackJob_->isRunning(); }
-
-void MainWindow::startEditPlaybackPreparation() {
-    if (!project_) {
-        return;
-    }
-    if (editPlaybackJob_->isRunning()) {
-        editPlaybackDirty_ = true;
-        editPlaybackJob_->requestCancel();
-        return;
-    }
-    editPlaybackDirty_ = false;
-    editPlaybackJob_->start([this, projectCopy = project_->renderSnapshot()](
-                                sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
-        auto audio = std::make_shared<std::optional<sound_mind::codec::AudioBuffer>>();
-        try {
-            const auto composite = sound_mind::core::compositeProject(
-                projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
-            if (composite.has_value() && !token.cancellationRequested()) {
-                *audio = sound_mind::codec::decode(*composite);
-            }
-        } catch (const std::exception&) {
-            audio->reset();  // cancelled or failed: nothing to play.
-        }
-        return [this, audio](bool cancelled) {
-            if (editPlaybackDirty_) {
-                startEditPlaybackPreparation();  // a newer edit arrived: it wins.
-                return;
-            }
-            if (cancelled || !audio->has_value() || !project_) {
-                return;
-            }
-            applyEditPlayback(std::move(**audio));
-        };
-    });
-}
-
-void MainWindow::applyEditPlayback(sound_mind::codec::AudioBuffer audio) {
-    // Stops playback first (see load()'s own docs) - the confirmed
-    // "audible restart on edit" behavior, not seamless live double-
-    // buffering.
-    playbackController_->load(std::move(audio));
-    const double totalSeconds = playbackController_->totalSeconds();
-
-    switch (playbackScope_) {
-        case sound_mind::studio::PlaybackScope::Track:
-            repeatRangeStartSeconds_ = 0.0;
-            repeatRangeEndSeconds_ = totalSeconds;
-            repeatLoopBackSeconds_ = repeatRangeStartSeconds_;
-            // Pushed to the engine before this seek() - a fresh load()
-            // just reset it to "no restriction" (see PlaybackEngine::
-            // loadAudio()'s own docs), so the seek below needs this scope's
-            // own range in place first to resolve correctly if it happens
-            // to land exactly at/past that range's own end.
-            syncPlaybackRangeToEngine();
-            playbackController_->seek(currentPlaybackPositionSeconds_);
-            break;
-        case sound_mind::studio::PlaybackScope::Delta:
-            repeatRangeStartSeconds_ = pendingEditBounds_ ? pendingEditBounds_->startTimeSeconds : 0.0;
-            repeatRangeEndSeconds_ = pendingEditBounds_ ? pendingEditBounds_->endTimeSeconds : totalSeconds;
-            repeatLoopBackSeconds_ = repeatRangeStartSeconds_;
-            syncPlaybackRangeToEngine();
-            playbackController_->seek(repeatRangeStartSeconds_);
-            break;
-        case sound_mind::studio::PlaybackScope::Review:
-            repeatRangeStartSeconds_ = pendingEditBounds_ ? pendingEditBounds_->startTimeSeconds : 0.0;
-            repeatRangeEndSeconds_ = totalSeconds;
-            // Unlike Delta, Review loops the whole track once it reaches
-            // the end - back to the track's own start, not the edit's.
-            repeatLoopBackSeconds_ = 0.0;
-            syncPlaybackRangeToEngine();
-            playbackController_->seek(repeatRangeStartSeconds_);
-            break;
-    }
-
-    playbackController_->play();
-}
-
-void MainWindow::syncPlaybackRangeToEngine() {
-    // `<= repeatRangeStartSeconds_`, not `<= 0.0`: a single-click (as
-    // opposed to dragged) paint stroke's own bounds() is a genuine
-    // zero-width point - Delta/Review scope then sets
-    // repeatRangeEndSeconds_ == repeatRangeStartSeconds_ exactly (see
-    // handleContentChangedForPlayback() above). A range with nothing to
-    // actually loop over (end <= start) is treated the same as "no range
-    // yet": push "no restriction" down instead, so playback continues
-    // straight through with no halt/loop-back at all for that one edit -
-    // see this method's own docs on why, unlike the former
-    // checkRepeatPlaybackRange() this replaces, there's no recursion risk
-    // here to guard against.
-    if (repeatRangeEndSeconds_ <= repeatRangeStartSeconds_) {
-        playbackController_->setPlaybackRange(/*loopEnabled=*/false, playbackController_->totalSeconds(),
-                                               /*loopBackSeconds=*/0.0);
-        return;
-    }
-    playbackController_->setPlaybackRange(repeatEnabled_, repeatRangeEndSeconds_, repeatLoopBackSeconds_);
-}
+bool MainWindow::isPreparingEditPlayback() const noexcept { return playbackPreparer_->isPreparingEdit(); }
 
 
-bool MainWindow::isCompositingForPlayback() const noexcept { return compositeJob_->isRunning(); }
+bool MainWindow::isCompositingForPlayback() const noexcept { return playbackPreparer_->isCompositing(); }
 
-void MainWindow::scheduleRepeatRefresh() {
-    if (!project_ || !repeatEnabled_ || !playbackController_->isPlaying()) {
-        return;
-    }
-    if (refreshJob_->isRunning()) {
-        refreshDirty_ = true;
-        return;
-    }
-    refreshDirty_ = false;
-    refreshJob_->start([this, projectCopy = project_->renderSnapshot()](
-                           sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
-        auto audio = std::make_shared<std::optional<sound_mind::codec::AudioBuffer>>();
-        double lufs = -70.0;
-        try {
-            const auto composite = sound_mind::core::compositeProject(
-                projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
-            if (composite.has_value()) {
-                *audio = sound_mind::codec::decode(*composite);
-                lufs = sound_mind::core::integratedLoudnessLufs(**audio);
-            }
-        } catch (const std::exception&) {
-            audio->reset();  // cancelled or failed: playback just keeps the older audio.
-        }
-        return [this, audio, lufs](bool) { finishRepeatRefresh(std::move(*audio), lufs); };
-    });
-}
-
-void MainWindow::finishRepeatRefresh(std::optional<sound_mind::codec::AudioBuffer> result, double loudnessLufs) {
-    if (refreshDirty_) {
-        refreshDirty_ = false;
-        scheduleRepeatRefresh();
-        return;
-    }
-    if (!result.has_value() || !repeatEnabled_ || !playbackController_->isPlaying()) {
-        return;
-    }
-    noteLoadedPlaybackLoudness(loudnessLufs);  // the refreshed mix's own loudness.
-    if (playbackController_->stageAudio(std::move(*result))) {
-        return;
-    }
-    // Length or sample rate changed, so it can't be swapped in seamlessly:
-    // reload in place at the same position (stageAudio left `result` intact).
-    playbackController_->load(std::move(*result));
-    if (playbackScope_ == sound_mind::studio::PlaybackScope::Track) {
-        repeatRangeStartSeconds_ = 0.0;
-        repeatRangeEndSeconds_ = playbackController_->totalSeconds();
-        repeatLoopBackSeconds_ = 0.0;
-    }
-    syncPlaybackRangeToEngine();
-    playbackController_->seek(currentPlaybackPositionSeconds_);
-    playbackController_->play();
-}
+void MainWindow::scheduleRepeatRefresh() { playbackPreparer_->scheduleRepeatRefresh(); }
 
 void MainWindow::setFilterPreviewEnabled(bool enabled) {
     if (!enabled || !project_) {
@@ -5420,44 +5157,6 @@ void MainWindow::finishFilterPreviewRender(std::optional<sound_mind::codec::Audi
     }
 }
 
-void MainWindow::cancelPlaybackComposite() { compositeJob_->requestCancel(); }
-
-void MainWindow::finishPlaybackComposite(CompositeOutcome outcome, const QString& error,
-                                         std::optional<sound_mind::codec::AudioBuffer> audio, double loudnessLufs) {
-    switch (outcome) {
-        case CompositeOutcome::Success:
-            if (audio.has_value()) {
-                // load() itself emits durationChanged() (connected in the
-                // constructor to playbackPanel_->setDuration()).
-                noteLoadedPlaybackLoudness(loudnessLufs);
-                playbackController_->load(std::move(*audio));
-                // A fresh load starts a new "nothing edited yet this
-                // session" range - the whole track, regardless of
-                // playbackScope_ - narrowed only once a real edit actually
-                // arrives (handleContentChangedForPlayback()).
-                repeatRangeStartSeconds_ = 0.0;
-                repeatRangeEndSeconds_ = playbackController_->totalSeconds();
-                repeatLoopBackSeconds_ = 0.0;
-                syncPlaybackRangeToEngine();
-                playbackController_->play();
-                noteMacroPlayhead();
-                statusBar()->clearMessage();
-            } else {
-                // Shouldn't happen given startPlayback()'s own pre-check
-                // already confirmed a contributor exists - kept as a safe
-                // fallback rather than an assert.
-                statusBar()->showMessage(tr("Nothing to play."), 5000);
-            }
-            break;
-        case CompositeOutcome::Cancelled:
-            // Nothing to roll back - playbackController_ was never touched.
-            statusBar()->showMessage(tr("Playback preparation cancelled."), 5000);
-            break;
-        case CompositeOutcome::Failed:
-            statusBar()->clearMessage();
-            QMessageBox::critical(this, tr("Playback Failed"), error);
-            break;
-    }
-}
+void MainWindow::cancelPlaybackComposite() { playbackPreparer_->cancelComposite(); }
 
 }  // namespace sound_mind::studio

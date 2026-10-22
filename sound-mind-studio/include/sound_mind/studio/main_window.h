@@ -31,6 +31,7 @@
 #include "sound_mind/studio/background_job.h"
 #include "sound_mind/studio/export_controller.h"
 #include "sound_mind/studio/import_controller.h"
+#include "sound_mind/studio/playback_preparer.h"
 #include "sound_mind/studio/branch_curve_session.h"
 #include "sound_mind/studio/project_change.h"
 #include "sound_mind/studio/analysis_panel.h"
@@ -540,10 +541,9 @@ public slots:
      * Review scope - see `handleContentChangedForPlayback()`'s own docs on
      * why that's Scope's job alone, not this flag's. What this *does* gate
      * is only what happens once the active range's own end is reached:
-     * loops back to its own start (pushed to the engine by
-     * `syncPlaybackRangeToEngine()`, called unconditionally here so a
-     * toggle takes effect immediately even when the range itself doesn't
-     * change) while `true`, halts there while `false` - and, for `Track`
+     * loops back to its own start (pushed to the engine at once, even when
+     * the range itself doesn't change - see `PlaybackPreparer::setRepeat()`,
+     * which this forwards to since `v0.1.48.4`) while `true`, halts there while `false` - and, for `Track`
      * scope specifically, whether an edit re-renders in place at all
      * (`Track` has no narrower region to preview on its own, so with
      * Repeat off it does nothing). Turning Repeat off immediately widens
@@ -3341,18 +3341,6 @@ private:
     /// device. `v0.0.42.1`.
     void pollTestInputLevel();
 
-    /// @brief How a background playback composite ended.
-    enum class CompositeOutcome { Success, Cancelled, Failed };
-
-    /// @brief Starts playback with a finished startPlayback() composite -
-    ///        the same load()-then-play() sequence it always did - or
-    ///        reports a cancel or a failure. Finding #12 Installment H.
-    /// @param outcome How the composite ended.
-    /// @param error Why it failed, if it did.
-    /// @param audio The decoded composite, if there was anything to play.
-    /// @param loudnessLufs Its integrated loudness, for normalization.
-    void finishPlaybackComposite(CompositeOutcome outcome, const QString& error,
-                                 std::optional<sound_mind::codec::AudioBuffer> audio, double loudnessLufs);
 
     /**
      * @brief While Repeat is on and playback is running, re-prepares the
@@ -3368,25 +3356,6 @@ private:
      * Repeat is on and playback is running. UI thread only.
      */
     void scheduleRepeatRefresh();
-
-    /// @brief Finishes a scheduleRepeatRefresh() job: re-runs it if another
-    ///        change arrived meanwhile; otherwise stages the result (or, if
-    ///        the audio length changed so it can't be staged, reloads in
-    ///        place at the same position).
-    /// @param result The refreshed mix, or nothing if the run failed.
-    /// @param loudnessLufs Its integrated loudness.
-    void finishRepeatRefresh(std::optional<sound_mind::codec::AudioBuffer> result, double loudnessLufs);
-
-    /// @brief Starts preparing Delta/Review playback of the latest edit on
-    ///        a background task (`v0.1.47.1`), or, if one is running,
-    ///        cancels it and marks a re-run - the latest edit wins.
-    void startEditPlaybackPreparation();
-
-    /// @brief Loads `audio` and positions playback for the current scope
-    ///        and pendingEditBounds_ - Delta plays the edited region, Review
-    ///        from the edit to the end - then plays. UI thread only.
-    /// @param audio The decoded composite.
-    void applyEditPlayback(sound_mind::codec::AudioBuffer audio);
 
     /// @brief Waits for a pending commitRecordingAsync() save and applies
     ///        it - before New/Open/Close, so the take is part of the project
@@ -3429,40 +3398,14 @@ private:
 
     /**
      * @brief Repeat Playback's/one-shot preview's shared edit hook -
-     *        connected to `toolPaletteController_::contentChanged()`
-     *        (which already merges every content-changing action:
-     *        Paint/Pick/Fill/Paste/a stamped sequence, undo, and
-     *        redo). A no-op with no `project_` open; otherwise gated by
-     *        `repeatEnabled_` and `playbackScope_` together - see the two
-     *        cases below.
-     *
-     * Track scope re-prepares in the background (scheduleRepeatRefresh()).
-     * Delta/Review (`v0.1.47.1`) record the edited bounds and prepare the
-     * composite's audio on a background task (startEditPlaybackPreparation()),
-     * so the edit returns at once; applyEditPlayback() then reloads it
-     * (`PlaybackController::load()` stops playback first, per its own
-     * docs - "audible restart on edit", confirmed with the user over
-     * building genuine seamless live double-buffering into
-     * `PlaybackEngine`), then repositions and resumes per
-     * `playbackScope_`:
-     * - `Track`: keeps the pre-edit position
-     *   (`currentPlaybackPositionSeconds_`) - the edit is heard "in
-     *   place", playback never jumps. Only reacts while `repeatEnabled_`
-     *   *and* playback is already active - Track has no narrower "the
-     *   edit" region to preview on its own.
-     * - `Delta`/`Review`: jumps to `layer`'s own most recently active
-     *   operation's own `bounds().startTimeSeconds` - a practical
-     *   approximation of "what just changed" that works uniformly for a
-     *   fresh paint stroke *and* an undo/redo (neither of which has a
-     *   freshly-appended operation of its own to read `bounds()` from) -
-     *   see this method's own definition for the exact reasoning. Reacts
-     *   to *every* edit regardless of `repeatEnabled_` or whether playback
-     *   was already active - per `docs/sound-mind-design.md`'s "Repeat
-     *   Playback" section, this jump-on-edit behavior is driven by Scope
-     *   alone; Repeat only decides what happens once the edited range's
-     *   own end is reached (see `syncPlaybackRangeToEngine()`'s own docs).
-     *   With Repeat off and nothing already playing, this is what starts
-     *   a fresh, automatic one-shot preview of the just-made edit.
+     *        connected (through applyProjectChange()'s caller) to
+     *        `toolPaletteController_::contentChanged()`, which merges every
+     *        content-changing action (Paint/Pick/Fill/Paste/a stamped
+     *        sequence, undo, redo). Forwards to
+     *        `PlaybackPreparer::contentChanged()` (`v0.1.48.4`): Track with
+     *        Repeat refreshes in the background; Delta/Review play the edit
+     *        (a one-shot preview with Repeat off). A no-op with no project,
+     *        or while handleMindWaveEdited() replays strokes.
      *
      * @param layer Which layer changed.
      */
@@ -3493,46 +3436,6 @@ private:
      * @param id The MindWave that changed.
      */
     void handleMindWaveEdited(sound_mind::core::MindWaveId id);
-
-    /**
-     * @brief Pushes `repeatRangeStartSeconds_`/`repeatRangeEndSeconds_`/
-     *        `repeatLoopBackSeconds_`/`repeatEnabled_` down into
-     *        `playbackController_`'s own `PlaybackEngine`, so a loop-back
-     *        or an end-of-range halt happens sample-accurately, inside
-     *        that engine, the moment playback actually reaches the range's
-     *        end - not up to one ~33ms position-polling tick later.
-     *
-     * **As of Decision #217 (Gapless Repeat Playback):** this replaces the
-     * former `checkRepeatPlaybackRange()`, which read these same four
-     * members from `PlaybackController::positionChanged()`'s own ~30fps
-     * poll and reacted with a separate `seek()`/`play()` (looping) or
-     * `pause()` (halting) call *after* noticing the range had already been
-     * crossed - always leaving a real, audible silent gap between the
-     * natural end and that later reaction. `PlaybackEngine::
-     * setPlaybackRange()` now resolves both outcomes itself, directly
-     * inside `renderBlock()`/`seek()` - see its own docs. This method's
-     * only remaining job is translating this class's own four
-     * MainWindow-level members into that one engine-level call, every time
-     * any of them changes (every call site that used to assign
-     * `repeatRangeStartSeconds_`/`repeatRangeEndSeconds_`/
-     * `repeatLoopBackSeconds_` directly now calls this right after, and so
-     * does every `playbackController_->load()` call site, since
-     * `PlaybackEngine::loadAudio()` itself resets any previously set
-     * range - see its own docs).
-     *
-     * A call whenever `repeatRangeEndSeconds_ <= repeatRangeStartSeconds_`
-     * - not just the pre-edit "no range yet" default (both `0.0`), but
-     * also a genuinely zero-width `Delta`/`Review` range (a single-click,
-     * as opposed to dragged, paint stroke's own `bounds()` has an equal
-     * start/end) - instead pushes "no restriction" (the whole loaded
-     * track, not looping) down to the engine, exactly reproducing
-     * `checkRepeatPlaybackRange()`'s own former "nothing meaningful to
-     * loop over, play straight through" treatment of that same condition.
-     * Unlike that former method, there's no recursion risk here to guard
-     * against: this makes one plain, non-reentrant call into the engine,
-     * never calls `seek()`/`play()`/`pause()` itself.
-     */
-    void syncPlaybackRangeToEngine();
 
     /**
      * @brief Re-reads `gridPanel_`'s own current Snap to Grid checkbox and
@@ -3771,7 +3674,7 @@ private:
     /// @brief Records the integrated loudness of the audio just loaded
     ///        (or staged) for playback, and re-applies the normalization
     ///        gain. The measurement itself runs on the background task that
-    ///        prepared the audio (compositeJob_ or refreshJob_), never on
+    ///        prepared the audio (PlaybackPreparer's), never on
     ///        the GUI thread.
     /// @param lufs The loudness, LUFS (`kLoudnessFloorLufs` if silent).
     void noteLoadedPlaybackLoudness(double lufs);
@@ -4045,56 +3948,18 @@ private:
     /// `LoopEngine`/`RecordEngine` themselves start at.
     float configuredInputGain_ = 1.0f;
 
-    /// @brief Repeat Playback's own current state - see
-    /// setPlaybackRepeat()'s/setPlaybackScope()'s own docs. `v0.0.42.2`.
-    bool repeatEnabled_ = false;
-    sound_mind::studio::PlaybackScope playbackScope_ = sound_mind::studio::PlaybackScope::Track;
-
-    /// @brief The currently active playback range, in seconds - `[0,
-    /// totalSeconds()]` (the whole track) right after startPlayback()/a
-    /// manual seekPlayback(); narrowed to the edited operation's own
-    /// bounds() by handleContentChangedForPlayback() while `playbackScope_`
-    /// is `Delta`/`Review` - independent of `repeatEnabled_`, which only
-    /// decides what syncPlaybackRangeToEngine() pushes down for the engine
-    /// to do once this range's own end is reached (see its own docs), not
-    /// whether the range itself is tracked.
-    double repeatRangeStartSeconds_ = 0.0;
-    double repeatRangeEndSeconds_ = 0.0;
-
-    /// @brief Where syncPlaybackRangeToEngine() tells the engine to loop
-    /// back to once playback reaches repeatRangeEndSeconds_, when
-    /// `repeatEnabled_` - equal to repeatRangeStartSeconds_
-    /// for `Track`/`Delta` (looping the same range it's built from), but
-    /// `0.0` for `Review`: `Review`'s own range runs from the edit's start
-    /// to the whole track's end (see docs/sound-mind-design.md's "Repeat
-    /// Playback" - "reaches the end of the track... repeats from the start
-    /// of the track"), so the loop-back target is the *track's* start, not
-    /// the edit's. Kept in sync with repeatRangeStartSeconds_ everywhere
-    /// the latter is reset to `0.0` (a fresh load, a manual seek, Repeat
-    /// turned off), since those all mean "no active Delta/Review range".
-    double repeatLoopBackSeconds_ = 0.0;
-
     /// @brief The most recently reported playback position, in seconds -
     /// tracked here (PlaybackController exposes no positionSeconds()
     /// getter, only the positionChanged() signal) so
-    /// handleContentChangedForPlayback() knows where to resume from for
-    /// `PlaybackScope::Track` (which never jumps on an edit). Also read by
+    /// PlaybackPreparer knows where to resume from for `PlaybackScope::Track`
+    /// (which never jumps on an edit). Also read by
     /// macroRecorder_'s own recordEvent() calls (`v0.Y.49.1`, Macro Mode)
     /// as the timestamp to record against.
     double currentPlaybackPositionSeconds_ = 0.0;
 
-    /// @brief Shown while startPlayback() prepares - see compositeJob_.
-    QPushButton* compositeCancelButton_ = nullptr;
-
-    /// @brief A change arrived while refreshJob_ was running.
-    bool refreshDirty_ = false;
     /// @brief Set while handleMindWaveEdited() replays strokes, so those
     ///        replays don't start Delta/Review playback.
     bool replayingForMindWave_ = false;
-    /// @brief Another edit arrived while editPlaybackJob_ was running.
-    bool editPlaybackDirty_ = false;
-    /// @brief The edited region applyEditPlayback() positions playback on.
-    std::optional<sound_mind::core::TimeFrequencyRect> pendingEditBounds_;
 
     /// @brief The filter preview's own looping engine, created on first use
     ///        with audioDeviceMode_ - see setFilterPreviewEnabled().
@@ -4114,9 +3979,7 @@ private:
     /// @{
     std::unique_ptr<ExportController> exportController_;  ///< Export audio/video/macro video (`v0.1.48.2`).
     std::unique_ptr<ImportController> importController_;  ///< Audio, image and MIDI import (`v0.1.48.3`).
-    std::unique_ptr<BackgroundJob> compositeJob_;      ///< startPlayback()'s first composite.
-    std::unique_ptr<BackgroundJob> refreshJob_;        ///< Repeat's background refresh.
-    std::unique_ptr<BackgroundJob> editPlaybackJob_;   ///< Delta/Review preparation.
+    std::unique_ptr<PlaybackPreparer> playbackPreparer_;  ///< Play's composite, Repeat, Delta/Review (`v0.1.48.4`).
     std::unique_ptr<BackgroundJob> recordingSaveJob_;  ///< Saving a stopped recording.
     std::unique_ptr<BackgroundJob> filterPreviewJob_;  ///< Filter preview renders.
     std::unique_ptr<BackgroundJob> loudnessJob_;       ///< The Analysis panel's run.

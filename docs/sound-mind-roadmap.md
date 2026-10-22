@@ -1198,7 +1198,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.82.2` | Video export overhaul, modelled on the legacy Studio (inserted 2026-10-22) | `0.1.45.1` | #270 |
 | `v0.Y.82.3` | Remove the Pool codec (inserted 2026-10-22) | `0.1.46.1` | #271 |
 | `v0.Y.82.4` | Responsiveness and modularity pass (inserted 2026-10-22) | `0.1.47.1`-`0.1.47.4` | #272-#275 |
-| `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1`-`0.1.48.3` | #276-#278 |
+| `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1`-`0.1.48.4` | #276-#279 |
 | - | Beta readiness check | *(after `v0.Y.82.5`)* | |
 | `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
 | `v0.Y.84.1` | Light and dark mode | - | |
@@ -1490,6 +1490,7 @@ Steps 4 and 5 of the 2026-10-22 code scan, so changes from beta feedback stay ch
 - ✅ **Installment A - one project-change notification.** Settled in `v0.1.48.1`, Decision #276. `ProjectChange` + `MainWindow::applyProjectChange()` replace hand-wired fan-out at each edit site.
 - ✅ **Installment B - `ExportController`.** Settled in `v0.1.48.2`, Decision #277.
 - ✅ **Installment C - `ImportController`.** Settled in `v0.1.48.3`, Decision #278.
+- ✅ **Installment D - `PlaybackPreparer`.** Settled in `v0.1.48.4`, Decision #279.
 - **Next installments - the rest of `MainWindow` split into controllers, piece by piece**, each keeping `MainWindow`'s public API as thin forwards so its tests keep passing: export, import, playback preparation, recording and Loop, analysis, Macros, menu building.
 - **Then - data-driven filter and tool parameters** (step 5): one parameter table generating JSON, panel widgets and MindWave bindings.
 

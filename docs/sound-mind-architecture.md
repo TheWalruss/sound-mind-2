@@ -3101,6 +3101,35 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - no project imports nothing.
 
       The 52 `MainWindowTest` import/MIDI/drop cases pass unchanged.
+279. **Modularity pass, installment D: `PlaybackPreparer`.** Settled in `v0.1.48.4`.
+    - **`studio::PlaybackPreparer` (new, `QObject`)** owns the three preparation jobs and the Repeat/Scope state with its playing range:
+      - `prepareAndPlay()`: Play with nothing loaded, cancellable via `compositeCancelButton`;
+      - `scheduleRepeatRefresh()`;
+      - `contentChanged()`: Delta/Review, or Track with Repeat;
+      - `setRepeat()`, `setScope()` and `widenToWholeTrack()` (after a manual seek);
+      - `projectChanged()`;
+      - `isCompositing()`, `cancelComposite()` and `isPreparingEdit()`.
+
+      The three jobs now share one `prepare()` (composite, decode, optional loudness) instead of three copies.
+    - **No dependency on `MainWindow`.** It works on a `PlaybackController` it's given, with a `Context` for:
+      - the project;
+      - the window's tracked position;
+      - loudness reports (output normalization);
+      - "started" (Macro recording notes the playhead);
+      - errors.
+    - **The transport stays in `MainWindow`:** what may play when (Macro playback, Loop, Recording, the filter preview), Pause, Stop and the position.
+    - **`MainWindow`:**
+      - Its playback API forwards.
+      - Removed: `repeatEnabled_`, `playbackScope_` and the three range members; `refreshDirty_`, `editPlaybackDirty_` and `pendingEditBounds_`; `compositeCancelButton_` and three jobs.
+      - Also removed: `syncPlaybackRangeToEngine()`, `startEditPlaybackPreparation()`, `applyEditPlayback()`, `finishRepeatRefresh()`, `finishPlaybackComposite()` and `CompositeOutcome`.
+    - **Tests:** Studio `PlaybackPreparerTest`, 5 cases, about 1.5 s, on a device-less `PlaybackController`:
+      - preparing loads and plays the whole track;
+      - nothing to play starts nothing;
+      - cancel leaves nothing loaded;
+      - Delta plays the edited region even from a stop;
+      - Track scope without Repeat ignores edits.
+
+      The 53 `MainWindowTest` playback/Repeat/Delta/Review cases pass unchanged.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

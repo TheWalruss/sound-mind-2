@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.48.4] - 2026-10-22
+
+Roadmap slot `v0.Y.82.5` (modularity), installment D.
+
+### Changed
+
+- Internal: preparing audio for Playback, Repeat and Delta/Review moved out of the main window into its own component, tested on its own. Nothing changes in how playback behaves.
+
 ## [0.1.48.3] - 2026-10-22
 
 Roadmap slot `v0.Y.82.5` (modularity), installment C.
