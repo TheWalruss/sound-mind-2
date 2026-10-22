@@ -59,6 +59,7 @@
 #include "sound_mind/core/pitch_detection.h"
 #include "sound_mind/studio/remaster.h"
 #include "sound_mind/studio/remaster_dialog.h"
+#include "sound_mind/studio/background_job.h"
 #include "sound_mind/studio/base_recipes.h"
 #include "sound_mind/studio/video_export_dialog.h"
 #include "sound_mind/studio/macro_manager_dialog.h"
@@ -470,18 +471,18 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // cancel affordance for long operations), Installments C (video)/E
     // (audio) - see exportCompositeVideoAsync()'s/
     // exportCompositeAudioAsync()'s own docs. Hidden until an export is
-    // actually running - see pollExportProgress().
+    // actually running - see exportJob_.
     exportCancelButton_ = new QPushButton(tr("✕"));  // "✕".
     exportCancelButton_->setObjectName(QStringLiteral("exportCancelButton"));
     exportCancelButton_->setToolTip(tr("Cancel"));
     exportCancelButton_->setFixedWidth(24);
     exportCancelButton_->hide();
-    connect(exportCancelButton_, &QPushButton::clicked, this, &MainWindow::cancelExport);
     statusBar()->addPermanentWidget(exportCancelButton_);
 
-    exportProgressTimer_ = new QTimer(this);
-    exportProgressTimer_->setInterval(33);  // same ~30fps cadence as loopUpdateTimer_.
-    connect(exportProgressTimer_, &QTimer::timeout, this, &MainWindow::pollExportProgress);
+    // v0.1.47.2: every long operation is a BackgroundJob - see its docs.
+    exportJob_ = std::make_unique<BackgroundJob>();
+    exportJob_->setCancelButton(exportCancelButton_);
+    connect(exportJob_.get(), &BackgroundJob::stillRunning, this, &MainWindow::showExportProgress);
 
     // Finding #12, Installment F - see importAudioSnippetsAsync()'s own
     // docs. A separate slot from export's own, not shared - unlike
@@ -494,12 +495,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     importCancelButton_->setToolTip(tr("Cancel"));
     importCancelButton_->setFixedWidth(24);
     importCancelButton_->hide();
-    connect(importCancelButton_, &QPushButton::clicked, this, &MainWindow::cancelImport);
     statusBar()->addPermanentWidget(importCancelButton_);
-
-    importProgressTimer_ = new QTimer(this);
-    importProgressTimer_->setInterval(33);  // same ~30fps cadence as loopUpdateTimer_.
-    connect(importProgressTimer_, &QTimer::timeout, this, &MainWindow::pollImportProgress);
+    importJob_ = std::make_unique<BackgroundJob>();
+    importJob_->setCancelButton(importCancelButton_);
 
     // Finding #12, Installment H - see startPlayback()'s own docs. A
     // third, independent slot - not shared with export's/import's own.
@@ -508,27 +506,16 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     compositeCancelButton_->setToolTip(tr("Cancel"));
     compositeCancelButton_->setFixedWidth(24);
     compositeCancelButton_->hide();
-    connect(compositeCancelButton_, &QPushButton::clicked, this, &MainWindow::cancelPlaybackComposite);
     statusBar()->addPermanentWidget(compositeCancelButton_);
+    compositeJob_ = std::make_unique<BackgroundJob>();
+    compositeJob_->setCancelButton(compositeCancelButton_);
 
-    compositeProgressTimer_ = new QTimer(this);
-    compositeProgressTimer_->setInterval(33);  // same ~30fps cadence as loopUpdateTimer_.
-    connect(compositeProgressTimer_, &QTimer::timeout, this, &MainWindow::pollCompositeProgress);
-
-    refreshTimer_ = new QTimer(this);
-    refreshTimer_->setInterval(33);
-    connect(refreshTimer_, &QTimer::timeout, this, &MainWindow::pollRepeatRefresh);
-
-    editPlaybackTimer_ = new QTimer(this);
-    editPlaybackTimer_->setInterval(15);
-    connect(editPlaybackTimer_, &QTimer::timeout, this, &MainWindow::pollEditPlayback);
-
-    recordingSaveTimer_ = new QTimer(this);
-    recordingSaveTimer_->setInterval(33);
-    connect(recordingSaveTimer_, &QTimer::timeout, this, &MainWindow::pollRecordingSave);
-    filterPreviewTimer_ = new QTimer(this);
-    filterPreviewTimer_->setInterval(33);
-    connect(filterPreviewTimer_, &QTimer::timeout, this, &MainWindow::pollFilterPreviewRender);
+    refreshJob_ = std::make_unique<BackgroundJob>();
+    editPlaybackJob_ = std::make_unique<BackgroundJob>(nullptr, std::chrono::milliseconds(15));
+    recordingSaveJob_ = std::make_unique<BackgroundJob>();
+    filterPreviewJob_ = std::make_unique<BackgroundJob>();
+    loudnessJob_ = std::make_unique<BackgroundJob>(nullptr, std::chrono::milliseconds(50));
+    loopBackingJob_ = std::make_unique<BackgroundJob>();
     connect(playbackController_, &PlaybackController::invalidated, this, &MainWindow::scheduleRepeatRefresh);
     // Anything that changes what's heard also changes what the analysis
     // measured (v0.1.40.10) - one hook for every such edit, including ones
@@ -946,7 +933,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         if ((!autoAnalyze_ && !reanalyzeRequested_) || !project_) {
             return;
         }
-        if (loudnessTask_ != nullptr) {
+        if (loudnessJob_->isRunning()) {
             autoAnalyzeTimer_->start();  // a cancelled run is still winding down: try again shortly.
             return;
         }
@@ -960,29 +947,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(analysisPanel_, &AnalysisPanel::pitchVoiceCountChanged, this, [this](int voices) {
         pitchVoiceCount_ = voices;
         settings_.setValue(QStringLiteral("pitchVoiceCount"), voices);
-        if (analysisPanel_->hasReport() || loudnessTask_ != nullptr) {
+        if (analysisPanel_->hasReport() || loudnessJob_->isRunning()) {
             requestReanalysis();  // the report's pitch tracks no longer match.
         }
     });
     connect(analysisPanel_, &AnalysisPanel::pitchSpikeFilterChanged, this, [this](double milliseconds) {
         settings_.setValue(QStringLiteral("pitchSpikeFilterMs"), milliseconds);
-    });
-    loudnessTimer_ = new QTimer(this);
-    loudnessTimer_->setInterval(50);
-    connect(loudnessTimer_, &QTimer::timeout, this, [this]() {
-        if (loudnessTask_ == nullptr || loudnessTask_->isRunning()) {
-            return;
-        }
-        loudnessTimer_->stop();
-        loudnessTask_.reset();
-        analysisPanel_->setAnalyzing(false);
-        if (loudnessResult_.has_value()) {
-            analysisPanel_->setReport(*loudnessResult_);
-            loudnessResult_.reset();
-            if (analysisStale_) {
-                analysisPanel_->setStale();  // a change landed after this run had already finished.
-            }
-        }
     });
 
     loopPanel_ = new LoopPanel(this);
@@ -1811,9 +1781,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     loopUpdateTimer_ = new QTimer(this);
     loopUpdateTimer_->setInterval(33);
     connect(loopUpdateTimer_, &QTimer::timeout, this, &MainWindow::updateLoopLayer);
-    loopBackingTimer_ = new QTimer(this);
-    loopBackingTimer_->setInterval(33);
-    connect(loopBackingTimer_, &QTimer::timeout, this, &MainWindow::pollLoopBacking);
 
     // Just needs to keep RecordEngine's ring buffer (~370ms of headroom at
     // its default capacity/sample rate) from ever filling up - unlike
@@ -2208,14 +2175,10 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // no-op when already stopped, or when loopEngine_ doesn't exist yet -
     // see its own docs), so this is always safe regardless of caller.
     setFilterPreviewEnabled(false);
-    if (editPlaybackTask_) {
-        editPlaybackDirty_ = false;
-        editPlaybackTask_->requestCancel();  // pollEditPlayback() discards it.
-    }
+    editPlaybackDirty_ = false;
+    editPlaybackJob_->requestCancel();  // its completion drops the old project's audio.
     pendingEditBounds_.reset();
-    if (loudnessTask_) {
-        loudnessTask_->requestCancel();  // its result is for the old project - see the timer's handler.
-    }
+    loudnessJob_->requestCancel();  // its result is for the old project: the completion drops it.
     analysisPanel_->clearReport();
     analysisStale_ = false;
     autoAnalyzeTimer_->stop();
@@ -2803,108 +2766,82 @@ void MainWindow::importAudioSnippetsAsync(const std::filesystem::path& path,
         return;
     }
 
-    importPath_ = path;
-    importOutcome_ = ImportOutcome::Success;
-    importErrorMessage_.clear();
-    importedLayers_.clear();
-
     // settings copied by value - encodeAudioSnippets() never touches
     // project_ itself, so the background thread has nothing shared to
     // synchronize against - see this method's own docs.
     const auto settings = project_->settings();
-    importedSource_.reset();
     const std::optional<std::filesystem::path> sourcesFolder = project_->sourcesFolder();
-    importTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, snippetIndices, settings, offsetSeconds, sourcesFolder](sound_mind::core::CancellationToken& token) {
-            QString encodeError;
-            try {
-                importedLayers_ = sound_mind::studio::encodeAudioSnippets(
-                    settings, path, snippetIndices, [&token]() { return token.cancellationRequested(); },
-                    &encodeError, offsetSeconds);
-                if (importedLayers_.empty()) {
-                    importOutcome_ = ImportOutcome::Failed;
-                    importErrorMessage_ = encodeError;
-                } else if (sourcesFolder.has_value()) {
-                    // The file itself is kept in the project (v0.1.43.2),
-                    // copied here off the UI thread; registered on completion.
-                    try {
-                        importedSource_ = sound_mind::core::storeSourceFile(*sourcesFolder, path, "audio");
-                    } catch (const std::exception&) {
-                        importedSource_.reset();  // the import stands, just not replayable.
-                    }
+    importJob_->start([this, path, snippetIndices, settings, offsetSeconds,
+                       sourcesFolder](sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
+        auto result = std::make_shared<ImportResult>();
+        QString encodeError;
+        try {
+            result->layers = sound_mind::studio::encodeAudioSnippets(
+                settings, path, snippetIndices, [&token]() { return token.cancellationRequested(); }, &encodeError,
+                offsetSeconds);
+            if (result->layers.empty()) {
+                result->outcome = ImportOutcome::Failed;
+                result->error = encodeError;
+            } else if (sourcesFolder.has_value()) {
+                // The file itself is kept in the project (v0.1.43.2),
+                // copied here off the UI thread; registered on completion.
+                try {
+                    result->source = sound_mind::core::storeSourceFile(*sourcesFolder, path, "audio");
+                } catch (const std::exception&) {
+                    result->source.reset();  // the import stands, just not replayable.
                 }
-            } catch (const sound_mind::studio::ImportCancelled&) {
-                importOutcome_ = ImportOutcome::Cancelled;
-            } catch (const std::exception& e) {
-                importOutcome_ = ImportOutcome::Failed;
-                importErrorMessage_ = QString::fromStdString(e.what());
             }
-        });
-    importTask_->start();
-
+        } catch (const sound_mind::studio::ImportCancelled&) {
+            result->outcome = ImportOutcome::Cancelled;
+        } catch (const std::exception& e) {
+            result->outcome = ImportOutcome::Failed;
+            result->error = QString::fromStdString(e.what());
+        }
+        return [this, path, result](bool) { finishImport(path, std::move(*result)); };
+    });
     statusBar()->showMessage(tr("Importing audio..."));
-    importCancelButton_->show();
-    importProgressTimer_->start();
 }
 
-bool MainWindow::isImportRunning() const noexcept { return importTask_ != nullptr && importTask_->isRunning(); }
+bool MainWindow::isImportRunning() const noexcept { return importJob_->isRunning(); }
 
-void MainWindow::cancelImport() {
-    if (importTask_) {
-        importTask_->requestCancel();
-    }
-}
+void MainWindow::cancelImport() { importJob_->requestCancel(); }
 
-void MainWindow::pollImportProgress() {
-    if (importTask_->isRunning()) {
-        return;
-    }
-    importProgressTimer_->stop();
-    importCancelButton_->hide();
-
-    switch (importOutcome_) {
+void MainWindow::finishImport(const std::filesystem::path& path, ImportResult result) {
+    switch (result.outcome) {
         case ImportOutcome::Success: {
-            const auto importedCount = static_cast<int>(importedLayers_.size());
-            if (importedSource_.has_value()) {
-                const sound_mind::core::SourceId source = project_->addSource(std::move(*importedSource_));
-                importedSource_.reset();
-                for (auto& layer : importedLayers_) {
+            const auto importedCount = static_cast<int>(result.layers.size());
+            if (result.source.has_value()) {
+                const sound_mind::core::SourceId source = project_->addSource(std::move(*result.source));
+                for (auto& layer : result.layers) {
                     nlohmann::json recipe = layer.baseRecipe();
                     recipe["source"] = source;
                     layer.setBaseRecipe(std::move(recipe));
                 }
             }
-            for (auto& layer : importedLayers_) {
+            for (auto& layer : result.layers) {
                 project_->addLayer(std::move(layer));
             }
-            importedLayers_.clear();
-            commitHistory(tr("Imported \"%1\"").arg(QString::fromStdString(importPath_.filename().string())));
+            commitHistory(tr("Imported \"%1\"").arg(QString::fromStdString(path.filename().string())));
             canvas_->invalidateCompositeAll();
             playbackController_->invalidate();
             hasUnsavedChanges_ = true;
             layerController_->refreshLayersPanel();
             statusBar()->showMessage(tr("Imported %1 layer(s) from \"%2\".")
                                           .arg(importedCount)
-                                          .arg(QString::fromStdString(importPath_.filename().string())),
+                                          .arg(QString::fromStdString(path.filename().string())),
                                       5000);
             break;
         }
         case ImportOutcome::Cancelled:
-            // Nothing to roll back beyond discarding these - the encoded
-            // layers were never added to project_ in the first place,
-            // unlike Export's own "delete the partial file" rollback (see
-            // Decision #136) - matching finding #12's confirmed "cancel
-            // rolls back partial work" semantics with the simplest
-            // rollback an import can have: not committing anything at all.
-            importedLayers_.clear();
+            // Nothing to roll back - the encoded layers were never added to
+            // project_ (finding #12's "cancel rolls back partial work").
             statusBar()->showMessage(tr("Audio import cancelled."), 5000);
             break;
         case ImportOutcome::Failed:
             statusBar()->clearMessage();
-            QMessageBox::critical(this, tr("Import Audio Failed"), importErrorMessage_);
+            QMessageBox::critical(this, tr("Import Audio Failed"), result.error);
             break;
     }
-    importTask_.reset();
 }
 
 bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePickerDialog::Mode mode,
@@ -3088,39 +3025,21 @@ void MainWindow::exportCompositeVideoAsync(const std::filesystem::path& path,
         return;
     }
 
-    exportKind_ = ExportKind::Video;
-    exportOpenWhenDone_ = openWhenDone;
-    exportProgress_ = 0.0;
-    exportPath_ = path;
-    exportOutcome_ = ExportOutcome::Success;
-    exportErrorMessage_.clear();
-
     // project_ copied by value - the background thread composites its own
     // independent copy, so later edits on the UI thread can't race it.
-    exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+    startExportJob(
+        ExportKind::Video, path, openWhenDone,
         [this, path, options, projectCopy = *project_,
-         limiterCeiling = limiterEnabled_ ? std::optional<float>(static_cast<float>(limiterCeilingDb_)) : std::nullopt](sound_mind::core::CancellationToken& token) {
+         limiterCeiling = limiterEnabled_ ? std::optional<float>(static_cast<float>(limiterCeilingDb_)) : std::nullopt](
+            sound_mind::core::CancellationToken& token) -> ExportResult {
             const auto shouldCancel = [&token]() { return token.cancellationRequested(); };
-            try {
-                if (!sound_mind::core::exportProjectVideo(projectCopy, path, options, shouldCancel, limiterCeiling,
-                                                          [this](double done) { exportProgress_ = done; })) {
-                    exportOutcome_ = ExportOutcome::Failed;
-                    exportErrorMessage_ = tr("Nothing to export - no visible, unmuted layer has content.");
-                }
-            } catch (const sound_mind::codec::ExportCancelled&) {
-                exportOutcome_ = ExportOutcome::Cancelled;
-            } catch (const sound_mind::core::CompositeCancelled&) {
-                exportOutcome_ = ExportOutcome::Cancelled;
-            } catch (const std::exception& e) {
-                exportOutcome_ = ExportOutcome::Failed;
-                exportErrorMessage_ = QString::fromStdString(e.what());
+            if (!sound_mind::core::exportProjectVideo(projectCopy, path, options, shouldCancel, limiterCeiling,
+                                                      [this](double done) { exportProgress_ = done; })) {
+                return {ExportOutcome::Failed, tr("Nothing to export - no visible, unmuted layer has content.")};
             }
-        });
-    exportTask_->start();
-
-    statusBar()->showMessage(tr("Exporting video..."));
-    exportCancelButton_->show();
-    exportProgressTimer_->start();
+            return {};
+        },
+        tr("Exporting video..."));
 }
 
 void MainWindow::exportCompositeAudioAsync(const std::filesystem::path& path,
@@ -3135,35 +3054,19 @@ void MainWindow::exportCompositeAudioAsync(const std::filesystem::path& path,
         return;
     }
 
-    exportKind_ = ExportKind::Audio;
-    exportPath_ = path;
-    exportOutcome_ = ExportOutcome::Success;
-    exportErrorMessage_.clear();
-
     // project_ copied by value - see exportCompositeVideoAsync().
-    exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, format, projectCopy = *project_,
-         limiterCeiling = limiterEnabled_ ? std::optional<float>(static_cast<float>(limiterCeilingDb_)) : std::nullopt](sound_mind::core::CancellationToken& token) {
+    startExportJob(
+        ExportKind::Audio, path, /*openWhenDone=*/false,
+        [path, format, projectCopy = *project_,
+         limiterCeiling = limiterEnabled_ ? std::optional<float>(static_cast<float>(limiterCeilingDb_)) : std::nullopt](
+            sound_mind::core::CancellationToken& token) -> ExportResult {
             const auto shouldCancel = [&token]() { return token.cancellationRequested(); };
-            try {
-                if (!sound_mind::core::exportProjectAudio(projectCopy, path, format, shouldCancel, limiterCeiling)) {
-                    exportOutcome_ = ExportOutcome::Failed;
-                    exportErrorMessage_ = tr("Nothing to export - no visible, unmuted layer has content.");
-                }
-            } catch (const sound_mind::codec::ExportCancelled&) {
-                exportOutcome_ = ExportOutcome::Cancelled;
-            } catch (const sound_mind::core::CompositeCancelled&) {
-                exportOutcome_ = ExportOutcome::Cancelled;
-            } catch (const std::exception& e) {
-                exportOutcome_ = ExportOutcome::Failed;
-                exportErrorMessage_ = QString::fromStdString(e.what());
+            if (!sound_mind::core::exportProjectAudio(projectCopy, path, format, shouldCancel, limiterCeiling)) {
+                return {ExportOutcome::Failed, tr("Nothing to export - no visible, unmuted layer has content.")};
             }
-        });
-    exportTask_->start();
-
-    statusBar()->showMessage(tr("Exporting audio..."));
-    exportCancelButton_->show();
-    exportProgressTimer_->start();
+            return {};
+        },
+        tr("Exporting audio..."));
 }
 
 void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path, sound_mind::core::MacroId id,
@@ -3179,15 +3082,10 @@ void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path, sound_
         return;
     }
 
-    exportKind_ = ExportKind::MacroVideo;
-    exportOpenWhenDone_ = openWhenDone;
-    exportProgress_ = 0.0;
     const double macroSeconds = std::max(renderer->durationSeconds(), 1e-9);
-    exportPath_ = path;
-    exportOutcome_ = ExportOutcome::Success;
-    exportErrorMessage_.clear();
-    exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, renderer, options, macroSeconds](sound_mind::core::CancellationToken& token) {
+    startExportJob(
+        ExportKind::MacroVideo, path, openWhenDone,
+        [this, path, renderer, options, macroSeconds](sound_mind::core::CancellationToken& token) -> ExportResult {
             // Rendered on a project of the renderer's own: the open one is
             // never touched (v0.1.44.2).
             renderer->setShouldCancel([&token]() { return token.cancellationRequested(); });
@@ -3198,73 +3096,84 @@ void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path, sound_
                                      [this, macroSeconds](double seconds) { exportProgress_ = seconds / macroSeconds; },
                                      &failure);
             if (token.cancellationRequested()) {
-                exportOutcome_ = ExportOutcome::Cancelled;
-            } else if (!written) {
-                exportOutcome_ = ExportOutcome::Failed;
-                exportErrorMessage_ = QString::fromStdString(failure);
+                return {ExportOutcome::Cancelled, {}};
             }
-        });
-    exportTask_->start();
-    statusBar()->showMessage(tr("Exporting macro video..."));
-    exportCancelButton_->show();
-    exportProgressTimer_->start();
+            if (!written) {
+                return {ExportOutcome::Failed, QString::fromStdString(failure)};
+            }
+            return {};
+        },
+        tr("Exporting macro video..."));
 }
 
-bool MainWindow::isExportRunning() const noexcept { return exportTask_ != nullptr && exportTask_->isRunning(); }
+bool MainWindow::isExportRunning() const noexcept { return exportJob_->isRunning(); }
 
-void MainWindow::cancelExport() {
-    if (exportTask_) {
-        exportTask_->requestCancel();
-    }
-}
+void MainWindow::cancelExport() { exportJob_->requestCancel(); }
 
-void MainWindow::pollExportProgress() {
-    if (exportTask_->isRunning()) {
-        if (exportKind_ != ExportKind::Audio) {
-            statusBar()->showMessage(tr("Exporting %1... %2%")
-                                         .arg(exportKind_ == ExportKind::Video ? tr("video") : tr("macro video"))
-                                         .arg(static_cast<int>(std::lround(exportProgress_.load() * 100.0))));
+void MainWindow::startExportJob(ExportKind kind, const std::filesystem::path& path, bool openWhenDone,
+                                std::function<ExportResult(sound_mind::core::CancellationToken&)> work,
+                                const QString& startMessage) {
+    exportKind_ = kind;
+    exportProgress_ = 0.0;
+    exportJob_->start([this, kind, path, openWhenDone, work = std::move(work)](
+                          sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
+        ExportResult result;
+        try {
+            result = work(token);
+        } catch (const sound_mind::codec::ExportCancelled&) {
+            result = {ExportOutcome::Cancelled, {}};
+        } catch (const sound_mind::core::CompositeCancelled&) {
+            result = {ExportOutcome::Cancelled, {}};
+        } catch (const std::exception& e) {
+            result = {ExportOutcome::Failed, QString::fromStdString(e.what())};
         }
-        return;
-    }
-    exportProgressTimer_->stop();
-    exportCancelButton_->hide();
+        return [this, kind, path, openWhenDone, result](bool) { finishExport(kind, path, openWhenDone, result); };
+    });
+    statusBar()->showMessage(startMessage);
+}
 
-    const QString kindLabel = exportKind_ == ExportKind::Video     ? tr("video")
-                               : exportKind_ == ExportKind::Audio  ? tr("audio")
-                                                                    : tr("macro video");
-    switch (exportOutcome_) {
+void MainWindow::showExportProgress() {
+    if (exportKind_ != ExportKind::Audio) {
+        statusBar()->showMessage(tr("Exporting %1... %2%")
+                                     .arg(exportKind_ == ExportKind::Video ? tr("video") : tr("macro video"))
+                                     .arg(static_cast<int>(std::lround(exportProgress_.load() * 100.0))));
+    }
+}
+
+void MainWindow::finishExport(ExportKind kind, const std::filesystem::path& path, bool openWhenDone,
+                              const ExportResult& result) {
+    const QString kindLabel = kind == ExportKind::Video    ? tr("video")
+                              : kind == ExportKind::Audio ? tr("audio")
+                                                          : tr("macro video");
+    switch (result.outcome) {
         case ExportOutcome::Success:
             statusBar()->showMessage(
-                tr("Exported %1 to \"%2\".").arg(kindLabel, QString::fromStdWString(exportPath_.wstring())), 5000);
-            if (exportOpenWhenDone_ && exportKind_ != ExportKind::Audio) {
-                QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdWString(exportPath_.wstring())));
+                tr("Exported %1 to \"%2\".").arg(kindLabel, QString::fromStdWString(path.wstring())), 5000);
+            if (openWhenDone && kind != ExportKind::Audio) {
+                QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdWString(path.wstring())));
             }
             break;
         case ExportOutcome::Cancelled:
             // Rolls back the partial file ExportCancelled itself
             // deliberately leaves behind - see exportVideo()'s/
-            // exportCompressedAudio()'s own docs - matching finding #12's
-            // confirmed "cancel rolls back partial work" semantics rather
-            // than leaving a broken, unplayable file at the path the user
-            // chose.
-            std::filesystem::remove(exportPath_);
-            statusBar()->showMessage(tr("%1 export cancelled.").arg(exportKind_ == ExportKind::Video ? tr("Video")
-                                                                      : exportKind_ == ExportKind::Audio
-                                                                          ? tr("Audio")
+            // exportCompressedAudio()'s own docs - rather than leaving a
+            // broken, unplayable file at the path the user chose.
+            std::filesystem::remove(path);
+            statusBar()->showMessage(tr("%1 export cancelled.")
+                                         .arg(kind == ExportKind::Video    ? tr("Video")
+                                              : kind == ExportKind::Audio ? tr("Audio")
                                                                           : tr("Macro video")),
-                                      5000);
+                                     5000);
             break;
         case ExportOutcome::Failed: {
             statusBar()->clearMessage();
-            const QString title = exportKind_ == ExportKind::Video     ? tr("Export Video Failed")
-                                   : exportKind_ == ExportKind::Audio  ? tr("Export Audio Failed")
-                                                                        : tr("Export Macro Video Failed");
-            QMessageBox::critical(this, title, exportErrorMessage_);
+            const QString title = kind == ExportKind::Video    ? tr("Export Video Failed")
+                                  : kind == ExportKind::Audio ? tr("Export Audio Failed")
+                                                              : tr("Export Macro Video Failed");
+            QMessageBox::critical(this, title, result.error);
             break;
         }
     }
-    exportTask_.reset();
 }
 
 bool MainWindow::openUserDocIfBundled(const QString& htmlFilename) {
@@ -3599,16 +3508,16 @@ void MainWindow::noteProjectChangedForAnalysis() {
     if (!autoAnalyze_) {
         return;
     }
-    if (loudnessTask_ != nullptr && !loudnessTask_->wasCancelled()) {
-        loudnessTask_->requestCancel();  // its result would already be out of date.
+    if (loudnessJob_->isRunning() && !loudnessJob_->cancelRequested()) {
+        loudnessJob_->requestCancel();  // its result would already be out of date.
         ++cancelledAnalyses_;
     }
     autoAnalyzeTimer_->start();  // restarts the wait on each change.
 }
 
 void MainWindow::requestReanalysis() {
-    if (loudnessTask_ != nullptr && !loudnessTask_->wasCancelled()) {
-        loudnessTask_->requestCancel();
+    if (loudnessJob_->isRunning() && !loudnessJob_->cancelRequested()) {
+        loudnessJob_->requestCancel();
         ++cancelledAnalyses_;
     }
     reanalyzeRequested_ = true;
@@ -3629,27 +3538,36 @@ void MainWindow::setAutoAnalyze(bool enabled) {
 }
 
 void MainWindow::analyzeLoudness() {
-    if (!project_ || loudnessTask_ != nullptr) {
+    if (!project_ || loudnessJob_->isRunning()) {
         return;
     }
-    loudnessResult_.reset();
     analysisStale_ = false;
     reanalyzeRequested_ = false;
     analysisPanel_->setAnalyzing(true);
     if (!autoAnalyze_) {
         analysisPanel_->show();  // an explicit request; Auto-update never pops the panel up by itself.
     }
-    loudnessTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, projectCopy = *project_, voices = pitchVoiceCount_](sound_mind::core::CancellationToken& token) {
-            try {
-                loudnessResult_ = sound_mind::core::analyzeProjectLoudness(
-                    projectCopy, [&token]() { return token.cancellationRequested(); }, voices);
-            } catch (const std::exception&) {
-                loudnessResult_.reset();  // cancelled or failed - nothing to show.
+    loudnessJob_->start([this, projectCopy = *project_, voices = pitchVoiceCount_](
+                            sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
+        std::optional<sound_mind::core::ProjectLoudnessReport> report;
+        try {
+            report = sound_mind::core::analyzeProjectLoudness(
+                projectCopy, [&token]() { return token.cancellationRequested(); }, voices);
+        } catch (const std::exception&) {
+            report.reset();  // cancelled or failed - nothing to show.
+        }
+        auto shared = std::make_shared<std::optional<sound_mind::core::ProjectLoudnessReport>>(std::move(report));
+        return [this, shared](bool cancelled) {
+            analysisPanel_->setAnalyzing(false);
+            if (cancelled || !shared->has_value()) {
+                return;  // stale (an edit, or another project) or failed.
             }
-        });
-    loudnessTask_->start();
-    loudnessTimer_->start();
+            analysisPanel_->setReport(**shared);
+            if (analysisStale_) {
+                analysisPanel_->setStale();  // a change landed after this run had already finished.
+            }
+        };
+    });
 }
 
 void MainWindow::flushPickedTextEdit() {
@@ -4896,36 +4814,36 @@ void MainWindow::startPlayback() {
             return;
         }
 
-        compositeOutcome_ = CompositeOutcome::Success;
-        compositeErrorMessage_.clear();
-        compositedResult_.reset();
-
         // project_ copied by value - compositeProject() never touches
         // project_ itself once backgrounded, so the background thread has
         // nothing shared to synchronize against - see startPlayback()'s
         // own docs.
-        compositeTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-            [this, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
-                try {
-                    const auto composite = sound_mind::core::compositeProject(
-                        projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
-                    if (composite.has_value()) {
-                        // Decoded and measured here, off the GUI thread.
-                        compositedResult_ = sound_mind::codec::decode(*composite);
-                        compositedLoudnessLufs_ = sound_mind::core::integratedLoudnessLufs(*compositedResult_);
-                    }
-                } catch (const sound_mind::core::CompositeCancelled&) {
-                    compositeOutcome_ = CompositeOutcome::Cancelled;
-                } catch (const std::exception& e) {
-                    compositeOutcome_ = CompositeOutcome::Failed;
-                    compositeErrorMessage_ = QString::fromStdString(e.what());
+        compositeJob_->start([this, projectCopy = *project_](
+                                 sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
+            auto audio = std::make_shared<std::optional<sound_mind::codec::AudioBuffer>>();
+            double lufs = -70.0;
+            CompositeOutcome outcome = CompositeOutcome::Success;
+            QString error;
+            try {
+                const auto composite = sound_mind::core::compositeProject(
+                    projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
+                if (composite.has_value()) {
+                    // Decoded and measured here, off the GUI thread.
+                    *audio = sound_mind::codec::decode(*composite);
+                    lufs = sound_mind::core::integratedLoudnessLufs(**audio);
                 }
-            });
-        compositeTask_->start();
-
+            } catch (const sound_mind::core::CompositeCancelled&) {
+                outcome = CompositeOutcome::Cancelled;
+            } catch (const std::exception& e) {
+                outcome = CompositeOutcome::Failed;
+                error = QString::fromStdString(e.what());
+            }
+            return [this, audio, lufs, outcome, error](bool cancelled) {
+                finishPlaybackComposite(cancelled ? CompositeOutcome::Cancelled : outcome, error, std::move(*audio),
+                                        lufs);
+            };
+        });
         statusBar()->showMessage(tr("Preparing playback..."));
-        compositeCancelButton_->show();
-        compositeProgressTimer_->start();
         return;
     }
 
@@ -5045,10 +4963,7 @@ void MainWindow::toggleLoopMode() {
 
     if (loopEngine_->isRunning() || loopStartPending_) {
         loopStartPending_ = false;
-        loopBackingTimer_->stop();
-        if (loopBackingTask_) {
-            loopBackingTask_->requestCancel();
-        }
+        loopBackingJob_->requestCancel();  // its completion drops the result.
         loopUpdateTimer_->stop();
         loopEngine_->stop();
         loopLayerId_.reset();
@@ -5101,12 +5016,11 @@ void MainWindow::scheduleLoopBacking() {
     if (!project_ || !loopEngine_ || !loopLayerId_) {
         return;
     }
-    if (loopBackingTask_ && loopBackingTask_->isRunning()) {
+    if (loopBackingJob_->isRunning()) {
         loopBackingDirty_ = true;
         return;
     }
     loopBackingDirty_ = false;
-    loopBackingResult_.reset();
 
     sound_mind::core::Project projectCopy = *project_;
     if (sound_mind::core::Layer* loopLayer = projectCopy.layerById(*loopLayerId_)) {
@@ -5114,43 +5028,34 @@ void MainWindow::scheduleLoopBacking() {
     }
     const std::size_t loopLength = loopEngine_->loopLengthSamples();
     const std::uint32_t sampleRateHz = sound_mind::core::streamCodecConfigFor(project_->settings()).sampleRateHz;
-    loopBackingTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, projectCopy = std::move(projectCopy), loopLength,
-         sampleRateHz](sound_mind::core::CancellationToken& token) {
-            sound_mind::codec::AudioBuffer audio;
-            audio.sampleRateHz = sampleRateHz;
-            try {
-                const auto composite = sound_mind::core::compositeProject(
-                    projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
-                if (composite.has_value()) {
-                    audio = sound_mind::codec::decode(*composite);
-                }
-            } catch (const std::exception&) {
-                return;  // cancelled or failed: keep whatever the engine already plays.
+    loopBackingJob_->start([this, projectCopy = std::move(projectCopy), loopLength, sampleRateHz](
+                               sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
+        auto audio = std::make_shared<std::optional<sound_mind::codec::AudioBuffer>>();
+        sound_mind::codec::AudioBuffer mix;
+        mix.sampleRateHz = sampleRateHz;
+        try {
+            const auto composite = sound_mind::core::compositeProject(
+                projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
+            if (composite.has_value()) {
+                mix = sound_mind::codec::decode(*composite);
             }
-            audio.sampleRateHz = sampleRateHz;
-            audio.left.resize(loopLength, 0.0f);
-            audio.right.resize(loopLength, 0.0f);
-            loopBackingResult_ = std::move(audio);
-        });
-    loopBackingTask_->start();
-    loopBackingTimer_->start();
+            mix.sampleRateHz = sampleRateHz;
+            mix.left.resize(loopLength, 0.0f);
+            mix.right.resize(loopLength, 0.0f);
+            *audio = std::move(mix);
+        } catch (const std::exception&) {
+            audio->reset();  // cancelled or failed: keep whatever the engine already plays.
+        }
+        return [this, audio](bool cancelled) { finishLoopBacking(std::move(*audio), cancelled); };
+    });
 }
 
-void MainWindow::pollLoopBacking() {
-    if (!loopBackingTask_ || loopBackingTask_->isRunning()) {
-        return;
-    }
-    loopBackingTimer_->stop();
-    loopBackingTask_.reset();
-    auto result = std::move(loopBackingResult_);
-    loopBackingResult_.reset();
-
+void MainWindow::finishLoopBacking(std::optional<sound_mind::codec::AudioBuffer> result, bool cancelled) {
     if (loopBackingDirty_) {
         scheduleLoopBacking();
         return;
     }
-    if (!result.has_value() || !loopEngine_) {
+    if (cancelled || !result.has_value() || !loopEngine_) {
         return;
     }
     loopEngine_->setBackingAudio(std::move(*result));
@@ -5529,45 +5434,19 @@ void MainWindow::commitRecordingAsync(sound_mind::codec::AudioBuffer captured) {
         return;
     }
     flushRecordingSave();  // one at a time, in order.
-    recordingSaveResult_.reset();
-    recordingSaveError_.clear();
-    recordingSaveTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, audio = std::move(captured), config = sound_mind::core::streamCodecConfigFor(project_->settings()),
-         folder = project_->sourcesFolder()](sound_mind::core::CancellationToken&) {
-            try {
-                recordingSaveResult_ = prepareRecording(audio, config, folder);
-            } catch (const std::exception& e) {
-                recordingSaveError_ = QString::fromStdString(e.what());
-            }
-        });
-    recordingSaveTask_->start();
-    recordingSaveTimer_->start();
+    recordingSaveJob_->start(
+        [audio = std::move(captured), config = sound_mind::core::streamCodecConfigFor(project_->settings()),
+         folder = project_->sourcesFolder(), this](sound_mind::core::CancellationToken&) -> BackgroundJob::Completion {
+            auto prepared = std::make_shared<PreparedRecording>(prepareRecording(audio, config, folder));
+            return [this, prepared](bool) { applyRecording(std::move(*prepared)); };
+        },
+        [this](const QString& error) { QMessageBox::critical(this, tr("Record Failed"), error); });
     statusBar()->showMessage(tr("Saving the recording..."));
 }
 
-bool MainWindow::isSavingRecording() const noexcept { return recordingSaveTask_ != nullptr; }
+bool MainWindow::isSavingRecording() const noexcept { return recordingSaveJob_->isRunning(); }
 
-void MainWindow::pollRecordingSave() {
-    if (!recordingSaveTask_ || recordingSaveTask_->isRunning()) {
-        return;
-    }
-    recordingSaveTimer_->stop();
-    recordingSaveTask_.reset();
-    auto result = std::move(recordingSaveResult_);
-    recordingSaveResult_.reset();
-    if (!result.has_value()) {
-        QMessageBox::critical(this, tr("Record Failed"), recordingSaveError_);
-        return;
-    }
-    applyRecording(std::move(*result));
-}
-
-void MainWindow::flushRecordingSave() {
-    if (recordingSaveTask_) {
-        recordingSaveTask_->waitForFinished();
-        pollRecordingSave();
-    }
-}
+void MainWindow::flushRecordingSave() { recordingSaveJob_->finishNow(); }
 
 void MainWindow::refreshRecordTargets() {
     std::vector<std::pair<sound_mind::core::LayerId, QString>> targets;
@@ -5642,52 +5521,41 @@ void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer
     startEditPlaybackPreparation();
 }
 
-bool MainWindow::isPreparingEditPlayback() const noexcept { return editPlaybackTask_ != nullptr; }
+bool MainWindow::isPreparingEditPlayback() const noexcept { return editPlaybackJob_->isRunning(); }
 
 void MainWindow::startEditPlaybackPreparation() {
     if (!project_) {
         return;
     }
-    if (editPlaybackTask_ && editPlaybackTask_->isRunning()) {
+    if (editPlaybackJob_->isRunning()) {
         editPlaybackDirty_ = true;
-        editPlaybackTask_->requestCancel();
+        editPlaybackJob_->requestCancel();
         return;
     }
     editPlaybackDirty_ = false;
-    editPlaybackResult_.reset();
-    editPlaybackTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
-            try {
-                const auto composite = sound_mind::core::compositeProject(
-                    projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
-                if (composite.has_value() && !token.cancellationRequested()) {
-                    editPlaybackResult_ = sound_mind::codec::decode(*composite);
-                }
-            } catch (const std::exception&) {
-                editPlaybackResult_.reset();  // cancelled or failed: nothing to play.
+    editPlaybackJob_->start([this, projectCopy = *project_](
+                                sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
+        auto audio = std::make_shared<std::optional<sound_mind::codec::AudioBuffer>>();
+        try {
+            const auto composite = sound_mind::core::compositeProject(
+                projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
+            if (composite.has_value() && !token.cancellationRequested()) {
+                *audio = sound_mind::codec::decode(*composite);
             }
-        });
-    editPlaybackTask_->start();
-    editPlaybackTimer_->start();
-}
-
-void MainWindow::pollEditPlayback() {
-    if (!editPlaybackTask_ || editPlaybackTask_->isRunning()) {
-        return;
-    }
-    editPlaybackTimer_->stop();
-    const bool cancelled = editPlaybackTask_->wasCancelled();
-    editPlaybackTask_.reset();
-    auto result = std::move(editPlaybackResult_);
-    editPlaybackResult_.reset();
-    if (editPlaybackDirty_) {
-        startEditPlaybackPreparation();
-        return;
-    }
-    if (cancelled || !result.has_value() || !project_) {
-        return;
-    }
-    applyEditPlayback(std::move(*result));
+        } catch (const std::exception&) {
+            audio->reset();  // cancelled or failed: nothing to play.
+        }
+        return [this, audio](bool cancelled) {
+            if (editPlaybackDirty_) {
+                startEditPlaybackPreparation();  // a newer edit arrived: it wins.
+                return;
+            }
+            if (cancelled || !audio->has_value() || !project_) {
+                return;
+            }
+            applyEditPlayback(std::move(**audio));
+        };
+    });
 }
 
 void MainWindow::applyEditPlayback(sound_mind::codec::AudioBuffer audio) {
@@ -5752,46 +5620,36 @@ void MainWindow::syncPlaybackRangeToEngine() {
 }
 
 
-bool MainWindow::isCompositingForPlayback() const noexcept {
-    return compositeTask_ != nullptr && compositeTask_->isRunning();
-}
+bool MainWindow::isCompositingForPlayback() const noexcept { return compositeJob_->isRunning(); }
 
 void MainWindow::scheduleRepeatRefresh() {
     if (!project_ || !repeatEnabled_ || !playbackController_->isPlaying()) {
         return;
     }
-    if (refreshTask_ && refreshTask_->isRunning()) {
+    if (refreshJob_->isRunning()) {
         refreshDirty_ = true;
         return;
     }
     refreshDirty_ = false;
-    refreshResult_.reset();
-    refreshTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
-            try {
-                const auto composite = sound_mind::core::compositeProject(
-                    projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
-                if (composite.has_value()) {
-                    refreshResult_ = sound_mind::codec::decode(*composite);
-                    refreshLoudnessLufs_ = sound_mind::core::integratedLoudnessLufs(*refreshResult_);
-                }
-            } catch (const std::exception&) {
-                refreshResult_.reset();  // cancelled or failed: playback just keeps the older audio.
+    refreshJob_->start([this, projectCopy = *project_](
+                           sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
+        auto audio = std::make_shared<std::optional<sound_mind::codec::AudioBuffer>>();
+        double lufs = -70.0;
+        try {
+            const auto composite = sound_mind::core::compositeProject(
+                projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
+            if (composite.has_value()) {
+                *audio = sound_mind::codec::decode(*composite);
+                lufs = sound_mind::core::integratedLoudnessLufs(**audio);
             }
-        });
-    refreshTask_->start();
-    refreshTimer_->start();
+        } catch (const std::exception&) {
+            audio->reset();  // cancelled or failed: playback just keeps the older audio.
+        }
+        return [this, audio, lufs](bool) { finishRepeatRefresh(std::move(*audio), lufs); };
+    });
 }
 
-void MainWindow::pollRepeatRefresh() {
-    if (!refreshTask_ || refreshTask_->isRunning()) {
-        return;
-    }
-    refreshTimer_->stop();
-    refreshTask_.reset();
-    auto result = std::move(refreshResult_);
-    refreshResult_.reset();
-
+void MainWindow::finishRepeatRefresh(std::optional<sound_mind::codec::AudioBuffer> result, double loudnessLufs) {
     if (refreshDirty_) {
         refreshDirty_ = false;
         scheduleRepeatRefresh();
@@ -5800,7 +5658,7 @@ void MainWindow::pollRepeatRefresh() {
     if (!result.has_value() || !repeatEnabled_ || !playbackController_->isPlaying()) {
         return;
     }
-    noteLoadedPlaybackLoudness(refreshLoudnessLufs_);  // the refreshed mix's own loudness.
+    noteLoadedPlaybackLoudness(loudnessLufs);  // the refreshed mix's own loudness.
     if (playbackController_->stageAudio(std::move(*result))) {
         return;
     }
@@ -5821,9 +5679,7 @@ void MainWindow::setFilterPreviewEnabled(bool enabled) {
     if (!enabled || !project_) {
         filterPreviewActive_ = false;
         filterPreviewDirty_ = false;
-        if (filterPreviewTask_) {
-            filterPreviewTask_->requestCancel();  // pollFilterPreviewRender() discards it.
-        }
+        filterPreviewJob_->requestCancel();  // its completion drops the render.
         if (filterPreviewEngine_) {
             filterPreviewEngine_->stop();
         }
@@ -5864,12 +5720,11 @@ void MainWindow::scheduleFilterPreviewRender() {
     if (!filterPreviewActive_ || !project_) {
         return;
     }
-    if (filterPreviewTask_ && filterPreviewTask_->isRunning()) {
+    if (filterPreviewJob_->isRunning()) {
         filterPreviewDirty_ = true;
         return;
     }
     filterPreviewDirty_ = false;
-    filterPreviewResult_.reset();
 
     sound_mind::core::FilterPreviewRequest request;
     request.config = filterConfigurationPanel_->filterConfiguration();
@@ -5882,27 +5737,20 @@ void MainWindow::scheduleFilterPreviewRender() {
     request.selection = toolPaletteController_->committedSelection();
     request.startSeconds = filterPreviewWindow_.first;
     request.endSeconds = filterPreviewWindow_.second;
-    filterPreviewTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, projectCopy = *project_, request](sound_mind::core::CancellationToken& token) {
-            try {
-                filterPreviewResult_ = sound_mind::core::renderFilterPreview(
-                    projectCopy, request, [&token]() { return token.cancellationRequested(); });
-            } catch (const std::exception&) {
-                filterPreviewResult_.reset();  // cancelled or failed: keep looping the older audio.
-            }
-        });
-    filterPreviewTask_->start();
-    filterPreviewTimer_->start();
+    filterPreviewJob_->start([this, projectCopy = *project_, request](
+                                 sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
+        auto audio = std::make_shared<std::optional<sound_mind::codec::AudioBuffer>>();
+        try {
+            *audio = sound_mind::core::renderFilterPreview(projectCopy, request,
+                                                           [&token]() { return token.cancellationRequested(); });
+        } catch (const std::exception&) {
+            audio->reset();  // cancelled or failed: keep looping the older audio.
+        }
+        return [this, audio](bool) { finishFilterPreviewRender(std::move(*audio)); };
+    });
 }
 
-void MainWindow::pollFilterPreviewRender() {
-    if (!filterPreviewTask_ || filterPreviewTask_->isRunning()) {
-        return;
-    }
-    filterPreviewTimer_->stop();
-    filterPreviewTask_.reset();
-    auto result = std::move(filterPreviewResult_);
-    filterPreviewResult_.reset();
+void MainWindow::finishFilterPreviewRender(std::optional<sound_mind::codec::AudioBuffer> result) {
 
     if (!filterPreviewActive_) {
         return;
@@ -5933,28 +5781,17 @@ void MainWindow::pollFilterPreviewRender() {
     }
 }
 
-void MainWindow::cancelPlaybackComposite() {
-    if (compositeTask_) {
-        compositeTask_->requestCancel();
-    }
-}
+void MainWindow::cancelPlaybackComposite() { compositeJob_->requestCancel(); }
 
-void MainWindow::pollCompositeProgress() {
-    if (compositeTask_->isRunning()) {
-        return;
-    }
-    compositeProgressTimer_->stop();
-    compositeCancelButton_->hide();
-
-    switch (compositeOutcome_) {
+void MainWindow::finishPlaybackComposite(CompositeOutcome outcome, const QString& error,
+                                         std::optional<sound_mind::codec::AudioBuffer> audio, double loudnessLufs) {
+    switch (outcome) {
         case CompositeOutcome::Success:
-            if (compositedResult_.has_value()) {
+            if (audio.has_value()) {
                 // load() itself emits durationChanged() (connected in the
-                // constructor to playbackPanel_->setDuration()) - only
-                // needs doing once per load, matching startPlayback()'s own
-                // prior synchronous contract.
-                noteLoadedPlaybackLoudness(compositedLoudnessLufs_);
-                playbackController_->load(std::move(*compositedResult_));
+                // constructor to playbackPanel_->setDuration()).
+                noteLoadedPlaybackLoudness(loudnessLufs);
+                playbackController_->load(std::move(*audio));
                 // A fresh load starts a new "nothing edited yet this
                 // session" range - the whole track, regardless of
                 // playbackScope_ - narrowed only once a real edit actually
@@ -5974,17 +5811,14 @@ void MainWindow::pollCompositeProgress() {
             }
             break;
         case CompositeOutcome::Cancelled:
-            // Nothing to roll back beyond discarding compositedResult_ -
-            // playbackController_ was never touched.
+            // Nothing to roll back - playbackController_ was never touched.
             statusBar()->showMessage(tr("Playback preparation cancelled."), 5000);
             break;
         case CompositeOutcome::Failed:
             statusBar()->clearMessage();
-            QMessageBox::critical(this, tr("Playback Failed"), compositeErrorMessage_);
+            QMessageBox::critical(this, tr("Playback Failed"), error);
             break;
     }
-    compositedResult_.reset();
-    compositeTask_.reset();
 }
 
 }  // namespace sound_mind::studio

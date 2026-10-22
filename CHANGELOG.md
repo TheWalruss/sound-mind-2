@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.47.2] - 2026-10-22
+
+Roadmap slot `v0.Y.82.4` (responsiveness and modularity), installment B.
+
+### Fixed
+
+- An analysis, an edit's Delta/Review preparation or a Loop Mode refresh that finished at the very moment you opened another project could still be applied to it. A result is now dropped once its project is left.
+- **Order/Chaos strokes no longer change by themselves.** Their randomness was drawn afresh every time a layer was rebuilt (after another stroke, an undo, reopening the project), so a Chaos stroke could look and sound different each time. Each stroke now always comes out the same. Strokes made before this version get a new, fixed shape once.
+
+### Changed
+
+- Internal: every long operation (import, export, playback preparation, analysis, Loop Mode, filter preview, saving a recording) now runs through one shared mechanism, so they all start, report progress, cancel and finish the same way.
+
 ## [0.1.47.1] - 2026-10-22
 
 Roadmap slot `v0.Y.82.4` (responsiveness and modularity), installment A.

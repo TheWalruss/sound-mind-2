@@ -2933,6 +2933,48 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `CanvasWidgetTest` +2: the flower is projected once until the composite, the size or an override frame changes.
       - `MainWindowTest` +2: Delta preparation is in the background and the latest edit wins; `commitRecordingAsync()` adds the layer, with its source, only when done. The five Delta/Review cases now wait for `isPreparingEditPlayback()` to clear.
       - Core `test_history.cpp` +1: unrelated commits don't re-serialize Mind Shots; a rename is recorded and undone, with the clip intact.
+273. **Responsiveness pass, installment B: `BackgroundJob`, one shape for long operations.** Settled in `v0.1.47.2`.
+    - **Before:** `MainWindow` hand-wired nine background operations: import, export, the playback composite, Repeat refresh, Delta/Review preparation, recording save, filter preview, loudness analysis and Loop Mode backing. Each had its own `BackgroundTask`, `QTimer`, poll slot, result member, outcome enum and error string, with some cancel buttons wired by hand.
+    - **`studio::BackgroundJob` (new, `QObject`):**
+      - The **work** runs on a `BackgroundTask`, touches nothing shared, and returns a **completion**: a closure holding its result.
+      - The job polls, then runs the completion on the UI thread, told `cancelled`.
+      - `isRunning()` stays true until the completion has run, so "not running" implies "applied".
+      - Other parts:
+        - `requestCancel()`;
+        - `finishNow()`: wait, then apply;
+        - an optional cancel button, shown while running;
+        - `stillRunning()` on each poll, for progress;
+        - an error handler for exceptions from the work.
+      - A completion may restart its own job; the job is reset first. That is the "latest request wins" pattern refresh, Delta/Review, filter preview and Loop backing use.
+    - **A real race, fixed:**
+      - The old Delta/Review poll used `BackgroundTask::wasCancelled()`, but `BackgroundTask::requestCancel()` is a no-op once the work has returned. A cancel that arrived after the work finished but before the poll was lost.
+      - The loudness poll didn't check cancellation at all. Opening another project at that moment could apply the old project's report, edit audio or Loop backing.
+      - `BackgroundJob` records `requestCancel()` itself, so the completion always sees it. Loudness, edit playback and Loop backing drop cancelled results.
+    - **`MainWindow`:**
+      - Nine `std::unique_ptr<BackgroundJob>` members are declared last in the class. They are destroyed first, so a running job is cancelled and waited for before anything its work or completion uses goes away.
+      - The three exports share `startExportJob()`, `finishExport()` and `showExportProgress()`.
+      - The import result is an `ImportResult`, applied by `finishImport()`. The playback composite is applied by `finishPlaybackComposite()`, Repeat by `finishRepeatRefresh()`, the filter preview by `finishFilterPreviewRender()` and Loop backing by `finishLoopBacking()`.
+      - The public API is unchanged: `isImportRunning()`, `cancelExport()`, `isCompositingForPlayback()`, `isPreparingEditPlayback()`, `isSavingRecording()` and the cancel buttons' object names. Each `isXRunning()` now also covers the moment between the work finishing and its result being applied.
+      - Removed: the poll slots, 9 `QTimer`s, the result, outcome and error members, `exportPath_`, `exportOpenWhenDone_`, `importPath_`, `importedLayers_` and `importedSource_`.
+    - **Found along the way, a real determinism bug:**
+      - A Core test (Order moving the loudest value) failed about 1% of runs under load. The cause: `applyOrderChaosPaintOperation()` seeded its `std::mt19937` from `std::random_device`.
+      - Every layer rebuild replays its strokes (a new stroke, undo, reopening, History replay, Remaster), so an Order/Chaos stroke re-rolled each time. That contradicts the design doc's determinism guarantee, which names the Chaos brush.
+      - Now seeded from the operation id (`std::seed_seq`), so it's deterministic per stroke. Moving a stroke gives it a new id, so it re-rolls once.
+      - The test's own precondition was wrong: its hot column tied the cross column (100 + 5 against 21 x 5 dB) and won the tie. It only passed when the randomness happened to move the hot value. The cross is now 10 dB per cell. Replaying an Order/Chaos stroke giving the same result is a new test.
+      - Not changed, flagged: Order finds its peak line by summing dB over each column's part of the footprint, which favours sparse edge columns near silence. A linear-energy or mean profile may be the better design.
+    - **Tests:** Studio `BackgroundJobTest`, 10 cases:
+      - the completion runs on the UI thread;
+      - running until applied;
+      - a second start is refused;
+      - the cancel button;
+      - `finishNow()`;
+      - restart from a completion;
+      - errors;
+      - destruction cancels, waits and drops the completion;
+      - a cancel after the work finished still reaches the completion;
+      - `stillRunning()`.
+
+      The existing `MainWindowTest` cases for every converted operation pass unchanged.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

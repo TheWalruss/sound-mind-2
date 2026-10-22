@@ -28,6 +28,7 @@
 #include "sound_mind/core/project_sources.h"
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
+#include "sound_mind/studio/background_job.h"
 #include "sound_mind/studio/branch_curve_session.h"
 #include "sound_mind/studio/analysis_panel.h"
 #include "sound_mind/studio/canvas_widget.h"
@@ -1455,7 +1456,7 @@ public slots:
 
     /// @brief Whether a loudness analysis is running.
     /// @return `true` from analyzeLoudness() until its report arrives.
-    [[nodiscard]] bool isAnalyzingLoudness() const noexcept { return loudnessTask_ != nullptr; }
+    [[nodiscard]] bool isAnalyzingLoudness() const noexcept { return loudnessJob_->isRunning(); }
 
     /**
      * @brief Turns the Analysis panel's Auto-update on or off (`v0.1.40.7`).
@@ -2534,7 +2535,7 @@ public:
      * `Project&`), so the background thread never needs to synchronize
      * against `project_`. The encoded layers are only ever added to
      * `project_` afterward, on the UI thread, once the background encode
-     * has actually finished successfully - see pollImportProgress()'s own
+     * has actually finished successfully - see finishImport()'s own
      * docs. Cancelling therefore rolls back cleanly by construction: the
      * encoded-so-far layers are simply discarded, having never touched
      * `project_` in the first place - simpler than Export's own "delete
@@ -2543,16 +2544,14 @@ public:
      *
      * A no-op (just a status bar message, no dialog) if no project is open,
      * or if isImportRunning() is already `true` - a second call would
-     * otherwise destroy the still-running `importTask_`, whose destructor
-     * blocks until its thread joins, silently freezing the UI. Also why
+     * otherwise collide with the running one on `importJob_`. Also why
      * newProject()/openProject()/openProjectAt()/closeEvent() all refuse
      * outright while isImportRunning(): switching or closing the project
      * out from under a background import that will later call
      * `project_->addLayer()` on whatever `project_` turns out to be by
      * then would silently misattribute those layers to the wrong project.
      *
-     * A separate slot from exportTask_/exportProgressTimer_/
-     * exportCancelButton_, not shared with them - unlike Video/Audio
+     * A separate job (`importJob_`) from export's, not shared with it - unlike Video/Audio
      * export (which read the same topmost layer and are never meaningfully
      * run together), importing new content and exporting existing content
      * are independent operations with no reason to block each other.
@@ -2896,10 +2895,10 @@ public:
      *        project - the real work behind the interactive exportAudio()
      *        slot, with the same shape as exportCompositeVideoAsync().
      *
-     * Shares `exportTask_`/`exportProgressTimer_`/`exportCancelButton_` with
-     * the video path: the status bar has room for one message and one
-     * cancel button at a time. `exportKind_` records which one is in
-     * flight, so pollExportProgress() can phrase its message correctly.
+     * Shares `exportJob_` and its cancel button with the video path: the
+     * status bar has room for one message and one cancel button at a time.
+     * `exportKind_` records which one is in flight, so showExportProgress()
+     * and finishExport() can phrase their messages correctly.
      *
      * @param path Destination path; its extension (`.flac`/`.ogg`/`.mp3`)
      *        selects the compressed format.
@@ -2913,7 +2912,7 @@ public:
      *        `docs/sound-mind-design.md`'s *Macros*): a `MacroRenderer`
      *        rebuilds the performance on a project of its own and
      *        `core::exportMacroVideo()` writes it segment by segment, on
-     *        `exportTask_` (cancellable, sharing the other exports' progress
+     *        `exportJob_` (cancellable, sharing the other exports' progress
      *        and cancel button). The open project is never touched.
      * @param path Destination path.
      * @param id The Macro.
@@ -3334,14 +3333,17 @@ private:
      *        in on its own - see `LoopEngine`), decoded and fitted to one
      *        loop. Called when Loop Mode starts and after every edit while
      *        it runs; a request while one is already in flight is coalesced
-     *        into one follow-up. See pollLoopBacking().
+     *        into one follow-up. See finishLoopBacking().
      */
     void scheduleLoopBacking();
 
-    /// @brief Finishes a scheduleLoopBacking() task: starts Loop Mode if
-    ///        this was its start-up preparation, otherwise hands the fresh
-    ///        audio to the running engine (applied at the next pass start).
-    void pollLoopBacking();
+    /// @brief Finishes a scheduleLoopBacking() job: re-runs it if another
+    ///        edit arrived meanwhile; otherwise starts Loop Mode if this was
+    ///        its start-up preparation, or hands the fresh audio to the
+    ///        running engine (applied at the next pass start).
+    /// @param result The mix, or nothing if the run failed.
+    /// @param cancelled Whether the run was cancelled (Loop Mode stopped).
+    void finishLoopBacking(std::optional<sound_mind::codec::AudioBuffer> result, bool cancelled);
 
     /// @brief recordDrainTimer_'s slot: moves whatever's newly captured
     /// out of recordEngine_'s ring buffer, while Recording is running -
@@ -3356,46 +3358,74 @@ private:
     /// device. `v0.0.42.1`.
     void pollTestInputLevel();
 
-    /// @brief exportProgressTimer_'s slot: a no-op while isExportRunning()
-    /// (still polling); once the background encode finishes, stops the
-    /// timer, hides exportCancelButton_, and reports the outcome per
-    /// exportOutcome_ - success (a status bar message naming the
-    /// destination, phrased per exportKind_), cancelled (deletes the
-    /// necessarily-partial output file first, then a status bar message),
-    /// or failed (`QMessageBox::critical()`, matching exportVideo()'s/
-    /// exportAudio()'s own prior synchronous failure presentation). See
-    /// exportCompositeVideoAsync()'s/exportCompositeAudioAsync()'s own
-    /// docs. `v0.0.45.15`, finding #12 Installment C (video), generalized
-    /// to cover audio too in Installment E.
-    void pollExportProgress();
+    /// @brief How a background export, import or playback composite ended.
+    enum class ExportOutcome { Success, Cancelled, Failed };
+    enum class ImportOutcome { Success, Cancelled, Failed };
+    enum class CompositeOutcome { Success, Cancelled, Failed };
+    /// @brief Which kind of export is running - for its status messages.
+    enum class ExportKind { Video, Audio, MacroVideo };
 
-    /// @brief importProgressTimer_'s slot: a no-op while isImportRunning()
-    /// (still polling); once the background encode finishes, stops the
-    /// timer, hides importCancelButton_, and reports the outcome per
-    /// importOutcome_ - success (moves importedLayers_ into project_ one by
-    /// one, then the usual canvas/playback-invalidate/refresh-panel/status-
-    /// message sequence importAudioSnippets() already does), cancelled
-    /// (discards importedLayers_ without ever touching project_ - see
-    /// importAudioSnippetsAsync()'s own docs on why that's the whole
-    /// rollback needed), or failed (`QMessageBox::critical()`). See
-    /// importAudioSnippetsAsync()'s own docs. Finding #12 Installment F.
-    void pollImportProgress();
+    /// @brief What an export's background work reports.
+    struct ExportResult {
+        ExportOutcome outcome = ExportOutcome::Success;  ///< How it ended.
+        QString error;                                    ///< Why it failed, if it did.
+    };
 
-    /// @brief compositeProgressTimer_'s slot: a no-op while
-    /// isCompositingForPlayback() (still polling); once the background
-    /// composite finishes, stops the timer, hides
-    /// compositeCancelButton_, and reports the outcome per
-    /// compositeOutcome_ - success (loads compositedResult_, already
-    /// decoded and measured on the background task, into
-    /// playbackController_ and starts playback, the same
-    /// load()-then-play() sequence startPlayback() always did
-    /// synchronously - or a status message noting there was nothing to
-    /// play, if compositedResult_ ended up empty), cancelled (discards
-    /// compositedResult_ without ever touching playbackController_ - see
-    /// startPlayback()'s own docs on why that's the whole rollback
-    /// needed), or failed (`QMessageBox::critical()`). Finding #12
-    /// Installment H.
-    void pollCompositeProgress();
+    /// @brief What an audio import's background work produced.
+    struct ImportResult {
+        ImportOutcome outcome = ImportOutcome::Success;          ///< How it ended.
+        QString error;                                            ///< Why it failed, if it did.
+        std::vector<sound_mind::core::Layer> layers;              ///< The encoded layers, not yet added.
+        std::optional<sound_mind::core::ProjectSource> source;   ///< The copied file, not yet registered.
+    };
+
+    /**
+     * @brief Starts an export on exportJob_ (`v0.1.47.2`) - the shared part
+     *        of exportCompositeVideoAsync()/exportCompositeAudioAsync()/
+     *        exportMacroVideoAsync(). `work` runs off the UI thread;
+     *        `ExportCancelled`/`CompositeCancelled` and other exceptions it
+     *        throws become a Cancelled/Failed result.
+     * @param kind What is exported, for messages and the progress display.
+     * @param path The destination; removed if the export is cancelled.
+     * @param openWhenDone Whether to open the file afterwards (not audio).
+     * @param work The export itself.
+     * @param startMessage The status bar message while it runs.
+     */
+    void startExportJob(ExportKind kind, const std::filesystem::path& path, bool openWhenDone,
+                        std::function<ExportResult(sound_mind::core::CancellationToken&)> work,
+                        const QString& startMessage);
+
+    /// @brief exportJob_'s progress display: "Exporting video... N%" (not
+    ///        for audio, which reports no progress).
+    void showExportProgress();
+
+    /// @brief Reports a finished export: a status message (and opening the
+    ///        file, if asked) on success; deleting the partial file on
+    ///        cancel; a dialog on failure. `v0.0.45.15`, finding #12.
+    /// @param kind What was exported.
+    /// @param path Where it was written.
+    /// @param openWhenDone Whether to open it.
+    /// @param result How it ended.
+    void finishExport(ExportKind kind, const std::filesystem::path& path, bool openWhenDone,
+                      const ExportResult& result);
+
+    /// @brief Applies a finished audio import: registers the copied source,
+    ///        adds the layers and commits one History entry; or reports a
+    ///        cancel (nothing was added) or a failure (a dialog). Finding #12
+    ///        Installment F.
+    /// @param path The imported file, for messages.
+    /// @param result What the import produced.
+    void finishImport(const std::filesystem::path& path, ImportResult result);
+
+    /// @brief Starts playback with a finished startPlayback() composite -
+    ///        the same load()-then-play() sequence it always did - or
+    ///        reports a cancel or a failure. Finding #12 Installment H.
+    /// @param outcome How the composite ended.
+    /// @param error Why it failed, if it did.
+    /// @param audio The decoded composite, if there was anything to play.
+    /// @param loudnessLufs Its integrated loudness, for normalization.
+    void finishPlaybackComposite(CompositeOutcome outcome, const QString& error,
+                                 std::optional<sound_mind::codec::AudioBuffer> audio, double loudnessLufs);
 
     /**
      * @brief While Repeat is on and playback is running, re-prepares the
@@ -3412,31 +3442,24 @@ private:
      */
     void scheduleRepeatRefresh();
 
-    /// @brief refreshTimer_'s slot: once the background re-prepare finishes,
-    /// stages its result (or, if the audio length changed so it can't be
-    /// staged, falls back to an in-place reload at the same position), or
-    /// re-runs if another change arrived meanwhile.
-    void pollRepeatRefresh();
+    /// @brief Finishes a scheduleRepeatRefresh() job: re-runs it if another
+    ///        change arrived meanwhile; otherwise stages the result (or, if
+    ///        the audio length changed so it can't be staged, reloads in
+    ///        place at the same position).
+    /// @param result The refreshed mix, or nothing if the run failed.
+    /// @param loudnessLufs Its integrated loudness.
+    void finishRepeatRefresh(std::optional<sound_mind::codec::AudioBuffer> result, double loudnessLufs);
 
     /// @brief Starts preparing Delta/Review playback of the latest edit on
     ///        a background task (`v0.1.47.1`), or, if one is running,
     ///        cancels it and marks a re-run - the latest edit wins.
     void startEditPlaybackPreparation();
 
-    /// @brief editPlaybackTimer_'s slot: applies the prepared audio once
-    ///        the task finishes (applyEditPlayback()), re-runs it if another
-    ///        edit arrived meanwhile, or discards a cancelled result.
-    void pollEditPlayback();
-
     /// @brief Loads `audio` and positions playback for the current scope
     ///        and pendingEditBounds_ - Delta plays the edited region, Review
     ///        from the edit to the end - then plays. UI thread only.
     /// @param audio The decoded composite.
     void applyEditPlayback(sound_mind::codec::AudioBuffer audio);
-
-    /// @brief recordingSaveTimer_'s slot: applies a finished
-    ///        commitRecordingAsync() save.
-    void pollRecordingSave();
 
     /// @brief Waits for a pending commitRecordingAsync() save and applies
     ///        it - before New/Open/Close, so the take is part of the project
@@ -3471,10 +3494,11 @@ private:
     ///        setFilterPreviewEnabled(). A no-op while the preview is off.
     void scheduleFilterPreviewRender();
 
-    /// @brief Polled by `filterPreviewTimer_`: hands a finished render to
-    ///        the preview engine (staged, or loaded on the first render),
-    ///        or starts the pending one.
-    void pollFilterPreviewRender();
+    /// @brief Finishes a filter preview render: starts the pending one if
+    ///        settings changed meanwhile, otherwise hands the render to the
+    ///        preview engine (staged, or loaded on the first render).
+    /// @param result The rendered audio, or nothing if the run failed.
+    void finishFilterPreviewRender(std::optional<sound_mind::codec::AudioBuffer> result);
 
     /**
      * @brief Repeat Playback's/one-shot preview's shared edit hook -
@@ -3794,7 +3818,7 @@ private:
     /// @brief Records the integrated loudness of the audio just loaded
     ///        (or staged) for playback, and re-applies the normalization
     ///        gain. The measurement itself runs on the background task that
-    ///        prepared the audio (compositeTask_ or refreshTask_), never on
+    ///        prepared the audio (compositeJob_ or refreshJob_), never on
     ///        the GUI thread.
     /// @param lufs The loudness, LUFS (`kLoudnessFloorLufs` if silent).
     void noteLoadedPlaybackLoudness(double lufs);
@@ -3831,11 +3855,6 @@ private:
     QTimer* autoAnalyzeTimer_ = nullptr;
     /// @brief See cancelledAnalysisCount().
     int cancelledAnalyses_ = 0;
-    /// @brief The running loudness analysis's result; declared before the
-    ///        task so the task is destroyed first (as refreshResult_).
-    std::optional<sound_mind::core::ProjectLoudnessReport> loudnessResult_;
-    std::unique_ptr<sound_mind::core::BackgroundTask> loudnessTask_;
-    QTimer* loudnessTimer_ = nullptr;
     /// @brief The Text tool's panel - see `TextToolPanel`.
     TextToolPanel* textToolPanel_ = nullptr;
 
@@ -4008,13 +4027,8 @@ private:
     /// future layer-list operations) can reallocate, invalidating a raw
     /// pointer held across such a call - see layerById().
     std::optional<sound_mind::core::LayerId> loopLayerId_;
-    /// @brief See scheduleLoopBacking(). The task is declared after the
-    ///        result it writes, so it's destroyed (and its thread joined)
-    ///        first.
-    std::optional<sound_mind::codec::AudioBuffer> loopBackingResult_;
-    std::unique_ptr<sound_mind::core::BackgroundTask> loopBackingTask_;
+    /// @brief An edit arrived while loopBackingJob_ was running.
     bool loopBackingDirty_ = false;
-    QTimer* loopBackingTimer_ = nullptr;
     /// @brief Loop Mode was started and is waiting for its first project
     ///        audio before the engine actually starts.
     bool loopStartPending_ = false;
@@ -4116,115 +4130,24 @@ private:
     /// as the timestamp to record against.
     double currentPlaybackPositionSeconds_ = 0.0;
 
-    /// @brief The currently running export (video or audio), if any - see
-    /// exportCompositeVideoAsync()'s/exportCompositeAudioAsync()'s own
-    /// docs on why both kinds share this one slot. `nullptr` whenever
-    /// isExportRunning() is `false` (including before the first export ever
-    /// starts) - reset once pollExportProgress() has finished reporting a
-    /// run's own outcome, not left holding a finished task around.
-    /// `v0.0.45.15`, finding #12 Installment C (video); generalized to cover
-    /// audio too in Installment E.
-    std::unique_ptr<sound_mind::core::BackgroundTask> exportTask_;
-    QTimer* exportProgressTimer_ = nullptr;
+    /// @brief Shown while an export runs - see exportJob_.
     QPushButton* exportCancelButton_ = nullptr;
-
-    /// @brief Which kind of export exportTask_ actually is - purely so
-    /// pollExportProgress() can phrase its own status bar message
-    /// correctly ("audio"/"video"/"macro video").
-    enum class ExportKind { Video, Audio, MacroVideo };
+    /// @brief The running export's kind - for showExportProgress().
     ExportKind exportKind_ = ExportKind::Video;
-
-    /// @brief Where the currently (or most recently) running export is/was
-    /// writing to - pollExportProgress()'s own docs on why this is deleted
-    /// rather than kept on cancellation.
-    std::filesystem::path exportPath_;
-
     /// @brief How far the running video export is, `0` to `1` - written by
-    ///        its worker, shown by pollExportProgress() (`v0.1.45.1`).
+    ///        its worker, shown by showExportProgress() (`v0.1.45.1`).
     std::atomic<double> exportProgress_{0.0};
-
-    /// @brief Whether to open the running video export's file when done.
-    bool exportOpenWhenDone_ = false;
-
-    /// @brief exportTask_'s own work function's outcome, written just
-    /// before it returns and read by pollExportProgress() only after
-    /// observing isExportRunning() == false - safe without its own
-    /// separate synchronization thanks to BackgroundTask::isRunning()'s own
-    /// release/acquire pairing (see its docs). Reset to `Success` at the
-    /// start of every new exportCompositeVideoAsync()/
-    /// exportCompositeAudioAsync() call, not left holding a stale value
-    /// from whatever the previous run's own outcome was.
-    enum class ExportOutcome { Success, Cancelled, Failed };
-    ExportOutcome exportOutcome_ = ExportOutcome::Success;
-    QString exportErrorMessage_;
-
-    /// @brief The currently running audio import, if any - see
-    /// importAudioSnippetsAsync()'s own docs. A separate slot from
-    /// exportTask_ - see its own docs on why the two aren't shared.
-    /// Finding #12 Installment F.
-    std::unique_ptr<sound_mind::core::BackgroundTask> importTask_;
-    QTimer* importProgressTimer_ = nullptr;
+    /// @brief Shown while an audio import runs - see importJob_.
     QPushButton* importCancelButton_ = nullptr;
-
-    /// @brief Where the currently (or most recently) running import is
-    /// reading from - purely for pollImportProgress()'s own status bar
-    /// message (naming the source file), unlike exportPath_ there's
-    /// nothing to delete here on cancellation.
-    std::filesystem::path importPath_;
-
-    /// @brief importTask_'s own work function's result on success - the
-    /// encoded-but-not-yet-added layers, moved into project_ one by one by
-    /// pollImportProgress() only once the whole encode succeeded, or
-    /// discarded untouched if it was cancelled. Written just before the
-    /// work function returns and read only after observing
-    /// isImportRunning() == false - safe without its own synchronization
-    /// for the same release/acquire reason exportOutcome_ is (see
-    /// BackgroundTask::isRunning()'s own docs). Cleared at the start of
-    /// every new importAudioSnippetsAsync() call.
-    std::vector<sound_mind::core::Layer> importedLayers_;
-    /// @brief The imported audio file, copied into the project's sources by
-    ///        the import task, registered when it completes (`v0.1.43.2`).
-    std::optional<sound_mind::core::ProjectSource> importedSource_;
-
-    enum class ImportOutcome { Success, Cancelled, Failed };
-    ImportOutcome importOutcome_ = ImportOutcome::Success;
-    QString importErrorMessage_;
-
-    /// @brief The currently running playback composite, if any - see
-    /// startPlayback()'s own docs. A separate slot from exportTask_/
-    /// importTask_. Finding #12 Installment H.
-    std::unique_ptr<sound_mind::core::BackgroundTask> compositeTask_;
-    QTimer* compositeProgressTimer_ = nullptr;
+    /// @brief Shown while startPlayback() prepares - see compositeJob_.
     QPushButton* compositeCancelButton_ = nullptr;
 
-    /// @brief Result of refreshTask_ (see scheduleRepeatRefresh()); same
-    /// release/acquire reasoning as compositedResult_. Declared before
-    /// refreshTask_ so the task is destroyed first.
-    std::optional<sound_mind::codec::AudioBuffer> refreshResult_;
-    /// @brief refreshResult_'s integrated loudness, measured on refreshTask_.
-    double refreshLoudnessLufs_ = -70.0;
-    std::unique_ptr<sound_mind::core::BackgroundTask> refreshTask_;
-    QTimer* refreshTimer_ = nullptr;
-    /// @brief A change arrived while refreshTask_ was running.
+    /// @brief A change arrived while refreshJob_ was running.
     bool refreshDirty_ = false;
-
-    /// @brief Delta/Review edit playback (`v0.1.47.1`) - see
-    ///        startEditPlaybackPreparation(). The result is declared before
-    ///        the task so the task is destroyed first.
-    std::optional<sound_mind::codec::AudioBuffer> editPlaybackResult_;
-    std::unique_ptr<sound_mind::core::BackgroundTask> editPlaybackTask_;
-    QTimer* editPlaybackTimer_ = nullptr;
-    /// @brief Another edit arrived while editPlaybackTask_ was running.
+    /// @brief Another edit arrived while editPlaybackJob_ was running.
     bool editPlaybackDirty_ = false;
     /// @brief The edited region applyEditPlayback() positions playback on.
     std::optional<sound_mind::core::TimeFrequencyRect> pendingEditBounds_;
-
-    /// @brief commitRecordingAsync()'s save (`v0.1.47.1`); result first,
-    ///        so the task is destroyed before it.
-    std::optional<PreparedRecording> recordingSaveResult_;
-    QString recordingSaveError_;
-    std::unique_ptr<sound_mind::core::BackgroundTask> recordingSaveTask_;
-    QTimer* recordingSaveTimer_ = nullptr;
 
     /// @brief The filter preview's own looping engine, created on first use
     ///        with audioDeviceMode_ - see setFilterPreviewEnabled().
@@ -4234,28 +4157,24 @@ private:
     ///        the preview runs, so every render has the same length.
     std::pair<double, double> filterPreviewWindow_{0.0, 0.0};
     int filterPreviewRenders_ = 0;
-    /// @brief Result of filterPreviewTask_; declared first so the task is
-    ///        destroyed before it (same reasoning as refreshResult_).
-    std::optional<sound_mind::codec::AudioBuffer> filterPreviewResult_;
-    std::unique_ptr<sound_mind::core::BackgroundTask> filterPreviewTask_;
-    QTimer* filterPreviewTimer_ = nullptr;
-    /// @brief An edit arrived while filterPreviewTask_ was running.
+    /// @brief An edit arrived while filterPreviewJob_ was running.
     bool filterPreviewDirty_ = false;
 
-    /// @brief compositeTask_'s own work function's result on success -
-    /// written just before it returns and read only after observing
-    /// isCompositingForPlayback() == false, safe for the same release/
-    /// acquire reason exportOutcome_ is (see
-    /// BackgroundTask::isRunning()'s own docs). `std::nullopt` on
-    /// cancellation, failure, or a composite with nothing to play. Already
-    /// decoded, and measured into compositedLoudnessLufs_, on the task.
-    std::optional<sound_mind::codec::AudioBuffer> compositedResult_;
-    /// @brief compositedResult_'s integrated loudness (for normalization).
-    double compositedLoudnessLufs_ = -70.0;
-
-    enum class CompositeOutcome { Success, Cancelled, Failed };
-    CompositeOutcome compositeOutcome_ = CompositeOutcome::Success;
-    QString compositeErrorMessage_;
+    /// @name Long operations (`v0.1.47.2`)
+    /// One BackgroundJob each - see its docs. Declared last, so they are
+    /// destroyed first: a running job is cancelled and waited for before
+    /// any member its work or completion uses goes away.
+    /// @{
+    std::unique_ptr<BackgroundJob> exportJob_;         ///< Export audio/video/macro video.
+    std::unique_ptr<BackgroundJob> importJob_;         ///< Audio import.
+    std::unique_ptr<BackgroundJob> compositeJob_;      ///< startPlayback()'s first composite.
+    std::unique_ptr<BackgroundJob> refreshJob_;        ///< Repeat's background refresh.
+    std::unique_ptr<BackgroundJob> editPlaybackJob_;   ///< Delta/Review preparation.
+    std::unique_ptr<BackgroundJob> recordingSaveJob_;  ///< Saving a stopped recording.
+    std::unique_ptr<BackgroundJob> filterPreviewJob_;  ///< Filter preview renders.
+    std::unique_ptr<BackgroundJob> loudnessJob_;       ///< The Analysis panel's run.
+    std::unique_ptr<BackgroundJob> loopBackingJob_;    ///< Loop Mode's backing audio.
+    /// @}
 };
 
 }  // namespace sound_mind::studio

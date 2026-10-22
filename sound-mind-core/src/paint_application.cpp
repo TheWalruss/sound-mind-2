@@ -1502,9 +1502,11 @@ void applyChaos(const std::vector<OrderChaosPoolEntry>& pool, double fraction, c
 /// concentrating energy into an emergent horizontal/vertical cross (see
 /// `OrderChaosConfiguration`'s own docs for the audible intent). Distance
 /// to the cross is `min(|frame - peakFrame|, |bin - peakBin|)` - however
-/// close a point comes to *either* line. Deterministic (no randomness at
-/// all) whenever `fraction` selects the entire pool, since both sorts below
-/// are then applied to every entry rather than a randomly-drawn subset.
+/// close a point comes to *either* line. Deterministic for a given `rng`
+/// state (v0.1.47.2: seeded from the operation - see
+/// applyOrderChaosPaintOperation()); the shuffle below also decides the
+/// order of equally distant/equally loud entries, even when `fraction`
+/// selects the whole pool.
 void applyOrder(const std::vector<OrderChaosPoolEntry>& pool, double fraction, const LocalMagnitudeSnapshot& snapshot,
                 const GradientStop& opacitySource, sound_mind::codec::StreamImage& content, std::mt19937& rng) {
     const auto poolSize = pool.size();
@@ -1540,9 +1542,8 @@ void applyOrder(const std::vector<OrderChaosPoolEntry>& pool, double fraction, c
         peakBin = snapshot.binLow + static_cast<int>(std::distance(binProfile.begin(), peakBinIt));
     }
 
-    // A uniformly random subset of size k (this is the only randomness
-    // Order itself uses - at k == poolSize, selecting "the entire pool"
-    // needs no randomness at all, making this branch fully deterministic).
+    // A uniformly random subset of size k - the only randomness Order
+    // uses. At k == poolSize it still orders ties in the sorts below.
     std::vector<std::size_t> selected(poolSize);
     std::iota(selected.begin(), selected.end(), std::size_t{0});
     std::shuffle(selected.begin(), selected.end(), rng);
@@ -1613,11 +1614,16 @@ void applyOrderChaosPaintOperation(const PaintOperation& operation, const OrderC
     }
     const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave, content.config);
 
-    // One shared engine for every stamp/sample this call processes -
-    // reseeded fresh only once per applyPaintOperation() call (heap
-    // allocation/randomness are both fine here - this runs on the UI/main
-    // thread from a paint stroke, never inside a real-time audio callback).
-    thread_local std::mt19937 rng{std::random_device{}()};
+    // One engine for every stamp/sample this call processes, seeded from
+    // the operation itself (v0.1.47.2): a stroke is replayed whenever its
+    // layer is rebuilt (a new stroke, undo, reopening, History replay), and
+    // must come out the same every time - docs/sound-mind-design.md's
+    // "Generators" determinism guarantee, which names this brush. (It was
+    // seeded from std::random_device, so a Chaos stroke changed on every
+    // rebuild.) Moving a stroke gives it a new id, so it re-rolls once.
+    const auto id = static_cast<std::uint64_t>(operation.id());
+    std::seed_seq seed{static_cast<std::uint32_t>(id), static_cast<std::uint32_t>(id >> 32), 0x0C4A05u};
+    std::mt19937 rng(seed);
 
     for (const StrokeSample& sample : samples) {
         const StampParameters params = resolveStampParameters(mindWaves, sample, content.config);

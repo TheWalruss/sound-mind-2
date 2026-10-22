@@ -1197,7 +1197,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.82.1` | Macros: record, play and export a performance (redesigned 2026-10-21) | `0.1.44.1`-`0.1.44.3` | #262, #267-#269 |
 | `v0.Y.82.2` | Video export overhaul, modelled on the legacy Studio (inserted 2026-10-22) | `0.1.45.1` | #270 |
 | `v0.Y.82.3` | Remove the Pool codec (inserted 2026-10-22) | `0.1.46.1` | #271 |
-| `v0.Y.82.4` | Responsiveness and modularity pass (inserted 2026-10-22) | `0.1.47.1` | #272 |
+| `v0.Y.82.4` | Responsiveness and modularity pass (inserted 2026-10-22) | `0.1.47.1`-`0.1.47.2` | #272-#273 |
 | - | Beta readiness check | *(after `v0.Y.82.4`)* | |
 | `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
 | `v0.Y.84.1` | Light and dark mode | - | |
@@ -1478,7 +1478,7 @@ User request (2026-10-22): scan for refactoring opportunities to improve respons
   - Delta/Review playback is prepared on a background task, with the latest edit winning.
   - Stopping a recording encodes and stores it in the background.
   - History commits reuse the Mind Shot library's JSON while it's unchanged.
-- **Installment B - one background-job helper** for the Studio's long operations (task, poll, cancel, outcome), replacing seven hand-wired copies in `MainWindow`.
+- ✅ **Installment B - one background-job helper.** Settled in `v0.1.47.2`, Decision #273. `BackgroundJob` (task, poll, cancel button, UI-thread completion) replaces nine hand-wired copies in `MainWindow`.
 - **Installment C - canvas compositing on a worker:** the canvas shows the last finished composite (plus the live stroke) while the new one is made.
 - **Installment D - MindWave dependency tracking:** a MindWave edit invalidates only the layers, filters and strokes that use it.
 - **Later, with the user (step 4 of the scan):** one project-change notification instead of hand-wired fan-out; splitting `MainWindow` into controllers; data-driven filter and tool parameters.

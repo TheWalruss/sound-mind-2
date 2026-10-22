@@ -2138,12 +2138,15 @@ TEST_CASE("applyPaintOperation with an OrderChaosConfiguration (Order) permutes 
     // regardless of the footprint's own exact extent (the hot value alone
     // can't outweigh an entire loud column/row's own summed profile), so
     // the hot value - not already on the cross - is the one entry
-    // guaranteed to move toward it.
+    // guaranteed to move toward it. (v0.1.47.2: 10 dB, not 5 - at 5 the
+    // hot column summed to 100 + 5 = 105, tying the cross column's 21 x 5,
+    // and the tie went to the hot column, so the test only passed when the
+    // then-unseeded randomness happened to move the hot value anyway.)
     for (int bin = 45; bin <= 65; ++bin) {
-        content.leftMagnitudeDb[pixelIndex(content, 55, bin)] = 5.0f;
+        content.leftMagnitudeDb[pixelIndex(content, 55, bin)] = 10.0f;
     }
     for (int frame = 45; frame <= 65; ++frame) {
-        content.leftMagnitudeDb[pixelIndex(content, frame, 55)] = 5.0f;
+        content.leftMagnitudeDb[pixelIndex(content, frame, 55)] = 10.0f;
     }
     content.leftMagnitudeDb[pixelIndex(content, 45, 45)] = 100.0f;
 
@@ -2631,5 +2634,31 @@ TEST_CASE("In Image mode, FrequencyAxis stamps every N frequency bins, not every
         const int frame = static_cast<int>(std::lround(timeToFrameIndex(t, config)));
         REQUIRE(content.leftMagnitudeDb[pixelIndex(content, frame, static_cast<int>(std::lround(targetBin)))] ==
                 -10.0f);
+    }
+}
+
+// v0.1.47.2: Order/Chaos randomness is seeded from the operation, so a
+// replayed stroke (every layer rebuild replays them) gives the same result -
+// docs/sound-mind-design.md's "the same guarantee applies to ... the Chaos
+// brush". It used std::random_device, so a Chaos stroke changed on every
+// rebuild.
+TEST_CASE("Replaying an Order/Chaos stroke gives exactly the same result", "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage original = makeBlankContent(config, 100);
+    for (std::size_t i = 0; i < original.leftMagnitudeDb.size(); ++i) {
+        original.leftMagnitudeDb[i] = static_cast<float>(i % 37) - 40.0f;
+        original.rightMagnitudeDb[i] = static_cast<float>(i % 23) - 40.0f;
+    }
+    const float freq = binIndexToFrequency(50.0f, config);
+    const Path path = makeSingleTapPath(0.5, freq, 0.0f, 1.0f);
+    for (const double amount : {-0.7, 0.4}) {  // Chaos (a random subset), Order (a random subset too).
+        const PaintOperation op(7, LayerId{1}, path, makeOrderChaosTool(0.2, amount, 0.0f));
+        StreamImage first = original;
+        StreamImage second = original;
+        applyPaintOperation(op, 4000.0, first);
+        applyPaintOperation(op, 4000.0, second);
+        CHECK(first.leftMagnitudeDb == second.leftMagnitudeDb);
+        CHECK(first.rightMagnitudeDb == second.rightMagnitudeDb);
+        CHECK(first.leftMagnitudeDb != original.leftMagnitudeDb);  // it did something.
     }
 }
