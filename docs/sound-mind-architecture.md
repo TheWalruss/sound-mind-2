@@ -3028,6 +3028,37 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `MindWaveControllerTest` +1: edit, undo and remove each say which MindWave.
       - `MainWindowTest` +2: an unused MindWave's edit leaves prepared playback; a tremolo-bound stroke re-renders on edit (failed before: nothing rebuilt it).
       - `mindWaveAndFilterEditsMarkAnalysisAndPlaybackStale` now binds the MindWave first. It had edited an unused one, which now rightly changes nothing.
+276. **Modularity pass, installment A: one project-change notification.** Settled in `v0.1.48.1`, roadmap slot `v0.Y.82.5`.
+    - **Before:** each edit site called its own selection of up to seven reactions:
+      - `hasUnsavedChanges_ = true` (23 sites);
+      - `canvas_->invalidateCompositeAll()/From()`;
+      - `playbackController_->invalidate()`;
+      - `noteProjectChangedForAnalysis()`;
+      - `refreshLayersPanel()`;
+      - the History and Composer panels;
+      - `refreshRecordTargets()`.
+
+      They varied: imports and recordings never refreshed Composer Mode, a real stale-view bug.
+    - **`studio::ProjectChange` (new, header-only):**
+      - Fields: canvas (unchanged, from a layer, or all), audible, analysis-only, layer list or a single thumbnail, History, Composer, record targets.
+      - Named constructors: `settingsOnly()`, `resources()`, `layersAdded()`, `layerContent(index, id)`, `layerProperties()`.
+    - **`MainWindow::applyProjectChange()`** is the one place that reacts. It always marks the project unsaved. Audible implies the analysis is stale too, via `PlaybackController::invalidated()`.
+    - **Converted:**
+      - the tool palette's `contentChanged`, followed by `handleContentChangedForPlayback()`;
+      - `LayerController::layersChanged`;
+      - MindWave library changes and edits;
+      - Resource Browser changes;
+      - MIDI, audio and image imports, the background import, and recordings;
+      - the Loop Input layer (`layersAdded()` without `audible`: the loop prepares its own audio);
+      - principal mode, decimal separator, Macro recording and management;
+      - kernel, filter and grid presets.
+    - **Not converted, as they aren't edits:**
+      - creating, opening and switching projects;
+      - undo, redo and jump (History's own path: `LayerController::handleHistoryChange()` and `MainWindow::handleHistoryChange()`);
+      - Hardware Acceleration (a display setting);
+      - Loop take display;
+      - Macro playback ending.
+    - **Tests:** Studio `ProjectChangeTest`, 4 cases, one per kind of change. `MainWindowTest` +1: importing audio adds its Composer track; failed before.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

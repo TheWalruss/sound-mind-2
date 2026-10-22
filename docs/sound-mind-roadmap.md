@@ -1198,7 +1198,8 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.82.2` | Video export overhaul, modelled on the legacy Studio (inserted 2026-10-22) | `0.1.45.1` | #270 |
 | `v0.Y.82.3` | Remove the Pool codec (inserted 2026-10-22) | `0.1.46.1` | #271 |
 | `v0.Y.82.4` | Responsiveness and modularity pass (inserted 2026-10-22) | `0.1.47.1`-`0.1.47.4` | #272-#275 |
-| - | Beta readiness check | *(after `v0.Y.82.4`)* | |
+| `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1` | #276 |
+| - | Beta readiness check | *(after `v0.Y.82.5`)* | |
 | `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
 | `v0.Y.84.1` | Light and dark mode | - | |
 | `v0.Y.85.1` | Color mapping choice | - | |
@@ -1481,7 +1482,14 @@ User request (2026-10-22): scan for refactoring opportunities to improve respons
 - ✅ **Installment B - one background-job helper.** Settled in `v0.1.47.2`, Decision #273. `BackgroundJob` (task, poll, cancel button, UI-thread completion) replaces nine hand-wired copies in `MainWindow`.
 - ✅ **Installment C - canvas compositing on a worker.** Settled in `v0.1.47.3`, Decision #274. The canvas shows the last finished composite (plus the just-drawn stroke) while the new one is made; layers share their images, so project copies for background work are cheap.
 - ✅ **Installment D - MindWave dependency tracking.** Settled in `v0.1.47.4`, Decision #275. A MindWave edit redoes only the layers, filters and strokes that use it; thumbnails are cached per MindWave.
-- **Later, with the user (step 4 of the scan):** one project-change notification instead of hand-wired fan-out; splitting `MainWindow` into controllers; data-driven filter and tool parameters.
+- Steps 4-5 of the scan continue in `v0.Y.82.5` below (user, 2026-10-22: "Continue the refactoring according to plan").
+
+#### `v0.Y.82.5` - Modularity: change notification, MainWindow decomposition, parameter tables (L) - inserted 2026-10-22
+
+Steps 4 and 5 of the 2026-10-22 code scan, so changes from beta feedback stay cheap:
+- ✅ **Installment A - one project-change notification.** Settled in `v0.1.48.1`, Decision #276. `ProjectChange` + `MainWindow::applyProjectChange()` replace hand-wired fan-out at each edit site.
+- **Next installments - `MainWindow` split into controllers, piece by piece**, each keeping `MainWindow`'s public API as thin forwards so its tests keep passing: export, import, playback preparation, recording and Loop, analysis, Macros, menu building.
+- **Then - data-driven filter and tool parameters** (step 5): one parameter table generating JSON, panel widgets and MindWave bindings.
 
 #### Then: Beta readiness check
 

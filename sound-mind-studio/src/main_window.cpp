@@ -723,33 +723,17 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // docs; it has already called canvas_->update() itself by this point.
     connect(toolPaletteController_, &ToolPaletteController::contentChanged, this,
             [this](sound_mind::core::LayerId layer) {
-                hasUnsavedChanges_ = true;
-                noteProjectChangedForAnalysis();
-                // v0.1.7.1 (docs/sound-mind-roadmap.md's targeted-
-                // invalidation raster cache) - every kind of content
-                // commit this signal fires for (paint, fill, cut, paste,
-                // apply filter to selection, chord stamps, path strokes)
-                // changed this one layer's own content, so the canvas's
-                // own cached composite only needs refolding from here up.
+                // One layer's content changed (paint, fill, cut, paste,
+                // filter to selection, chord stamps, path strokes): its
+                // composite from here up, its thumbnail, the audio - see
+                // applyProjectChange(). Playback is invalidated first, as
+                // handleContentChangedForPlayback() may load fresh audio.
                 if (project_.has_value()) {
                     if (const auto index = project_->layerIndexById(layer)) {
-                        canvas_->invalidateCompositeFrom(*index);
+                        applyProjectChange(ProjectChange::layerContent(*index, layer));
                     }
                 }
-                // `layer`'s own thumbnail cache entry is discarded and
-                // freshly re-rendered - every other layer's own cached
-                // thumbnail is reused as-is (see LayerController::
-                // refreshLayersPanel()'s own docs on why this matters:
-                // this fires after nearly every canvas edit).
-                layerController_->refreshLayersPanel(layer);
-                // Any audio already prepared for playback predates this edit -
-                // without discarding it the next Play would replay the old
-                // (e.g. silent, pre-paint) buffer. Must precede
-                // handleContentChangedForPlayback(), which may load fresh audio.
-                playbackController_->invalidate();
                 handleContentChangedForPlayback(layer);
-                refreshHistoryPanel();
-                refreshComposerPanel();
             });
 
     gridPanel_ = new GridPanel(this);
@@ -799,13 +783,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // v0.Y.29.1, Installment D); see its own docs.
     layerController_ =
         new LayerController(canvas_, playbackController_, layersPanel_, filterConfigurationPanel_, &history_, this);
-    connect(layerController_, &LayerController::layersChanged, this, [this]() {
-        hasUnsavedChanges_ = true;
-        noteProjectChangedForAnalysis();
-        refreshHistoryPanel();
-        refreshComposerPanel();
-        refreshRecordTargets();
-    });
+    connect(layerController_, &LayerController::layersChanged, this,
+            [this]() { applyProjectChange(ProjectChange::layerProperties()); });
     connect(layerController_, &LayerController::layerRemoved, this,
             [this](sound_mind::core::LayerId id) { toolPaletteController_->forgetLayer(id); });
     layerController_->setOperationDeleter([this](const std::vector<sound_mind::core::OperationId>& ids) {
@@ -817,12 +796,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // with it (v0.Y.31.1 Installment C2); see its own class docs.
     mindWaveController_ = new MindWaveController(mindWavesPanel_, layersPanel_, filterConfigurationPanel_,
                                                   toolConfigurationPanel_, canvas_, &history_, this);
-    connect(mindWaveController_, &MindWaveController::mindWavesChanged, this, [this]() {
-        hasUnsavedChanges_ = true;
-        // updateMindWave() commits a History entry, so the History Panel
-        // needs to reflect it too (v0.Y.49.1 Installment B).
-        refreshHistoryPanel();
-    });
+    connect(mindWaveController_, &MindWaveController::mindWavesChanged, this,
+            [this]() { applyProjectChange(ProjectChange::resources()); });
     // v0.1.47.4: only what uses the edited MindWave is redone.
     connect(mindWaveController_, &MindWaveController::mindWaveEdited, this, &MainWindow::handleMindWaveEdited);
 
@@ -831,8 +806,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // class docs.
     resourceBrowserController_ = new ResourceBrowserController(resourceBrowserPanel_, this);
     connect(resourceBrowserController_, &ResourceBrowserController::resourcesChanged, this, [this]() {
-        hasUnsavedChanges_ = true;
         commitHistory(tr("Changed resources"));
+        applyProjectChange(ProjectChange::resources());
     });
 
     // "Create New MindWave..." (v0.Y.62.1 Installment G) - one shared
@@ -2662,10 +2637,7 @@ bool MainWindow::finishMidiImport(const std::vector<sound_mind::core::LayerId>& 
     history_.commit(*project_, tr("Imported MIDI \"%1\"").arg(QString::fromStdString(path.filename().string())),
                     std::move(metadata));
 
-    canvas_->invalidateCompositeAll();
-    playbackController_->invalidate();
-    hasUnsavedChanges_ = true;
-    layerController_->refreshLayersPanel();
+    applyProjectChange(ProjectChange::layersAdded());
     statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
     return true;
 }
@@ -2724,13 +2696,7 @@ bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const st
         return false;
     }
 
-    canvas_->invalidateCompositeAll();
-    // The topmost layer just changed - the next startPlayback() should
-    // pick up the newly imported one instead of whatever was loaded
-    // before, rather than silently keep playing stale content.
-    playbackController_->invalidate();
-    hasUnsavedChanges_ = true;
-    layerController_->refreshLayersPanel();
+    applyProjectChange(ProjectChange::layersAdded());
     statusBar()->showMessage(
         tr("Imported %1 layer(s) from \"%2\".").arg(importedCount).arg(QString::fromStdString(path.filename().string())),
         5000);
@@ -2804,10 +2770,7 @@ void MainWindow::finishImport(const std::filesystem::path& path, ImportResult re
                 project_->addLayer(std::move(layer));
             }
             commitHistory(tr("Imported \"%1\"").arg(QString::fromStdString(path.filename().string())));
-            canvas_->invalidateCompositeAll();
-            playbackController_->invalidate();
-            hasUnsavedChanges_ = true;
-            layerController_->refreshLayersPanel();
+            applyProjectChange(ProjectChange::layersAdded());
             statusBar()->showMessage(tr("Imported %1 layer(s) from \"%2\".")
                                           .arg(importedCount)
                                           .arg(QString::fromStdString(path.filename().string())),
@@ -2841,10 +2804,7 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePi
         return false;
     }
 
-    canvas_->invalidateCompositeAll();
-    playbackController_->invalidate();
-    hasUnsavedChanges_ = true;
-    layerController_->refreshLayersPanel();
+    applyProjectChange(ProjectChange::layersAdded());
     statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
     return true;
 }
@@ -2867,10 +2827,7 @@ bool MainWindow::importImageFiles(const std::vector<std::filesystem::path>& path
         return false;
     }
 
-    canvas_->invalidateCompositeAll();
-    playbackController_->invalidate();
-    hasUnsavedChanges_ = true;
-    layerController_->refreshLayersPanel();
+    applyProjectChange(ProjectChange::layersAdded());
     statusBar()->showMessage(tr("Imported %1 file(s).").arg(importedCount), 5000);
     return true;
 }
@@ -4154,7 +4111,7 @@ void MainWindow::setPrincipalMode(bool imageModeEnabled) {
     }
     project_->setPrincipalMode(imageModeEnabled ? sound_mind::core::PrincipalMode::Image
                                                  : sound_mind::core::PrincipalMode::Sound);
-    hasUnsavedChanges_ = true;
+    applyProjectChange(ProjectChange::settingsOnly());
     toolConfigurationPanel_->setPrincipalMode(project_->settings().principalMode);
     updateCanvasFit();
 }
@@ -4190,7 +4147,7 @@ void MainWindow::setDecimalSeparator(sound_mind::core::DecimalSeparator separato
         return;
     }
     project_->setDecimalSeparator(separator);
-    hasUnsavedChanges_ = true;
+    applyProjectChange(ProjectChange::settingsOnly());
 }
 
 void MainWindow::setMacroRecordingEnabled(bool enabled) {
@@ -4205,7 +4162,7 @@ void MainWindow::setMacroRecordingEnabled(bool enabled) {
         const auto [position, playing] = macroPlayhead();
         macroRecorder_.start(*project_, name, position, playing);
         macroPlayheadTimer_->start();
-        hasUnsavedChanges_ = true;
+        applyProjectChange(ProjectChange::settingsOnly());
         statusBar()->showMessage(tr("Recording \"%1\" - start Playback or Loop; its clock runs while they do.")
                                      .arg(name));
     } else if (macroRecorder_.isRecording()) {
@@ -4213,7 +4170,7 @@ void MainWindow::setMacroRecordingEnabled(bool enabled) {
         const auto id = *macroRecorder_.recordingMacro();
         macroRecorder_.stop();
         macroPlayheadTimer_->stop();
-        hasUnsavedChanges_ = true;
+        applyProjectChange(ProjectChange::settingsOnly());
         if (const sound_mind::core::Macro* macro = project_->macroById(id)) {
             statusBar()->showMessage(tr("Recorded \"%1\": %2 s, %3 event(s).")
                                          .arg(QString::fromStdString(macro->name))
@@ -4274,7 +4231,7 @@ void MainWindow::manageMacros() {
     MacroManagerDialog dialog(*project_, this);
     dialog.exec();
     if (dialog.changed()) {
-        hasUnsavedChanges_ = true;
+        applyProjectChange(ProjectChange::settingsOnly());
     }
 }
 
@@ -4665,7 +4622,7 @@ void MainWindow::saveConvolutionKernel(int size, std::vector<float> coefficients
     }
     commitHistory(tr("Saved kernel \"%1\"").arg(QString::fromStdString(result.name)));
     refreshConvolutionKernelCombo();
-    hasUnsavedChanges_ = true;
+    applyProjectChange(ProjectChange::resources());
     statusBar()->showMessage(tr("Saved as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
 }
 
@@ -4698,7 +4655,7 @@ void MainWindow::saveFilterPreset(const sound_mind::core::FilterConfiguration& c
     commitHistory(tr("Saved filter preset \"%1\"").arg(QString::fromStdString(result.name)));
     refreshFilterPresetCombo();
     filterConfigurationPanel_->setActivePresetName(QString::fromStdString(result.name));
-    hasUnsavedChanges_ = true;
+    applyProjectChange(ProjectChange::resources());
     statusBar()->showMessage(tr("Saved as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
 }
 
@@ -4731,7 +4688,7 @@ void MainWindow::saveGridPreset() {
     commitHistory(tr("Saved grid preset \"%1\"").arg(QString::fromStdString(result.name)));
     refreshGridPresetCombo();
     gridPanel_->setActivePresetName(QString::fromStdString(result.name));
-    hasUnsavedChanges_ = true;
+    applyProjectChange(ProjectChange::resources());
     statusBar()->showMessage(tr("Saved as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
 }
 
@@ -4742,7 +4699,7 @@ void MainWindow::deleteGridPreset(sound_mind::core::GridPresetId id) {
     project_->removeGridPreset(id);
     commitHistory(tr("Deleted grid preset"));
     refreshGridPresetCombo();
-    hasUnsavedChanges_ = true;
+    applyProjectChange(ProjectChange::resources());
 }
 
 void MainWindow::refreshGridPresetCombo() {
@@ -4983,9 +4940,9 @@ void MainWindow::toggleLoopMode() {
         loopLayerId_ = project_->addLayer(std::move(layer));
         commitHistory(tr("Added Loop Input layer"));
     }
-    hasUnsavedChanges_ = true;
-    layerController_->refreshLayersPanel();
-    canvas_->invalidateCompositeAll();
+    ProjectChange loopLayerAdded = ProjectChange::layersAdded();
+    loopLayerAdded.audible = false;  // the loop prepares its own audio (scheduleLoopBacking()).
+    applyProjectChange(loopLayerAdded);
 
     loopStartPending_ = true;
     loopPanel_->setRunning(true);
@@ -5397,12 +5354,7 @@ bool MainWindow::applyRecording(PreparedRecording prepared) {
             commitHistory(tr("Recorded a new layer"));
             statusBar()->showMessage(tr("Recording added as a new layer."), 5000);
         }
-        canvas_->invalidateCompositeAll();
-        playbackController_->invalidate();
-        hasUnsavedChanges_ = true;
-        noteProjectChangedForAnalysis();
-        layerController_->refreshLayersPanel();
-        refreshRecordTargets();
+        applyProjectChange(ProjectChange::layersAdded());
         return true;
     } catch (const std::exception& e) {
         QMessageBox::critical(this, tr("Record Failed"), QString::fromStdString(e.what()));
@@ -5453,6 +5405,39 @@ void MainWindow::pollTestInputLevel() {
     landingPage_->deviceConfiguration()->setInputLevel(level);
 }
 
+void MainWindow::applyProjectChange(const ProjectChange& change) {
+    hasUnsavedChanges_ = true;
+    switch (change.canvas) {
+        case ProjectChange::Canvas::Unchanged:
+            break;
+        case ProjectChange::Canvas::FromLayer:
+            canvas_->invalidateCompositeFrom(change.fromLayerIndex);
+            break;
+        case ProjectChange::Canvas::All:
+            canvas_->invalidateCompositeAll();
+            break;
+    }
+    if (change.layerList) {
+        layerController_->refreshLayersPanel();
+    } else if (change.thumbnail.has_value()) {
+        layerController_->refreshLayersPanel(*change.thumbnail);
+    }
+    if (change.audible) {
+        playbackController_->invalidate();  // also marks the analysis stale (invalidated()).
+    } else if (change.analysis) {
+        noteProjectChangedForAnalysis();
+    }
+    if (change.history) {
+        refreshHistoryPanel();
+    }
+    if (change.composer) {
+        refreshComposerPanel();
+    }
+    if (change.recordTargets) {
+        refreshRecordTargets();
+    }
+}
+
 void MainWindow::handleMindWaveEdited(sound_mind::core::MindWaveId id) {
     if (!project_) {
         return;
@@ -5470,10 +5455,11 @@ void MainWindow::handleMindWaveEdited(sound_mind::core::MindWaveId id) {
             toolPaletteController_->rebuildLayerContent(layer);
         }
     }
-    canvas_->invalidateCompositeFrom(*dependents.lowestStackIndex);
-    // Prepared playback no longer matches (which also marks the analysis
-    // out of date - see PlaybackController::invalidated()).
-    playbackController_->invalidate();
+    ProjectChange change;
+    change.canvas = ProjectChange::Canvas::FromLayer;
+    change.fromLayerIndex = *dependents.lowestStackIndex;
+    change.audible = true;
+    applyProjectChange(change);
 }
 
 void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer) {

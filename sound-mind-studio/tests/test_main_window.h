@@ -350,6 +350,7 @@ private slots:
     void mindWaveAndFilterEditsMarkAnalysisAndPlaybackStale();
     void editingAnUnusedMindWaveLeavesPlaybackAndAnalysisAlone();
     void editingAMindWaveReRendersTheStrokesBoundToIt();
+    void importingAudioAddsItsTrackToComposerMode();
     void pitchVoiceCountReanalyzesAndIsRemembered();
     void canvasMousePositionFeedsThePitchReadout();
 };

@@ -30,6 +30,7 @@
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/background_job.h"
 #include "sound_mind/studio/branch_curve_session.h"
+#include "sound_mind/studio/project_change.h"
 #include "sound_mind/studio/analysis_panel.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/text_tool_panel.h"
@@ -3540,6 +3541,20 @@ private:
      * @param layer Which layer changed.
      */
     void handleContentChangedForPlayback(sound_mind::core::LayerId layer);
+
+    /**
+     * @brief Brings everything that shows or plays the project up to date
+     *        after an edit (`v0.1.48.1`) - the single place edit sites hand
+     *        their change to, instead of each calling its own selection of
+     *        reactions. Marks the project unsaved; then, per `change`:
+     *        invalidates the canvas composite (from a layer, or all),
+     *        prepared playback (which marks the analysis stale too) or just
+     *        the analysis, refreshes the Layers panel (all rows, or one
+     *        thumbnail), the History and Composer panels, and the Record
+     *        panel's targets. UI thread only.
+     * @param change What the edit changed - see ProjectChange.
+     */
+    void applyProjectChange(const ProjectChange& change);
 
     /**
      * @brief Re-renders what MindWave `id` affects, and only that

@@ -56,8 +56,8 @@
 #include "sound_mind/studio/analysis_panel.h"
 #include "sound_mind/studio/text_tool_panel.h"
 #include "sound_mind/studio/canvas_widget.h"
-#include "sound_mind/studio/chord_generator_panel.h"
 #include "sound_mind/studio/composer_panel.h"
+#include "sound_mind/studio/chord_generator_panel.h"
 #include "sound_mind/studio/configure_devices_panel.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/grid_panel.h"
@@ -7179,6 +7179,24 @@ void MainWindowTest::editingAMindWaveReRendersTheStrokesBoundToIt() {
     ceiling.setPhaseRadians(0.0);  // baseline -> ceiling: the stroke sounds.
     window.updateMindWave(waveId, ceiling);
     QVERIFY(window.project()->layers().front().content()->leftMagnitudeDb != silenced);
+}
+
+// v0.1.48.1: every edit reaches every view through applyProjectChange() -
+// an import used to leave Composer Mode's tracks out of date.
+void MainWindowTest::importingAudioAddsItsTrackToComposerMode() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-composer-import.wav";
+    writeTestWavFile(path);
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* composer = window.findChild<sound_mind::studio::ComposerPanel*>();
+    QVERIFY(composer != nullptr);
+    QTest::qWait(0);
+    const auto before = composer->findChildren<QComboBox*>(QStringLiteral("backgroundStyleCombo")).size();
+
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+    QTest::qWait(0);
+    QCOMPARE(composer->findChildren<QComboBox*>(QStringLiteral("backgroundStyleCombo")).size(), before + 1);
 }
 
 void MainWindowTest::pitchVoiceCountReanalyzesAndIsRemembered() {

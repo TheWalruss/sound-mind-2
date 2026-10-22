@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.48.1] - 2026-10-22
+
+Roadmap slot `v0.Y.82.5` (modularity), installment A.
+
+### Fixed
+
+- **Composer Mode now shows a newly imported or recorded layer straight away.** Its tracks used to update only after some other edit.
+
+### Changed
+
+- Internal: every edit now reports what it changed to one place, which brings the canvas, playback, the analysis and the Layers, History, Composer and Record panels up to date - instead of each edit remembering its own list, where a forgotten item meant something on screen or in the audio going stale.
+
 ## [0.1.47.4] - 2026-10-22
 
 Roadmap slot `v0.Y.82.4` (responsiveness and modularity), installment D - completes the slot's planned steps.

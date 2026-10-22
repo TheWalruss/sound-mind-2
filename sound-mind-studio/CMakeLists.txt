@@ -106,6 +106,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/command_line.h
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/background_job.h
+    include/sound_mind/studio/project_change.h
     include/sound_mind/studio/branch_curve_session.h
     include/sound_mind/studio/canvas_widget.h
     include/sound_mind/studio/checklist_dialog.h
