@@ -9,7 +9,6 @@
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/generator.h"
-#include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/base_recipes.h"
@@ -161,7 +160,7 @@ void BaseRecipesTest::recordingReplaysFromItsFlacSource() {
     std::filesystem::remove_all(folder);
 }
 
-void BaseRecipesTest::emptyDuplicatePoolAndPhaseCleanupStartFromTheRenderedContent() {
+void BaseRecipesTest::emptyDuplicateAndPhaseCleanupStartFromTheRenderedContentButPoolIsGone() {
     const auto folder = freshFolder("sound-mind-test-recipe-derived");
     Project project = projectIn(folder);
     Layer layer(0, "Painted", LayerType::Normal);
@@ -182,11 +181,11 @@ void BaseRecipesTest::emptyDuplicatePoolAndPhaseCleanupStartFromTheRenderedConte
     QVERIFY(duplicate.has_value());
     QVERIFY(duplicate->stream->leftMagnitudeDb == content.leftMagnitudeDb);
 
-    const auto pooled = runBaseRecipe({{"kind", "pool"}}, id, project, sourcesOf(project), renderedOf(project));
-    QVERIFY(pooled.has_value());
-    QVERIFY(pooled->pool != nullptr);
-    const auto expected = sound_mind::core::computePooledContent(content);
-    QVERIFY(pooled->stream->leftMagnitudeDb == expected.streamContent.leftMagnitudeDb);
+    // v0.1.46.1: Pool was removed, so a "pool" recipe can't be repeated.
+    QString poolError;
+    QVERIFY(!runBaseRecipe({{"kind", "pool"}}, id, project, sourcesOf(project), renderedOf(project), &poolError)
+                 .has_value());
+    QVERIFY(!poolError.isEmpty());
 
     const auto cleaned =
         runBaseRecipe({{"kind", "phaseCleanup"}}, id, project, sourcesOf(project), renderedOf(project));

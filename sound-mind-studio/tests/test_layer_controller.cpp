@@ -66,7 +66,6 @@ struct Fixture {
 
 void LayerControllerTest::withNoProjectLookupsReturnNulloptOrNullptr() {
     Fixture fixture;
-    QVERIFY(fixture.controller.topmostLayerWithContent() == nullptr);
     QVERIFY(fixture.controller.layerById(1) == nullptr);
     QVERIFY(!fixture.controller.paintTargetLayerId().has_value());
 }

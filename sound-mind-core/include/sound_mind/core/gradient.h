@@ -139,8 +139,8 @@ void from_json(const nlohmann::json& json, Gradient& gradient);
 /**
  * @brief An opaque, uniform gradient at the "silence floor" (~-96dB) on
  *        both channels - "no audible/visible content here", the same
- *        constant `color_conversion.h`'s own display range and Codec's
- *        Pool file quantization already use.
+ *        constant `color_conversion.h`'s own display range already
+ *        uses.
  *
  * Shared by every caller that needs to non-destructively silence a region
  * rather than removing an operation outright: Cut's own source-region

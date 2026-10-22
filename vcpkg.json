@@ -8,7 +8,6 @@
     "nlohmann-json",
     "pocketfft",
     "juce",
-    "tiff",
     {
       "name": "ffmpeg",
       "default-features": false,

@@ -53,7 +53,7 @@ private:
  * each use for their own real-time-adjacent audio device callbacks): those
  * three are audio-device-bound workers with a fixed `run()` body each;
  * `BackgroundTask` instead wraps an arbitrary caller-supplied work function
- * (Import encoding, Pool encode/decode, Export, GPU compute dispatch - see
+ * (Import encoding, Export, GPU compute dispatch - see
  * the milestone's own later installments), which a lambda-taking
  * `std::function` fits more directly than subclassing would.
  *

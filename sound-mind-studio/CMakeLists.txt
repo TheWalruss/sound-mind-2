@@ -276,7 +276,7 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/licenses/"
 # vcpkg's own VCPKG_APPLOCAL_DEPS mechanism (see CMakePresets.json; ON for
 # both the debug and release presets) already copies every non-Qt runtime
 # DLL the built executable actually needs (FFmpeg's avcodec/avformat/
-# swresample/swscale, libtiff, zlib, liblzma, libjpeg, mp3lame - the
+# swresample/swscale, mp3lame - the
 # vcpkg.json manifest's own dependencies) into the same directory as
 # sound-mind-studio.exe in the build tree, as a post-build step - but
 # `install(TARGETS ...)` above only installs the target's own primary

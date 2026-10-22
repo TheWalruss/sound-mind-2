@@ -6,7 +6,13 @@
 #include <numbers>
 #include <stdexcept>
 #include <algorithm>
+#include <exception>
+#include <string>
+#include <thread>
 #include <vector>
+
+#define NOMINMAX
+#include <objbase.h>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -24,6 +30,24 @@ using sound_mind::codec::VideoCodec;
 using sound_mind::codec::VideoExportOptions;
 
 namespace {
+
+/// @brief Runs `work` on a fresh thread and rethrows anything it threw - how
+/// the Studio runs exports (a BackgroundTask), away from whatever COM
+/// apartment the calling thread is in.
+template <typename Work>
+void onWorkerThread(Work work) {
+    std::exception_ptr error;
+    std::thread([&] {
+        try {
+            work();
+        } catch (...) {
+            error = std::current_exception();
+        }
+    }).join();
+    if (error) {
+        std::rethrow_exception(error);
+    }
+}
 
 AudioBuffer makeSineTone(float frequencyHz, float durationSeconds, std::uint32_t sampleRateHz) {
     AudioBuffer audio;
@@ -206,7 +230,7 @@ TEST_CASE("Every available format writes a file with the right video and audio c
         options.height = 180;
         const auto path = std::filesystem::temp_directory_path() /
                           ("sound-mind-test-export-format." + sound_mind::codec::videoFileExtension(codec));
-        exportVideo(path, canvas, audio, options);
+        onWorkerThread([&] { exportVideo(path, canvas, audio, options); });
         const VideoInfo info = readBackVideoInfo(path);
         std::filesystem::remove(path);
 
@@ -233,6 +257,32 @@ TEST_CASE("exportVideo reports progress up to the end", "[video_export]") {
     CHECK(reported.front() > 0.0);
     CHECK(std::is_sorted(reported.begin(), reported.end()));
     CHECK(reported.back() == 1.0);
+}
+
+// v0.1.46.1: Media Foundation refuses a thread in a single-threaded COM
+// apartment (a Qt GUI thread, say) - the export says so instead of failing
+// with "Invalid argument".
+TEST_CASE("H.264 export from a single-threaded COM apartment explains what's wrong", "[video_export]") {
+    if (!sound_mind::codec::isVideoCodecAvailable(VideoCodec::H264)) {
+        SKIP("no H.264 encoder on this computer");
+    }
+    std::string message;
+    std::thread([&] {
+        (void)CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        VideoExportOptions options;
+        options.codec = VideoCodec::H264;
+        options.width = 64;
+        options.height = 32;
+        try {
+            exportVideo(std::filesystem::temp_directory_path() / "sound-mind-test-export-sta.mp4", makeTestCanvas(64, 32),
+                        makeSineTone(440.0f, 0.1f, 44100), options);
+        } catch (const std::runtime_error& e) {
+            message = e.what();
+        }
+        CoUninitialize();
+    }).join();
+    std::filesystem::remove(std::filesystem::temp_directory_path() / "sound-mind-test-export-sta.mp4");
+    CHECK(message.find("worker thread") != std::string::npos);
 }
 
 TEST_CASE("A format this computer lacks is refused up front", "[video_export]") {

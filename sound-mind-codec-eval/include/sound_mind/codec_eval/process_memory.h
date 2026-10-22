@@ -37,7 +37,7 @@ struct TimedMemoryResult {
 /// peak got while this call ran," which can read as `0` for a call that
 /// allocates and frees within headroom an earlier, larger call already
 /// established. Good enough to compare *relative* cost between codec
-/// configurations in the same process run (a 1024-bin Pool encode growing
+/// configurations in the same process run (a 1024-bin encode growing
 /// the peak far more than a 256-bin one is a real, meaningful signal); not a
 /// substitute for a real memory profiler if exact per-call attribution ever
 /// matters.

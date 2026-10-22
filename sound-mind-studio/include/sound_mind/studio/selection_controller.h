@@ -118,7 +118,7 @@ enum class SelectionCombineMode {
  * `PasteOperation`'s own docs. `cutSelection()` is Copy plus a same-bounds
  * `FillOperation` on `selectionLayer_` written with an opaque, ~-96dB
  * ("silence floor", the same constant `color_conversion.h`'s own display
- * range and Codec's Pool quantization already use) gradient on both
+ * range already uses) gradient on both
  * channels - reusing `FillOperation` rather than inventing a dedicated
  * "delete" `Operation` subtype, the same way `PickController`'s own delete
  * reuses an empty-effect `PaintOperation`.

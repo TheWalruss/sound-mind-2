@@ -8,7 +8,6 @@
 
 #include <nlohmann/json.hpp>
 
-#include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/filter_configuration.h"
@@ -76,14 +75,12 @@ NLOHMANN_JSON_SERIALIZE_ENUM(LayerType, {
 struct LayerBase {
     /// The base content; `nullptr` for a layer without content.
     std::shared_ptr<const sound_mind::codec::StreamImage> stream;
-    /// The matching Pool content, if any.
-    std::shared_ptr<const sound_mind::codec::PoolImage> pool;
     /// How the base was made - see Layer::setBaseContent().
     nlohmann::json recipe;
     /// Its Layer::baseRevision().
     std::uint64_t revision = 0;
 
-    /// @brief Roughly how much memory the images take.
+    /// @brief Roughly how much memory the image takes.
     /// @return Bytes.
     [[nodiscard]] std::size_t byteSize() const noexcept;
 };
@@ -204,10 +201,7 @@ public:
      *        all - see `docs/sound-mind-roadmap.md`'s Layers Panel
      *        milestone (`v0.Y.13.1`).
      *
-     * A hidden layer is skipped by "topmost layer with content" logic
-     * (`sound-mind-studio`'s `MainWindow::topmostLayerWithContent()`, in
-     * particular) - real multi-layer compositing (which would need this
-     * for blending, not just skipping) is still separately deferred.
+     * A hidden layer is left out of compositing, Playback and export.
      *
      * @return `true` unless explicitly hidden via setVisible(false).
      */
@@ -353,8 +347,8 @@ public:
      *
      * Splits the base off first if content() still doubles as it (see
      * baseContent()), so the base survives. Media that *replaces* what the
-     * layer is built on - an import, a recording, a generated layer,
-     * pooling - goes through setBaseContent() instead.
+     * layer is built on - an import, a recording, a generated layer, phase
+     * cleanup - goes through setBaseContent() instead.
      *
      * @param content The new rendered content.
      */
@@ -366,7 +360,7 @@ public:
     /**
      * @brief The content this layer's operations are replayed on top of
      *        (`v0.1.43.1`) - what an import, recording or generator
-     *        produced, or what pooling/phase cleanup baked.
+     *        produced, or what phase cleanup baked.
      *
      * Kept apart from content() only once something has been rendered on
      * top of it; until then content() *is* the base, so an unpainted layer
@@ -380,8 +374,7 @@ public:
 
     /**
      * @brief Replaces what this layer is built on (`v0.1.43.1`): its base
-     *        and rendered content both become `content`, and its Pool
-     *        content becomes `pool`.
+     *        and rendered content both become `content`.
      *
      * Gives the layer a new baseRevision(), which is how the project's
      * `History` tells a new base apart from an unchanged one, and keeps the
@@ -394,11 +387,8 @@ public:
      *        sources: a JSON object with at least a `"kind"` (see
      *        `docs/sound-mind-architecture.md`'s *History, Sources and
      *        Macros*), or `nullptr` if it can't be remade.
-     * @param pool The matching Pool content, if any; previous Pool content
-     *        is dropped either way.
      */
-    void setBaseContent(sound_mind::codec::StreamImage content, nlohmann::json recipe = nullptr,
-                        std::optional<sound_mind::codec::PoolImage> pool = std::nullopt);
+    void setBaseContent(sound_mind::codec::StreamImage content, nlohmann::json recipe = nullptr);
 
     /**
      * @brief Takes this layer's base out, leaving it with no content -
@@ -408,7 +398,7 @@ public:
      * Moves rather than copies: the image ends up shared by whoever keeps
      * the returned value.
      *
-     * @return The base, its Pool content, recipe and revision; an empty
+     * @return The base, its recipe and revision; an empty
      *         `stream` for a layer that had no content.
      */
     [[nodiscard]] LayerBase releaseBase();
@@ -454,24 +444,6 @@ public:
     ///        the file has been copied into the project (`v0.1.43.2`).
     /// @param recipe The recipe.
     void setBaseRecipe(nlohmann::json recipe) { baseRecipe_ = std::move(recipe); }
-
-    /**
-     * @brief This layer's cached Pool-encoded content, if it's been
-     *        Pooled at least once (see `sound_mind::core::poolLayer()`).
-     * @return The cached Pool content, or `std::nullopt` for a layer that
-     *         has never been Pooled.
-     *
-     * @note In-memory only, same reasoning as content(): persisted as its
-     *       own Pool file under the project's `pool/` folder, not inlined
-     *       into the JSON project file.
-     */
-    [[nodiscard]] const std::optional<sound_mind::codec::PoolImage>& poolContent() const noexcept {
-        return poolContent_;
-    }
-
-    /// @brief Sets this layer's cached Pool-encoded content.
-    /// @param content The new content, replacing anything previously cached.
-    void setPoolContent(sound_mind::codec::PoolImage content) { poolContent_ = std::move(content); }
 
     /**
      * @brief This layer's own filter type and parameters - see
@@ -542,7 +514,6 @@ private:
     std::int64_t translationColumns_ = 0;
     double rescaleFactor_ = 1.0;
     std::optional<sound_mind::codec::StreamImage> content_;
-    std::optional<sound_mind::codec::PoolImage> poolContent_;
     /// The base, once something is rendered on top of it - see baseContent().
     std::shared_ptr<const sound_mind::codec::StreamImage> base_;
     std::uint64_t baseRevision_ = 0;

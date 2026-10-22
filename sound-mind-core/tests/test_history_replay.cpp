@@ -54,7 +54,7 @@ ReplayOptions fakeRunnerOptions(int* calls = nullptr) {
             return std::nullopt;
         }
         return LayerBase{std::make_shared<const StreamImage>(marked(project.settings(), recipe.at("marker"))),
-                         nullptr, recipe, 0};
+                         recipe, 0};
     };
     return options;
 }

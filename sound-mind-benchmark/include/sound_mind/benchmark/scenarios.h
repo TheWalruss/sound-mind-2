@@ -46,8 +46,8 @@ namespace sound_mind::benchmark {
 
 /// @brief The Stream codec (`v0.1.41.1`): `encode()` and `decode()` of
 ///        music-like stereo audio at 10, 60 and 180 s, default settings -
-///        the transform under playback preparation, export, analysis,
-///        recording and Pool.
+///        the transform under playback preparation, export, analysis and
+///        recording.
 [[nodiscard]] std::vector<BenchmarkCase> buildCodecScenarios();
 
 /// @brief The Analysis panel (`v0.1.41.1`): the whole

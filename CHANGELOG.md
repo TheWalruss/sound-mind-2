@@ -6,6 +6,23 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.46.1] - 2026-10-22
+
+Roadmap slot `v0.Y.82.3` (remove the Pool codec).
+
+### Removed
+
+- **Pooling a layer**, and the Pool codec behind it.
+  - The Studio never used Pool for importing, painting, recording, Playback, Loop or export.
+  - The per-layer **Pool** button sent a layer's sound through Pool and back, which couldn't make it sound better than it already did; on real music it added a faint noise.
+  - The Layers panel no longer shows the Pool (⬇) button.
+  - Projects no longer get a `pool/` folder. A project saved by an older version still opens; its `pool/` folder is ignored.
+- LibTIFF, and the libjpeg-turbo, XZ (liblzma) and zlib libraries it brought along, are no longer part of the program or its licence notices.
+
+### Fixed
+
+- Exporting H.264 or HEVC video from a thread Windows' video encoders can't use now says so, instead of "could not open the video encoder: Invalid argument". The Studio's own exports were never affected.
+
 ## [0.1.45.1] - 2026-10-22
 
 Roadmap slot `v0.Y.82.2` (video export overhaul), modelled on the legacy Studio's export.

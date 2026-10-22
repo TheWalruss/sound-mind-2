@@ -10,11 +10,9 @@ namespace sound_mind::codec {
  * @brief Writes a StreamImage to a Stream file on disk.
  *
  * Per `docs/sound-mind-architecture.md`'s Stream File Format decision: a
- * lightweight custom binary container (not TIFF-like), self-describing -
- * everything needed to decode is embedded in the file itself, matching
- * Pool's self-describing property without needing a full TIFF
- * implementation for a format whose entire reason to exist is
- * encode/decode speed rather than generic-viewer compatibility.
+ * lightweight custom binary container, self-describing - everything needed
+ * to decode is embedded in the file itself - for a format whose reason to
+ * exist is encode/decode speed rather than generic-viewer compatibility.
  *
  * @param path Destination path.
  * @param image The Stream image to write.

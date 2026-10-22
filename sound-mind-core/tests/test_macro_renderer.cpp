@@ -56,7 +56,7 @@ MacroRenderOptions toneOptions() {
                            const sound_mind::core::ReplayRenderedLookup&, std::string*) -> std::optional<LayerBase> {
         return LayerBase{std::make_shared<const sound_mind::codec::StreamImage>(
                              tone(project.settings(), recipe.at("hz").get<double>())),
-                         nullptr, recipe, 0};
+                         recipe, 0};
     };
     return options;
 }

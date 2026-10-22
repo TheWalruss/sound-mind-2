@@ -28,9 +28,7 @@ struct ProjectExportMedia {
  *        decoded to audio, plus its canvas image.
  *
  * Hidden and muted layers are left out, exactly as in Playback; filter
- * layers apply as they do there. The audio is a Stream-mode decode of the
- * composite: compositing works on Stream content, so a Pooled layer's
- * higher-fidelity Pool content isn't used here.
+ * layers apply as they do there. The audio is a decode of the composite.
  *
  * @param project The project to render. Read only; safe to call on a copy
  *        from a background thread.

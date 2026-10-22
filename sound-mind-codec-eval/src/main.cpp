@@ -1,5 +1,5 @@
 // sound-mind-codec-eval: a developer-only tool that encodes/decodes real
-// audio files through both the Stream and Pool codecs, across a sweep of
+// audio files through the Stream codec, across a sweep of
 // hop lengths (timesteps) and bin counts, and reports fidelity (how close
 // the decoded result is to the original), timing, and approximate memory
 // cost for each combination - see docs/sound-mind-codec-design.md for the
@@ -25,7 +25,6 @@
 #include "sound_mind/codec/audio_buffer.h"
 #include "sound_mind/codec/audio_export.h"
 #include "sound_mind/codec/audio_file.h"
-#include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/codec_eval/eval_report.h"
 #include "sound_mind/codec_eval/fidelity_metrics.h"
@@ -160,18 +159,6 @@ void runOneCombination(const std::filesystem::path& inputFile, const AudioBuffer
         sound_mind::codec::exportCompressedAudio(audioPath, decoded, CompressedAudioFormat::Flac);
 
         rows.push_back(buildRow(inputFile, "Stream", image.config, original, decoded, encodeResult, decodeResult, audioPath));
-    }
-    {
-        sound_mind::codec::PoolImage image;
-        AudioBuffer decoded;
-        const TimedMemoryResult encodeResult = measureTimeAndMemory([&] { image = sound_mind::codec::poolEncode(original, config); });
-        const TimedMemoryResult decodeResult = measureTimeAndMemory([&] { decoded = sound_mind::codec::poolDecode(image); });
-
-        const std::filesystem::path audioPath =
-            decodedAudioPathFor(outputDir, inputFile, "Pool", config.hopLength, config.binCount);
-        sound_mind::codec::exportCompressedAudio(audioPath, decoded, CompressedAudioFormat::Flac);
-
-        rows.push_back(buildRow(inputFile, "Pool", image.config, original, decoded, encodeResult, decodeResult, audioPath));
     }
 }
 

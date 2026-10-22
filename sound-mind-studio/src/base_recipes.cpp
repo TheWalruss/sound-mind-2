@@ -8,7 +8,6 @@
 #include "sound_mind/codec/stream_file.h"
 #include "sound_mind/core/generator.h"
 #include "sound_mind/core/phase_cleanup.h"
-#include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/import_export.h"
 
@@ -27,7 +26,7 @@ std::optional<sound_mind::core::LayerBase> fail(QString* errorMessage, const QSt
 
 sound_mind::core::LayerBase baseOf(sound_mind::codec::StreamImage image, const nlohmann::json& recipe) {
     return sound_mind::core::LayerBase{std::make_shared<const sound_mind::codec::StreamImage>(std::move(image)),
-                                       nullptr, recipe, 0};
+                                       recipe, 0};
 }
 
 bool sameCodec(const sound_mind::codec::StreamCodecConfig& a, const sound_mind::codec::StreamCodecConfig& b) {
@@ -137,16 +136,6 @@ std::optional<sound_mind::core::LayerBase> runBaseRecipe(const nlohmann::json& r
             }
             return baseOf(*from, recipe);
         }
-        if (kind == "pool") {
-            const auto* from = rendered(layer);
-            if (from == nullptr) {
-                return fail(errorMessage, tr("The pooled layer had no content."));
-            }
-            auto pooled = sound_mind::core::computePooledContent(*from);
-            sound_mind::core::LayerBase base = baseOf(std::move(pooled.streamContent), recipe);
-            base.pool = std::make_shared<const sound_mind::codec::PoolImage>(std::move(pooled.poolImage));
-            return base;
-        }
         if (kind == "phaseCleanup") {
             const auto* from = rendered(layer);
             if (from == nullptr) {
@@ -210,9 +199,6 @@ sound_mind::core::HistoryBaseResolver replayingBaseResolver(const sound_mind::co
         sound_mind::core::LayerBase base;
         if (replayed->baseContent() != nullptr) {
             base.stream = std::make_shared<const sound_mind::codec::StreamImage>(*replayed->baseContent());
-        }
-        if (replayed->poolContent().has_value()) {
-            base.pool = std::make_shared<const sound_mind::codec::PoolImage>(*replayed->poolContent());
         }
         base.recipe = replayed->baseRecipe();
         return base;

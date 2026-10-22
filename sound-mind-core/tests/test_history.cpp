@@ -207,9 +207,9 @@ TEST_CASE("Baking a layer is recorded with its new base and undone together", "[
     paintOn(project, id);
     project.history().commit(project, "Painted");
 
-    project.layerById(id)->setBaseContent(markedImage(project, -5.0f), nlohmann::json{{"kind", "pool"}});
+    project.layerById(id)->setBaseContent(markedImage(project, -5.0f), nlohmann::json{{"kind", "phaseCleanup"}});
     project.operationLog().bakeLayer(id);
-    project.history().commit(project, "Pooled");
+    project.history().commit(project, "Cleaned up phase");
     REQUIRE(project.operationLog().activeOperationsTargeting(id).empty());
 
     const auto undone = project.history().undo(project);
@@ -319,7 +319,7 @@ TEST_CASE("The history is saved with the project; a base needed after reloading 
     const auto resolver = [&](std::size_t position, LayerId layer) -> std::optional<LayerBase> {
         askedPosition = position;
         REQUIRE(layer == id);
-        return LayerBase{std::make_shared<const StreamImage>(markedImage(loaded, -1.0f)), nullptr,
+        return LayerBase{std::make_shared<const StreamImage>(markedImage(loaded, -1.0f)),
                          nlohmann::json{{"kind", "test"}}, 0};
     };
     REQUIRE(loaded.history().undo(loaded, resolver).has_value());
@@ -372,7 +372,7 @@ TEST_CASE("applyEntry replays recorded entries into a fresh project", "[core][hi
     auto entry = project.history().entry(0);
     REQUIRE_FALSE(History::applyEntry(replay, entry).has_value());
     const auto supplyBase = [&](LayerId layer) -> std::optional<LayerBase> {
-        return LayerBase{std::make_shared<const StreamImage>(*project.layerById(layer)->baseContent()), nullptr,
+        return LayerBase{std::make_shared<const StreamImage>(*project.layerById(layer)->baseContent()),
                          project.layerById(layer)->baseRecipe(), 0};
     };
     for (std::size_t i = 0; i < project.history().size(); ++i) {

@@ -14,7 +14,9 @@ struct EvalRow {
     /// @brief The input audio file this row encoded/decoded.
     std::string inputFile;
 
-    /// @brief Which codec this row measured - `"Stream"` or `"Pool"`.
+    /// @brief Which codec this row measured - always `"Stream"` since the
+    ///        Pool codec was removed (`v0.1.46.1`); kept so reports keep
+    ///        their columns.
     std::string codecMode;
 
     /// @brief The `StreamCodecConfig::hopLength` used (samples/column).

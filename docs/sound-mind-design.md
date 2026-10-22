@@ -14,7 +14,7 @@ In principle, Sound Mind creates sound from images, or images from sound. More p
 
 The Sound Mind symbol is composed of five interwoven forms, each reflecting a principle that guided the design of every tool in this collection:
 
-**The Möbius Strip** — A surface with one side and no boundary. It stands for nonduality: the indivisibility of sound and image, of creator and creation. Audio and spectrogram are not two things but one continuous surface — encode and decode are two directions along the same loop, unified and unbroken. The Pool transformation is seamless and lossless because there is, in the deepest sense, no transformation at all.
+**The Möbius Strip** — A surface with one side and no boundary. It stands for nonduality: the indivisibility of sound and image, of creator and creation. Audio and spectrogram are not two things but one continuous surface — encode and decode are two directions along the same loop, unified and unbroken. Every mark on the image is heard, and every sound is seen, because there is, in the deepest sense, no transformation at all.
 
 **The Infinity Symbol (∞)** — Recurrence, eternity, perpetuity. A spectrogram is never finished — it is a field of perpetual becoming. Every composition can be layered further, transformed again, heard anew. There is no final state, only an endless unfolding of creative possibility.
 
@@ -28,7 +28,7 @@ The Sound Mind symbol is composed of five interwoven forms, each reflecting a pr
 
 | Principle | Symbol | How it is expressed |
 |-----------|--------|---------------------|
-| **Nonduality** | Möbius Strip | The Pool codec is mathematically lossless, the Stream codec immediate. Audio and spectrogram are one continuous surface — encode → edit → decode leaves no seam, no artefact, no break |
+| **Nonduality** | Möbius Strip | One codec, fast enough to be immediate. Audio and spectrogram are one continuous surface — encode → edit → decode leaves no seam, and what is painted is what is heard |
 | **Consciousness** | Phi | The mel-scaled frequency axis encodes the implicate order of perception into the canvas geometry. Equal vertical distance = equal perceived pitch; the piano keyboard maps cleanly to the vertical axis |
 | **Explicate order** | Diamond | Non-destructive layers, blend modes, unlimited undo, and per-layer transforms make every decision explicit and every path revisable |
 | **Life** | Heart | Painting tools designed for intuitive, expressive sculpting of sound — rhythm, symmetry, and complexity in service of feeling |
@@ -72,21 +72,11 @@ Every horizontal coordinate corresponds to a few milliseconds (N). That is, the 
 
 # Codec and Format
 
-Sound Mind Codec has two operating modes: "stream" and "pool"
+Sound Mind Codec has one transform, **Stream**. (A second, "Pool" mode — a near-lossless Non-Stationary Gabor Transform with its own TIFF file format, meant for off-line high-fidelity work — was built and then removed on 2026-10-22: the Studio never used it for importing, painting, recording, playback or export, the per-layer "Pool" round trip could only add error on top of Stream's, and on real music it added audible noise. Stream's fidelity is good enough to be the whole story.)
 
-## Pool Mode
+## Stream
 
-The Pool codec mode is for high-fidelity, off-line processing. It employs the Non-Static Gabor Transform to encode sound into spectrograms, and to decode spectrograms into sound. A Sound Mind Pool file is the encoded spectrogram. NSGT is inversible, so once a sound is encoded, it can be decoded and encoded endlessly without loss of fidelity. Similarly, once an image is decoded, it can be encoded and decoded endlessly without further loss of image quality.
-
-This is basically the same as what was developed in the prototype Sound Mind project. See CODEC_DETAILS.md (copied from the prototype project) for details - this may require modifications for the new Sound Mind version.
-
-### Sound Mind Pool Format
-
-The Sound Mind Pool Format is a special TIFF file. See SOUND_MIND_TIFF_SPEC.md (copied from the prototype project) for details - this may require modifications for the new Sound Mind version.
-
-## Stream Mode
-
-The Stream codec mode is for fast processing, suitable for use in live performances, in electronic instruments, or for immediate feedback in the Studio. It employs non-inversible transforms that can run in real-time, either on the CPU or on a GPU. These transforms are configured and tuned to correspond as closely as possible to the Pool mode, while optimized for speed and portability.
+The Stream codec is for fast processing, suitable for use in live performances, in electronic instruments, or for immediate feedback in the Studio. It employs non-inversible transforms that can run in real-time, either on the CPU or on a GPU. These transforms are tuned for fidelity within that speed and portability.
 
 The working target for that immediacy is roughly 100 ms from a paint or filter action to updated graphical feedback, and roughly 250 ms to updated audio feedback. These are aspirational targets to validate empirically once a real Stream pipeline exists, not guarantees — faster is welcome, and slower is still usable.
 
@@ -106,23 +96,15 @@ Sound Mind Projects are records of editing steps performed in the Studio, the im
 
 A project is stored as a project file alongside a folder holding its media, sources, and cached renders — not a single opaque archive. A formal, versioned schema for that file is a near-beta concern rather than a day-one one; early on, the format is free to change as the design settles. The design also assumes a single user editing a project at a time — sharing or merging a project between multiple people is out of scope for now.
 
-## Pool vs Stream
+## Immediate feedback
 
-In order to enable an easy and smooth user experience in the Studio, the Studio will primarily operate in Stream Mode. That means, after importing media into the project, all image and audio operations will produce immediate feedback.
-
-However, this breaks the "nondual" principle behind Sound Mind, so Pool processing is available as a manual step. To minimize the auditory and visual difference between Pool and Stream output, audio will be always be imported in Pool mode, with the resulting Pool file converted to a light-weight Stream copy.
-
-In the Studio context, "Stream Mode" also means faster image processing - rather than processing and rendering large and clunky 4-layer TIFF (Pool format) files when painting, the Studio will use regular RGB images for immediate visual feedback. One consequence is that all channel-specific phase data that would be encoded in the 4-layer TIFF is lost in RGB.
-
-Finally, to close the loop to nonduality, the user also has the option to "pool" an imported image or a painted layer - this performs a Pool export to audio, followed by a Pool import. Subsequent exports and imports will not affect the image or the sound.
+The Studio works entirely in Stream: after importing media into a project, every image and audio operation gives immediate feedback, and what Playback plays, Loop records and every export writes all come from the same Stream data. Painting works on the in-memory spectrogram itself rather than on generic RGB images, so nothing is lost between what's painted and what's heard.
 
 ## Non-destructive Processing
 
 Operations in Sound Mind Projects are fully non-destructive. Importing a sound file copies the media to a project subdirectory and performs the encoding to an image. Painting in that image adds a "paint event" that exactly describes the paintbrush used and the path it followed, without modifying the image. This "paint event" can be copied, moved, modified, or removed.
 
 A project's real content is therefore closer to a scene graph — objects, events, and operations referencing source data — than a stack of raster images. The raster pixel data a layer currently shows is a cached, replayable *result* of that graph, not the source of truth: it's buffered during editing and written to disk at convenient points (saving the project, switching the active layer, and similar moments) purely so the whole history doesn't need replaying from scratch every time.
-
-When performing a Pool export, all the operations are applied to the Pool-format media, rather than the lighter Stream media. Pool-mode operations are all fully phase-aware, for optimal audio reconstruction.
 
 ## History and Remastering
 
@@ -132,7 +114,7 @@ A project's **History** is the complete record of everything done to it, from th
 - adding, removing, reordering, renaming and duplicating layers;
 - every layer property (visibility, mute, gain/opacity, balance, position, scale, blend mode, filter settings, MindWave bindings);
 - every paint, fill, paste, text, sequence and filter-to-selection operation, and every later edit, restack or deletion of one;
-- pooling and phase cleanup;
+- phase cleanup;
 - creating, changing and removing resources (MindWaves, Mind Shots, Mind Grains, instruments, presets, kernels).
 
 It doesn't cover view and session state: zoom, scroll, the active tool, panel layout, selections that haven't been used for anything, device settings, and analysis.
@@ -513,7 +495,7 @@ Any of these can run once over a whole layer or a selection, and several can upd
 
 ## Color Mapping
 
-Sound Mind's underlying data has no color of its own — it is amplitude and phase for two channels. Color only enters wherever that data has to appear on, or come from, an RGB canvas: importing an image, encoding a sound onto a visual canvas, or rendering a Pool file for viewing. All three moments need the same underlying answer — which of the two channels' amplitude and phase map to which of red, green, and blue — so they should share a single, simple mapping rather than each inventing its own.
+Sound Mind's underlying data has no color of its own — it is amplitude and phase for two channels. Color only enters wherever that data has to appear on, or come from, an RGB canvas: importing an image, encoding a sound onto a visual canvas, and exporting the canvas as a picture or video. All three moments need the same underlying answer — which of the two channels' amplitude and phase map to which of red, green, and blue — so they should share a single, simple mapping rather than each inventing its own.
 
 A minimal version of that mapping needs only: which channel drives red, which drives green, and what (if anything — it can be left empty) drives blue. Left amplitude and right amplitude should always occupy two of the three; the third is the interesting choice, and is where phase, a blend of both channels, or nothing at all can go. This single small decision, made once and reused everywhere color is involved, is what should replace the larger preset catalogue the legacy version accumulated.
 
@@ -580,15 +562,9 @@ At minimum, format coverage should match the legacy version: WAV, MP3, FLAC, OGG
 
 ## Export
 
-Exporting audio is best done in Pool mode: the full phase-aware round trip gives the most faithful possible reconstruction, at the cost of the time a Pool encode takes (see [Pool vs Stream](#pool-vs-stream)). A quicker Stream-mode bounce remains available for scratch exports where speed matters more than fidelity. Unlike the legacy version, which only ever exported WAV, compressed audio output (at minimum MP3 and OGG/FLAC) should be supported from the start.
+Exporting audio decodes the whole mix, exactly as Playback hears it. Unlike the legacy version, which only ever exported WAV, compressed audio output (at minimum MP3 and OGG/FLAC) should be supported from the start.
 
 The Studio can also export the spectrogram canvas itself as a video, synchronised to the decoded audio — either the whole canvas visible for the full duration with a moving playback indicator, or a scrolling window that pans to keep the indicator in view. The video reflects whatever coordinate system (flat or [Sound Flower](#polar-coordinates-sound-flower)), color mapping, and light/dark mode are active in the Studio at export time, so what's exported always matches what's on screen. As in the legacy Studio, the export is set up in a dialog: format (H.264 by default, HEVC where available, ProRes for editing), resolution presets including vertical and square ones for social video, frame rate, quality, the animation mode with its window length, and whether the playhead is drawn.
-
-## Pool
-
-**Pooling** a layer or an entire project performs a full round trip through the lossless Pool codec and replaces the working Stream copy with the result — closing the loop back to the nondual principle that sound and image are one continuous surface, at the cost of the time a full Pool encode/decode takes.
-
-Pooling never discards anything: consistent with [non-destructive processing](#non-destructive-processing), the original raw layers and operations are hidden rather than deleted, the pooled result is inserted in their place, and the pooling step itself is recorded as an operation that can be undone like any other.
 
 # Sound Mind VST
 
@@ -608,7 +584,7 @@ An instrument plugin hosting a compact version of the Studio itself inside a plu
 
 The standalone Studio can also load third-party plugins itself, on a layer or across the whole project — an external EQ, compressor, or synthesizer used as a source or a processing step alongside Sound Mind's own tools. This keeps Sound Mind interoperable with an existing plugin-based workflow, rather than a closed system that only talks to itself.
 
-Both plugin roles only ever use the Stream codec on the audio thread — Pool's higher-fidelity round trip stays a manual, non-real-time step (see [Pool](#pool)), consistent with the requirement that real-time audio paths never touch anything that can allocate, block, or run for an unbounded time.
+Both plugin roles use the Stream codec on the audio thread, consistent with the requirement that real-time audio paths never touch anything that can allocate, block, or run for an unbounded time.
 
 ---
 

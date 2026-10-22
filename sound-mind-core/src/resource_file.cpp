@@ -9,7 +9,7 @@ namespace {
 
 /// @brief Every portable resource file's own envelope format version -
 /// bumped only if this envelope's own shape changes incompatibly, same
-/// convention as `StreamImage`/`PoolImage`'s own format versions.
+/// convention as `StreamImage`'s own format version.
 constexpr int kFormatVersion = 1;
 
 /// @brief Writes `entry` into a standalone portable resource file at

@@ -508,7 +508,7 @@ std::optional<HistoryChange> History::step(Project& project, bool forward, const
         }
         const std::optional<LayerBase>& kept = forward ? layerChange.baseAfter : layerChange.baseBefore;
         if (!(forward ? layerChange.afterHasContent : layerChange.beforeHasContent)) {
-            targetBases.emplace(layerChange.id, LayerBase{nullptr, nullptr, target.value("baseRecipe", nlohmann::json()), 0});
+            targetBases.emplace(layerChange.id, LayerBase{nullptr, target.value("baseRecipe", nlohmann::json()), 0});
         } else if (kept.has_value()) {
             targetBases.emplace(layerChange.id, *kept);
         } else if (auto recovered = resolver ? resolver(targetPosition, layerChange.id) : std::nullopt) {
@@ -545,7 +545,7 @@ std::optional<HistoryChange> History::applyEntry(Project& project, HistoryEntry&
         }
         if (!layerChange.afterHasContent) {
             targetBases.emplace(layerChange.id,
-                                LayerBase{nullptr, nullptr, layerChange.after.value("baseRecipe", nlohmann::json()), 0});
+                                LayerBase{nullptr, layerChange.after.value("baseRecipe", nlohmann::json()), 0});
         } else if (layerChange.baseAfter.has_value()) {
             targetBases.emplace(layerChange.id, *layerChange.baseAfter);
         } else if (auto supplied = base ? base(layerChange.id) : std::nullopt) {
@@ -568,7 +568,7 @@ std::optional<HistoryChange> History::revertEntry(Project& project, HistoryEntry
         }
         if (!layerChange.beforeHasContent) {
             targetBases.emplace(layerChange.id,
-                                LayerBase{nullptr, nullptr, layerChange.before.value("baseRecipe", nlohmann::json()), 0});
+                                LayerBase{nullptr, layerChange.before.value("baseRecipe", nlohmann::json()), 0});
         } else if (layerChange.baseBefore.has_value()) {
             targetBases.emplace(layerChange.id, *layerChange.baseBefore);
         } else if (auto supplied = base ? base(layerChange.id) : std::nullopt) {
@@ -611,8 +611,7 @@ std::size_t History::keptBaseBytes() const {
         if (!base.has_value()) {
             return;
         }
-        const void* key = base->stream ? static_cast<const void*>(base->stream.get())
-                                       : static_cast<const void*>(base->pool.get());
+        const void* key = base->stream.get();
         if (key != nullptr && seen.insert(key).second) {
             total += base->byteSize();
         }

@@ -1,23 +1,15 @@
-# sound-mind-codec: Pool/Stream transforms and file I/O (see sound-mind-architecture.md).
-# The Stream codec (stream_codec.*, stream_file.*, since v0.0.2.1), the Pool
-# codec (pool_codec.*, pool_file.*, since v0.0.5.1 - NSGT-based, near-
-# lossless), and compressed audio export (audio_export.*, since v0.0.6.1)
-# are all real.
+# sound-mind-codec: the Stream transform and file I/O (see sound-mind-architecture.md).
+# The Stream codec (stream_codec.*, stream_file.*, since v0.0.2.1) and
+# compressed audio export (audio_export.*, since v0.0.6.1). The Pool codec
+# (NSGT-based, v0.0.5.1) was removed in v0.1.46.1 - Decision #271.
 
-# PocketFFT (header-only, BSD-3-Clause) is the FFT backend picked for both
-# codecs' transforms - see docs/sound-mind-architecture.md's NSGT Library
+# PocketFFT (header-only, BSD-3-Clause) is the FFT backend picked for the
+# codec's transform - see docs/sound-mind-architecture.md's NSGT Library
 # Candidates / Decisions Needed for the reasoning (a permissive-license FFT
 # backend, sidestepping FFTW3's GPL entirely). No exported CMake config
 # ships with the port, so it's found and included directly, per vcpkg's own
 # documented usage for this port.
 find_path(POCKETFFT_INCLUDE_DIR "pocketfft_hdronly.h" REQUIRED)
-
-# libtiff for the Pool file format - a standard TIFF 6.0 container (see
-# pool_file.h). Chosen over lighter alternatives (e.g. tinytiff, which is
-# LGPL-3.0 - a real copyleft consideration for static linking, unlike
-# libtiff's permissive license) for its complete, native LZW/multi-page/
-# tiled-layout support.
-find_package(TIFF REQUIRED)
 
 # JUCE, as of v0.0.6.1 - previously only sound-mind-core linked it (for
 # PlaybackEngine's device I/O). codec now links it too, for its
@@ -50,8 +42,6 @@ add_library(sound-mind-codec
     src/color_mapping.cpp
     src/rgb_image_resample.cpp
     src/polar_projection.cpp
-    src/pool_codec.cpp
-    src/pool_file.cpp
     src/ffmpeg_audio_encoder.cpp
     src/ffmpeg_audio_decoder.cpp
     src/audio_export.cpp
@@ -75,11 +65,11 @@ target_link_directories(sound-mind-codec
 
 target_link_libraries(sound-mind-codec
     PRIVATE
-        TIFF::TIFF
         juce::juce_audio_formats
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags
         ${FFMPEG_LIBRARIES}
+        ole32  # CoGetApartmentType(), video_export.cpp
 )
 
 target_compile_features(sound-mind-codec PUBLIC cxx_std_23)

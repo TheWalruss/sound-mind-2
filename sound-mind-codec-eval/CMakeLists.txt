@@ -1,6 +1,6 @@
 # sound-mind-codec-eval: a developer-only tool (see
 # docs/sound-mind-codec-design.md) that encodes/decodes real audio files
-# through both the Stream and Pool codecs across a sweep of hop lengths and
+# through the Stream codec across a sweep of hop lengths and
 # bin counts, and reports fidelity/timing/memory metrics to a CSV report.
 # Never installed, never linked into the shipped app - sibling to
 # sound-mind-benchmark, but depends only on sound-mind-codec (not

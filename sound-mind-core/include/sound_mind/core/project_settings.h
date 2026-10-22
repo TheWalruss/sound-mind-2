@@ -82,8 +82,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(DecimalSeparator, {
  * @note Deliberately minimal for now: only fields that don't depend on a
  *       not-yet-existing codec or feature are included. Frequency-scale
  *       parameters beyond the scale choice itself (e.g. variable-Q zone
- *       breakpoints), and anything Pool-format-specific, are added once
- *       the codec that needs them exists.
+ *       breakpoints), are added once the codec that needs them exists.
  *
  * **As of `v0.Y.11.1` (Create Project Wizard):** `binCount`,
  * `minFrequencyHz`, and `maxFrequencyHz` were added specifically so

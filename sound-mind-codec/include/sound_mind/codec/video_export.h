@@ -29,8 +29,11 @@ namespace sound_mind::codec {
  * Add video and audio for the same stretch of time alternately (each a
  * second or a segment long); the muxer interleaves them.
  *
- * Not thread-safe; one instance per file. Media Foundation encoders need a
- * thread of their own (not the UI thread): run exports on a worker.
+ * Not thread-safe; one instance per file. H.264 and HEVC use Windows'
+ * Media Foundation encoders, which refuse a thread in a single-threaded COM
+ * apartment (a Qt GUI thread is one): run those exports on a worker thread,
+ * as every Studio export does (a `BackgroundTask`). On such a thread the
+ * constructor throws, saying so.
  */
 class StreamedVideoWriter {
 public:
@@ -48,8 +51,9 @@ public:
      *        a part of it).
      * @param sampleRateHz The audio's sample rate.
      * @param options Format, size, frame rate, animation, playhead, polar.
-     * @throws std::runtime_error if the format isn't available here, or the
-     *         file or encoders can't be set up.
+     * @throws std::runtime_error if the format isn't available here, the
+     *         file or encoders can't be set up, or (H.264/HEVC) this thread
+     *         is in a single-threaded COM apartment.
      */
     StreamedVideoWriter(const std::filesystem::path& path, std::uint32_t canvasWidth, std::uint32_t canvasHeight,
                         double projectSeconds, std::uint32_t sampleRateHz, const VideoExportOptions& options);
@@ -112,7 +116,8 @@ private:
  *        remove).
  * @param progress Told the fraction done, `0` to `1`; may be empty.
  * @throws std::runtime_error for an empty canvas, a non-positive frame rate,
- *         an unavailable format or an unwritable file.
+ *         an unavailable format, an unwritable file, or H.264/HEVC asked
+ *         for on a thread in a single-threaded COM apartment.
  * @throws ExportCancelled if cancelled.
  */
 void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, const AudioBuffer& audio,

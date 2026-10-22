@@ -19,9 +19,8 @@ namespace sound_mind::studio {
  *        Clean Up milestone (`v0.Y.23.1`).
  *
  * Deliberately project/layer-agnostic: it plays whatever audio load() is
- * given and knows nothing about `Project`/`Layer` - "which layer to play"
- * stays its owner's own decision (`MainWindow::topmostLayerWithContent()`,
- * currently), the same separation `PlaybackEngine` itself already draws at
+ * given and knows nothing about `Project`/`Layer` - what to play (the
+ * composite) stays its owner's decision, the same separation `PlaybackEngine` itself already draws at
  * the Core level. Purely presentational-adjacent, the same shape as
  * `LayersPanel`/`LoopPanel`/etc.: every position/duration update is a
  * signal the owner connects to whatever needs to reflect it

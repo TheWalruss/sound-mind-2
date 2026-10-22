@@ -198,7 +198,7 @@ public:
      *
      * Replays the layer's active operations on top of its base content
      * (`Layer::baseContent()`, `v0.1.43.1`: what an import, recording,
-     * generator, pooling or phase cleanup made it, saved with the project)
+     * generator or phase cleanup made it, saved with the project)
      * - or, if it has none (the Background layer, which
      * `Project::createNew()` leaves content-less), on a silent,
      * project-sized base (`sound_mind::core::silentContentFor()`), so every

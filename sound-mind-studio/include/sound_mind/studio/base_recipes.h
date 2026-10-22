@@ -22,7 +22,7 @@ namespace sound_mind::studio {
 using SourcePathLookup = std::function<std::optional<std::filesystem::path>(sound_mind::core::SourceId)>;
 
 /// @brief A layer's rendered content as it stands at the point of replay -
-///        what pooling, phase cleanup and duplicating started from.
+///        what phase cleanup and duplicating started from.
 using RenderedContentLookup = std::function<const sound_mind::codec::StreamImage*(sound_mind::core::LayerId)>;
 
 /**
@@ -42,7 +42,6 @@ using RenderedContentLookup = std::function<const sound_mind::codec::StreamImage
  * - `"layerImage"` (`source`, a Stream file): the content itself -
  *   decoded and re-encoded if the project's codec settings differ.
  * - `"duplicate"` (`sourceLayer`): that layer's rendered content.
- * - `"pool"`: this layer's rendered content, pooled.
  * - `"phaseCleanup"`: this layer's rendered content, cleaned up.
  *
  * Bit-for-bit only where the original was: FLAC-stored recordings come
@@ -89,7 +88,7 @@ using RenderedContentLookup = std::function<const sound_mind::codec::StreamImage
 /**
  * @brief Recovers a base the history no longer holds in memory by replaying
  *        `project`'s history up to the needed position (`v0.1.43.3`) - what
- *        lets undo reach back past a recording, Loop take or pooling after
+ *        lets undo reach back past a recording or Loop take after
  *        the project was reopened.
  *
  * Gives up (returns `std::nullopt`) for a history that doesn't start at the

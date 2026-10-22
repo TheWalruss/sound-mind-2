@@ -73,7 +73,7 @@ An initial version of the `EdgePreservingBlur`/`Convolve` sweeps used `{3, 9, 25
 
 ### Codec (`codec_scenarios.cpp`, `v0.1.41.1`)
 
-- **`encode()` and `decode()`** of deterministic, music-like stereo audio (`musicLikeAudio()`: five harmonic voices over a moving root, plus a little noise - dense enough that no bin is trivially empty) at 10, 60 and 180 s, default settings (44.1 kHz, 441-sample hop, 512 bins). Every playback preparation, export, analysis, Repeat refresh and Pool goes through these.
+- **`encode()` and `decode()`** of deterministic, music-like stereo audio (`musicLikeAudio()`: five harmonic voices over a moving root, plus a little noise - dense enough that no bin is trivially empty) at 10, 60 and 180 s, default settings (44.1 kHz, 441-sample hop, 512 bins). Every playback preparation, export, analysis and Repeat refresh goes through these.
 
 ### Analysis (`analysis_scenarios.cpp`, `v0.1.41.1`)
 

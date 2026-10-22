@@ -34,7 +34,7 @@ namespace sound_mind::core {
  *   retiming it, or Pick modifying a picked object) - appending a new
  *   operation whose `supersedes()` points at the old one, which becomes
  *   permanently inactive.
- * - **Baking** (bakeLayer(), `v0.1.43.1`): pooling or phase-cleaning a
+ * - **Baking** (bakeLayer(), `v0.1.43.1`): phase-cleaning a
  *   layer turns everything painted on it so far into its new base content,
  *   so those operations must never be replayed on top of it again. Every
  *   operation that targets the layer, with an id up to the baked threshold,

@@ -10,7 +10,7 @@ private slots:
     void importedImageKeepsItsFileAndReplaysExactly();
     void generatedLayerReplaysFromItsSeed();
     void recordingReplaysFromItsFlacSource();
-    void emptyDuplicatePoolAndPhaseCleanupStartFromTheRenderedContent();
+    void emptyDuplicateAndPhaseCleanupStartFromTheRenderedContentButPoolIsGone();
     void aMissingSourceOrUnknownRecipeFailsWithAReason();
     void undoAfterReopeningRemakesAReplacedBase();
 };

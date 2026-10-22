@@ -33,7 +33,7 @@ modify it. See [`LICENSE.md`](LICENSE.md) for the full terms. The source code
 is visible here, but being able to read it doesn't grant any further rights.
 
 It includes open-source components under their own licences - Qt, FFmpeg,
-LAME, JUCE, LibTIFF and others - listed with their licence texts in
+LAME, JUCE and others - listed with their licence texts in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`licenses/`](licenses/),
 which also ship with every download. The source code of the LGPL and MPL
 components is published in the
@@ -83,7 +83,7 @@ A developer-only performance benchmarking tool also lives here
 `docs/sound-mind-benchmarking.md`.
 
 A second developer-only tool, `sound-mind-codec-eval`, encodes/decodes real
-audio files through both the Stream and Pool codecs and reports fidelity,
+audio files through the Stream codec and reports fidelity,
 timing, and memory metrics to a CSV - see `docs/sound-mind-codec-design.md`
 for what the codec itself does, and that tool's own Doxygen docs for how to
 run it.

@@ -87,14 +87,12 @@ std::uint64_t nextBaseRevision() {
 
 }  // namespace
 
-void Layer::setBaseContent(sound_mind::codec::StreamImage content, nlohmann::json recipe,
-                           std::optional<sound_mind::codec::PoolImage> pool) {
+void Layer::setBaseContent(sound_mind::codec::StreamImage content, nlohmann::json recipe) {
     if (!displaced_.has_value()) {
         displaced_ = releaseBase();
     }
     content_ = std::move(content);
     base_.reset();
-    poolContent_ = std::move(pool);
     baseRecipe_ = std::move(recipe);
     baseRevision_ = nextBaseRevision();
 }
@@ -106,14 +104,10 @@ LayerBase Layer::releaseBase() {
     } else if (content_) {
         released.stream = std::make_shared<const sound_mind::codec::StreamImage>(std::move(*content_));
     }
-    if (poolContent_) {
-        released.pool = std::make_shared<const sound_mind::codec::PoolImage>(std::move(*poolContent_));
-    }
     released.recipe = std::move(baseRecipe_);
     released.revision = baseRevision_;
     base_.reset();
     content_.reset();
-    poolContent_.reset();
     baseRecipe_ = nlohmann::json();
     return released;
 }
@@ -124,11 +118,6 @@ void Layer::restoreBase(const LayerBase& base) {
         content_ = *base.stream;
     } else {
         content_.reset();
-    }
-    if (base.pool) {
-        poolContent_ = *base.pool;
-    } else {
-        poolContent_.reset();
     }
     baseRecipe_ = base.recipe;
     // A base remade by replaying the history comes without a revision of
@@ -158,9 +147,6 @@ std::size_t LayerBase::byteSize() const noexcept {
         bytes += (stream->leftMagnitudeDb.size() + stream->rightMagnitudeDb.size() +
                   stream->sharedPhaseRadians.size()) *
                  sizeof(float);
-    }
-    if (pool) {
-        bytes += (pool->leftMagnitudeDb.size() + pool->rightMagnitudeDb.size()) * sizeof(float) * 2;
     }
     return bytes;
 }

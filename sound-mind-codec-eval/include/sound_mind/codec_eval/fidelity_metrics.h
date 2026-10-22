@@ -17,7 +17,7 @@ constexpr float kSnrCapDb = 200.0f;
 ///        scale factor) signals, `0.0` for uncorrelated/silent ones.
 ///
 /// The same metric `sound-mind-codec`'s own round-trip fidelity tests
-/// already use (`test_pool_codec.cpp`/`test_stream_codec.cpp`) - reused
+/// already use (`test_stream_codec.cpp`) - reused
 /// here, not reimplemented differently, so a number from this tool means
 /// the same thing a developer reading those tests already expects.
 ///
@@ -42,7 +42,7 @@ constexpr float kSnrCapDb = 200.0f;
 /// Computed as `10*log10(energy(original) / energy(original - decoded))`,
 /// both signals truncated to their shorter length first (a codec's decoded
 /// length can differ by a few samples from the original - see
-/// `sound_mind::codec::decode()`/`poolDecode()`'s own "trimmed to
+/// `sound_mind::codec::decode()`'s own "trimmed to
 /// `sampleCount`" docs). The error energy's denominator is floored to avoid
 /// dividing by zero for a sample-exact round trip; the result is then
 /// capped at `kSnrCapDb`.
@@ -78,10 +78,8 @@ struct BandSnrDb {
 ///
 /// Both signals are truncated to their shorter length, then one whole-
 /// signal real FFT each (of the original, and of the sample-aligned error
-/// `original - decoded`) bins their energy by frequency - the same
-/// whole-signal-FFT approach `sound_mind::codec::poolEncode()` already uses
-/// for the Pool codec's own transform, reused here for consistency rather
-/// than a different (e.g. framed/STFT) energy estimate.
+/// `original - decoded`) bins their energy by frequency - a whole-signal
+/// estimate, independent of the codec's own framing.
 ///
 /// @param original The reference signal.
 /// @param decoded The codec's reconstruction of it.

@@ -47,19 +47,18 @@ struct StreamCodecConfig {
  * Per `docs/sound-mind-architecture.md`'s Stream File Format: left and
  * right amplitude, plus a single *shared* phase (not independent left/right
  * phase) taken from the two channels' mono/mid downmix - the "approximate
- * shared phase" option for the format's third channel. This is what makes
- * Stream mode's transform non-invertible in the strict sense Pool's NSGT
- * is meant to be: reconstructing left and right with the same phase is an
- * approximation, not a perfect inverse, traded deliberately for speed and
- * for fitting the format's three-channel budget. For audio where left and
+ * shared phase" option for the format's third channel. This makes the
+ * transform non-invertible in the strict sense: reconstructing left and
+ * right with the same phase is an approximation, not a perfect inverse,
+ * traded deliberately for speed and for fitting the format's three-channel
+ * budget. For audio where left and
  * right are identical (or very similar), the shared phase equals each
  * channel's true phase and reconstruction is effectively exact; genuine
  * stereo content trades some fidelity for that budget.
  *
  * Storage is row-major `[bin][frame]`, bin 0 = the lowest encoded
- * frequency - unlike Pool's TIFF convention of flipping so row 0 reads as
- * the top of the image in a generic viewer, Stream has no such
- * external-viewer constraint to satisfy.
+ * frequency. There's no external-viewer constraint to flip it for; display
+ * code (`toRgbImage()`) flips it so row 0 reads as the top.
  */
 struct StreamImage {
     /// @brief The parameters this image was encoded with.

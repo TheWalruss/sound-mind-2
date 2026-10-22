@@ -61,7 +61,7 @@ void AboutDialogTest::theEmbeddedLicenceAndNoticesAreTheShippedFiles() {
     QCOMPARE(AboutDialog::licenceText(), readFile(root + QStringLiteral("/LICENSE.md")));
     QCOMPARE(AboutDialog::noticesText(), readFile(root + QStringLiteral("/THIRD_PARTY_NOTICES.md")));
     QVERIFY(AboutDialog::licenceText().contains(QStringLiteral("Andreas Lundberg")));
-    for (const char* component : {"Qt", "FFmpeg", "LAME", "JUCE", "LibTIFF", "PocketFFT", "Eigen", "FLAC"}) {
+    for (const char* component : {"Qt", "FFmpeg", "LAME", "JUCE", "PocketFFT", "Eigen", "FLAC"}) {
         QVERIFY2(AboutDialog::noticesText().contains(QString::fromLatin1(component)), component);
     }
 }

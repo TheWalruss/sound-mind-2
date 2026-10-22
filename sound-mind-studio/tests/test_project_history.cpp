@@ -169,8 +169,7 @@ void ProjectHistoryTest::undoUsesTheBaseResolver() {
         if (position != 1 || layerId != id) {
             return std::nullopt;
         }
-        return LayerBase{std::make_shared<const sound_mind::codec::StreamImage>(marked(project, -1.0f)), nullptr,
-                         nullptr, 0};
+        return LayerBase{std::make_shared<const sound_mind::codec::StreamImage>(marked(project, -1.0f)), nullptr, 0};
     });
     QVERIFY(history.undo());
     QCOMPARE(project.layerById(id)->content()->leftMagnitudeDb.at(0), -1.0f);

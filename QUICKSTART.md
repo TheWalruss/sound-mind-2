@@ -50,7 +50,7 @@ data - keep them together.
 - Try a different **Blend Mode** on a selected layer's own row once you
   have more than one layer - Multiply, Screen, and the rest combine
   layers differently than the default Normal mix.
-- Read [`USER_GUIDE.md`](USER_GUIDE.md) for Loop Mode, Pooling, exporting
+- Read [`USER_GUIDE.md`](USER_GUIDE.md) for Loop Mode, exporting
   audio/video, and every panel's full set of controls.
 
 ---

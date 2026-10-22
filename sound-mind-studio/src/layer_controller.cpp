@@ -99,19 +99,6 @@ void LayerController::setProject(sound_mind::core::Project* project) {
     handleLayerSelectionChanged(std::nullopt);
 }
 
-sound_mind::core::Layer* LayerController::topmostLayerWithContent() {
-    if (project_ == nullptr) {
-        return nullptr;
-    }
-    auto& layers = project_->layers();
-    for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
-        if (it->content().has_value() && it->visible()) {
-            return &*it;
-        }
-    }
-    return nullptr;
-}
-
 sound_mind::core::Layer* LayerController::layerById(sound_mind::core::LayerId id) {
     if (project_ == nullptr) {
         return nullptr;
@@ -556,8 +543,7 @@ void LayerController::duplicateLayer(sound_mind::core::LayerId id) {
     // on the source comes along, since its operations stay on the source.
     sound_mind::core::Layer copy(*source);
     if (source->content().has_value()) {
-        copy.setBaseContent(*source->content(), nlohmann::json{{"kind", "duplicate"}, {"sourceLayer", id}},
-                            source->poolContent());
+        copy.setBaseContent(*source->content(), nlohmann::json{{"kind", "duplicate"}, {"sourceLayer", id}});
     }
     const sound_mind::core::LayerId newId = project_->addLayer(std::move(copy));
     commit(tr("Duplicated layer"));

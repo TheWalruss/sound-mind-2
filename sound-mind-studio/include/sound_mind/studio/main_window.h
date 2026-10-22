@@ -24,7 +24,6 @@
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/loop_engine.h"
 #include "sound_mind/core/playback_engine.h"
-#include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
@@ -139,8 +138,7 @@ class ResourceBrowserPanel;
  * after any action that adds, removes, reorders, renames, or changes a
  * layer's visibility/opacity - including the panel's own signals, wired
  * to cycleLayerVisibilityState()/setLayerOpacity()/renameLayer()/
- * deleteLayer()/reorderLayers(). topmostLayerWithContent() now also
- * skips hidden layers - see its own docs.
+ * deleteLayer()/reorderLayers().
  *
  * **As of `v0.Y.12.1` (Loop Mode, renamed from Live Mode):** the original
  * `LiveEngine` is renamed/reimplemented as `sound_mind::core::LoopEngine` -
@@ -213,7 +211,7 @@ class ResourceBrowserPanel;
  *
  * **As of `v0.Y.29.1` (Refactor & Clean Up, Installment D):**
  * `layerController_` now owns layer-stack lookup (`layerById()`,
- * `topmostLayerWithContent()`, `paintTargetLayerId()`), mutation
+ * `paintTargetLayerId()`), mutation
  * (`cycleLayerVisibilityState()`, `setLayerOpacity()`, ... `reorderLayers()`),
  * and Layers Panel/Filter Configuration Panel refresh - see its own class
  * docs. `paintTargetLayerId()` - the "which layer" resolution the
@@ -320,8 +318,7 @@ public slots:
      * snippet checked by default) and imports only what's still checked
      * when it's accepted - cancelling it, or accepting with nothing
      * checked, imports nothing. Progress and completion are reported via
-     * the status bar (non-modal) - see poolLayer()'s docs for why
-     * only failure shows a modal.
+     * the status bar (non-modal), since it can take a while; only a failure shows a modal.
      */
     void importAudio();
 
@@ -339,8 +336,7 @@ public slots:
      * offered when more than one file was selected (see
      * `ImageScalePickerDialog`'s own constructor docs); cancelling the
      * dialog cancels the whole import. Progress and completion are
-     * reported via the status bar (non-modal) - see poolTopmostLayer()'s
-     * docs for why only failure shows a modal.
+     * reported via the status bar (non-modal), since it can take a while; only a failure shows a modal.
      */
     void importImage();
 
@@ -760,37 +756,6 @@ public slots:
     void toggleTestOutputDevice(bool testing);
 
     /**
-     * @brief Pools `id`, then exports both its Stream and Pool renders as
-     *        PNG files, for side-by-side comparison in any image viewer -
-     *        the actual work behind `LayersPanel`'s own "Pool" button
-     *        (⬇), real-world testing pass 2026-09-29 ("move Pool Layer
-     *        into the Layers panel, as an option available to the
-     *        currently active layer" - confirmed with the user). Replaces
-     *        the removed toolbar's own `poolTopmostLayer()`, which always
-     *        targeted whichever layer happened to be topmost regardless of
-     *        selection; see `poolTopmostLayerAsync()`'s own docs for why
-     *        that specific "topmost" convenience entry point is kept
-     *        around (as a thin wrapper over this one) rather than deleted
-     *        outright.
-     *
-     * Per the confirmed scope for this milestone: pooling replaces the
-     * layer's content in place (see `sound_mind::core::poolLayer()`'s
-     * docs for why this isn't yet the design doc's "hide-not-delete,
-     * undoable operation" behavior) rather than prompting for anything.
-     * Progress and success are reported via the status bar (non-modal,
-     * since pooling can take a real amount of time); only a failure shows
-     * a modal, per this milestone's confirmed "status bar for
-     * progress/success, keep errors modal" scope.
-     *
-     * @param id The layer to pool - `LayersPanel`'s own "Pool" button only
-     *        ever emits this for the currently selected row, but this
-     *        itself is a no-op-safe entry point for any id: a no-op
-     *        (beyond a status bar/modal message) for an unknown id or one
-     *        with no content, the same as `poolLayerAsync()`'s own guard.
-     */
-    void poolLayer(sound_mind::core::LayerId id);
-
-    /**
      * @brief Prompts for a destination file and exports the whole
      *        project's audio - the full composite Playback hears - to it
      *        (see exportCompositeAudioAsync()).
@@ -798,8 +763,7 @@ public slots:
      * The chosen format (Flac/Ogg/MP3) is inferred from the destination
      * file's extension. Does nothing if no layer has content, or none is
      * open. Progress and completion are reported via the status bar
-     * (non-modal) - see poolLayer()'s docs for why only failure
-     * shows a modal.
+     * (non-modal), since it can take a while; only a failure shows a modal.
      */
     void exportAudio();
 
@@ -810,8 +774,8 @@ public slots:
      *        composite audio.
      *
      * Does nothing if no layer has content, or none is open. Progress and
-     * completion are reported via the status bar (non-modal) - see
-     * poolLayer()'s docs for why only failure shows a modal.
+     * completion are reported via the status bar (non-modal), since it can take a while; only a failure shows a
+     * modal.
      */
     void exportVideo();
 
@@ -2371,7 +2335,7 @@ public:
      *        beyond its just-created state).
      *
      * Tracked as a plain flag, set whenever content actually changes
-     * (import, Pool, a Loop/Recording capture adding or updating a layer,
+     * (import, a Loop/Recording capture adding or updating a layer,
      * or any real `Operation` appended to the project's `OperationLog` -
      * paint, fill, paste, pick, and their own undo()/redo() - since
      * Phase 3's own milestones) and cleared by a successful save or by
@@ -2834,128 +2798,6 @@ public:
         const std::map<std::filesystem::path, double>& audioSnippetOffsets = {},
         std::optional<PolarImportParams> imagePolarParams = std::nullopt,
         const std::map<std::filesystem::path, MidiDropChoice>& midiChoices = {});
-
-    /**
-     * @brief Pools `id` and writes its Stream and Pool renders as PNG
-     *        files, synchronously and without showing any dialog - kept as
-     *        the direct, blocking, headless-testable entry point (matching
-     *        importAudioFile()'s/importImageFile()'s own reason for
-     *        existing) even though `poolLayer()`'s own interactive slot no
-     *        longer calls this directly - see `poolLayerAsync()`'s own
-     *        docs for what actually backs it now.
-     *
-     * @param id The layer to pool.
-     * @param errorMessage If non-null and this returns `false`, set to a
-     *        human-readable description of what went wrong.
-     * @param streamPngPath If non-null and this returns `true`, set to the
-     *        path the Stream render was written to.
-     * @param poolPngPath If non-null and this returns `true`, set to the
-     *        path the Pool render was written to.
-     * @return `true` on success; `false` if `id` is unknown or has no
-     *         content, or writing either PNG failed.
-     *
-     * Marks hasUnsavedChanges() on success (the layer's content genuinely
-     * changed in place - see `sound_mind::core::poolLayer()`'s docs).
-     */
-    bool poolLayerNow(sound_mind::core::LayerId id, QString* errorMessage = nullptr,
-                       QString* streamPngPath = nullptr, QString* poolPngPath = nullptr);
-
-    /**
-     * @brief Pools the topmost layer with content and writes its Stream
-     *        and Pool renders as PNG files - a thin wrapper resolving
-     *        `layerController_->topmostLayerWithContent()` then delegating
-     *        to poolLayerNow(). Kept as its own entry point (rather than
-     *        requiring every caller to resolve the topmost id itself)
-     *        purely for the large number of existing tests already written
-     *        against this exact name/"always topmost" behavior - real-world
-     *        testing pass 2026-09-29 moved the only interactive caller
-     *        (the toolbar's own "Pool Layer" button) to `LayersPanel`'s new
-     *        per-row "Pool" button instead, which calls poolLayer()/
-     *        poolLayerAsync() with a *specific* id, not necessarily the
-     *        topmost one - so this method (and poolTopmostLayerAsync()
-     *        below) no longer has any interactive caller of its own, only
-     *        tests. Flagged here rather than deleted outright, since
-     *        rewriting ~15 existing tests to pass an explicit topmost id
-     *        instead offered no functional benefit.
-     *
-     * @param errorMessage If non-null and this returns `false`, set to a
-     *        human-readable description of what went wrong.
-     * @param streamPngPath If non-null and this returns `true`, set to the
-     *        path the Stream render was written to.
-     * @param poolPngPath If non-null and this returns `true`, set to the
-     *        path the Pool render was written to.
-     * @return `true` on success; `false` if there was no layer to pool, or
-     *         writing either PNG failed.
-     */
-    bool poolTopmostLayerNow(QString* errorMessage = nullptr, QString* streamPngPath = nullptr,
-                              QString* poolPngPath = nullptr);
-
-    /**
-     * @brief Starts an asynchronous Pool of `id` - the real work behind the
-     *        interactive poolLayer() slot - real-world testing pass finding
-     *        #12 ("a real, non-blocking cancel affordance for long
-     *        operations"), Installment G; generalized from a hardcoded
-     *        "topmost layer" target to an explicit id, real-world testing
-     *        pass 2026-09-29 ("move Pool Layer into the Layers panel, as an
-     *        option available to the currently active layer").
-     *
-     * Copies the layer's own current content out by value, then runs
-     * `sound_mind::core::computePooledContent()` on a `BackgroundTask` with
-     * a cancellation callback - the same "compute independently, commit on
-     * the UI thread only once fully successful" shape
-     * importAudioSnippetsAsync() already establishes (see its own docs),
-     * applied here to a layer *replacing* its own content rather than new
-     * layers being added. Cancelling therefore rolls back cleanly: the
-     * computed-but-uncommitted `PooledContent` is simply discarded, the
-     * layer's own real content never having been touched at all.
-     *
-     * The target layer is tracked by id (`poolLayerId_`), not a raw
-     * pointer, since `Project::layers()` is a `std::vector<Layer>` that
-     * could reallocate while the background pool runs - `layerController_->
-     * layerById()` re-resolves it fresh once the pool finishes, and simply
-     * does nothing (beyond reporting it) if the layer no longer exists by
-     * then.
-     *
-     * @param id The layer to pool.
-     *
-     * A no-op (just a status bar message, no dialog) if no project is open,
-     * `id` is unknown or has no content, or isPoolRunning() is already
-     * `true` - matching importAudioSnippetsAsync()'s own reasoning for the
-     * same guard. A separate slot from exportTask_/importTask_, not shared
-     * with either - Export never mutates the project at all, and Pool's own
-     * completion semantics (finding the target layer by id and replacing
-     * its content) don't match Import's (adding brand new layers) closely
-     * enough to share that machinery either. newProject()/openProject()/
-     * openProjectAt()/closeEvent() all also refuse outright while
-     * isPoolRunning(), the same reason (and pattern) they already refuse
-     * while isImportRunning().
-     *
-     * Does *not* write the Stream/Pool comparison PNGs poolLayerNow() does -
-     * that's a debug/verification feature no interactive caller has ever
-     * actually used (poolLayer() itself always passes `nullptr` for both).
-     */
-    void poolLayerAsync(sound_mind::core::LayerId id);
-
-    /**
-     * @brief Starts an asynchronous Pool of the topmost layer with content -
-     *        a thin wrapper resolving `layerController_->
-     *        topmostLayerWithContent()` then delegating to
-     *        poolLayerAsync(). See poolTopmostLayerNow()'s own docs on why
-     *        this "topmost" convenience entry point is kept despite having
-     *        no interactive caller of its own anymore.
-     */
-    void poolTopmostLayerAsync();
-
-    /// @brief Whether a poolTopmostLayerAsync() pool is still running.
-    /// @return `true` from poolTopmostLayerAsync() (once it actually
-    ///         started a background task) until the background compute
-    ///         finishes, one way or another.
-    [[nodiscard]] bool isPoolRunning() const noexcept;
-
-    /// @brief Requests cancellation of the currently running pool - the
-    /// actual work behind the status bar's own cancel button. A no-op if
-    /// isPoolRunning() is `false`.
-    void cancelPool();
 
     /**
      * @brief Exports the whole project's audio (the full composite Playback
@@ -3516,20 +3358,6 @@ private:
     /// rollback needed), or failed (`QMessageBox::critical()`). See
     /// importAudioSnippetsAsync()'s own docs. Finding #12 Installment F.
     void pollImportProgress();
-
-    /// @brief poolProgressTimer_'s slot: a no-op while isPoolRunning()
-    /// (still polling); once the background compute finishes, stops the
-    /// timer, hides poolCancelButton_, and reports the outcome per
-    /// poolOutcome_ - success (re-resolves poolLayerId_ via
-    /// layerController_->layerById() and applies pooledContent_ to it, then
-    /// the usual canvas/playback-invalidate/status-message sequence
-    /// poolTopmostLayerNow() already does - or a status message noting the
-    /// layer is gone, if it no longer exists), cancelled (discards
-    /// pooledContent_ without ever touching the layer - see
-    /// poolTopmostLayerAsync()'s own docs on why that's the whole rollback
-    /// needed), or failed (`QMessageBox::critical()`). Finding #12
-    /// Installment G.
-    void pollPoolProgress();
 
     /// @brief compositeProgressTimer_'s slot: a no-op while
     /// isCompositingForPlayback() (still polling); once the background
@@ -4289,38 +4117,9 @@ private:
     ImportOutcome importOutcome_ = ImportOutcome::Success;
     QString importErrorMessage_;
 
-    /// @brief The currently running Pool, if any - see
-    /// poolTopmostLayerAsync()'s own docs. A separate slot from
-    /// exportTask_/importTask_ - see its own docs on why none of the three
-    /// are shared. Finding #12 Installment G.
-    std::unique_ptr<sound_mind::core::BackgroundTask> poolTask_;
-    QTimer* poolProgressTimer_ = nullptr;
-    QPushButton* poolCancelButton_ = nullptr;
-
-    /// @brief Which layer poolTask_ is pooling - re-resolved via
-    /// layerController_->layerById() once the background compute finishes,
-    /// rather than a raw `Layer*` held across it (`Project::layers()` could
-    /// reallocate while it runs). `std::nullopt` whenever isPoolRunning()
-    /// is `false`.
-    std::optional<sound_mind::core::LayerId> poolLayerId_;
-    QString poolLayerName_;  ///< poolLayerId_'s own name, for pollPoolProgress()'s status message.
-
-    /// @brief poolTask_'s own work function's result on success - written
-    /// just before it returns and read only after observing
-    /// isPoolRunning() == false, safe for the same release/acquire reason
-    /// exportOutcome_/importedLayers_ are (see BackgroundTask::isRunning()'s
-    /// own docs). `std::nullopt` on cancellation or failure - nothing to
-    /// apply.
-    std::optional<sound_mind::core::PooledContent> pooledContent_;
-
-    enum class PoolOutcome { Success, Cancelled, Failed };
-    PoolOutcome poolOutcome_ = PoolOutcome::Success;
-    QString poolErrorMessage_;
-
     /// @brief The currently running playback composite, if any - see
     /// startPlayback()'s own docs. A separate slot from exportTask_/
-    /// importTask_/poolTask_ - see poolTask_'s own docs on why none of
-    /// these are shared. Finding #12 Installment H.
+    /// importTask_. Finding #12 Installment H.
     std::unique_ptr<sound_mind::core::BackgroundTask> compositeTask_;
     QTimer* compositeProgressTimer_ = nullptr;
     QPushButton* compositeCancelButton_ = nullptr;
@@ -4355,7 +4154,7 @@ private:
     /// @brief compositeTask_'s own work function's result on success -
     /// written just before it returns and read only after observing
     /// isCompositingForPlayback() == false, safe for the same release/
-    /// acquire reason exportOutcome_/pooledContent_ are (see
+    /// acquire reason exportOutcome_ is (see
     /// BackgroundTask::isRunning()'s own docs). `std::nullopt` on
     /// cancellation, failure, or a composite with nothing to play. Already
     /// decoded, and measured into compositedLoudnessLufs_, on the task.

@@ -8,6 +8,9 @@
 #include <thread>
 #include <vector>
 
+#define NOMINMAX
+#include <objbase.h>
+
 #include "ffmpeg_audio_encoder.h"
 #include "ffmpeg_raii.h"
 #include "sound_mind/codec/video_frame_renderer.h"
@@ -48,6 +51,17 @@ const AVCodec* findVideoEncoder(VideoCodec codec) {
 double bitsPerPixel(VideoCodec codec, VideoQuality quality) {
     const double h264 = quality == VideoQuality::Low ? 0.065 : quality == VideoQuality::Medium ? 0.13 : 0.26;
     return codec == VideoCodec::Hevc ? h264 * 0.6 : h264;
+}
+
+/// @brief Whether the calling thread is in a single-threaded COM apartment
+/// (a Qt GUI thread is) - where Media Foundation encoders refuse to open.
+bool inSingleThreadedApartment() {
+    APTTYPE type{};
+    APTTYPEQUALIFIER qualifier{};
+    if (FAILED(CoGetApartmentType(&type, &qualifier))) {
+        return false;  // COM not initialized here: the encoder initializes it itself.
+    }
+    return type == APTTYPE_STA || type == APTTYPE_MAINSTA;
 }
 
 /// @brief Creates and opens a video encoder; with a `formatCtx`, also adds
@@ -104,6 +118,11 @@ VideoEncoder createVideoEncoder(AVFormatContext* formatCtx, VideoCodec videoCode
 
     if (formatCtx != nullptr && (formatCtx->oformat->flags & AVFMT_GLOBALHEADER) != 0) {
         ctx.flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    }
+    if ((videoCodec == VideoCodec::H264 || videoCodec == VideoCodec::Hevc) && inSingleThreadedApartment()) {
+        throw std::runtime_error(
+            "H.264 and HEVC export uses Windows' Media Foundation encoders, which can't run on this thread (a "
+            "single-threaded COM apartment, such as a user-interface thread) - run the export on a worker thread");
     }
     checkFfmpeg(avcodec_open2(&ctx, codec, nullptr), "could not open the video encoder");
 

@@ -161,7 +161,7 @@ jobs:
       # `cmake --install` is meant to be the *one* place this logic lives,
       # so `cpack -G ZIP`/`cpack -G WIX` and this manual zip never drift
       # apart) already install the exe, every vcpkg-app-local third-party
-      # runtime DLL (FFmpeg/libtiff/...), and Qt's own runtime via
+      # runtime DLL (FFmpeg/...), and Qt's own runtime via
       # windeployqt (configured during the "Configure (Release)" step
       # above, host-side-tool cross-deployment included - see that file's
       # own comments) - a second, separate copy of that same deployment

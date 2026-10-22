@@ -67,7 +67,7 @@ struct Rig {
             }
             return LayerBase{std::make_shared<const sound_mind::codec::StreamImage>(
                                  sound_mind::core::silentContentFor(at.settings())),
-                             nullptr, recipe, 0};
+                             recipe, 0};
         };
         return std::make_unique<sound_mind::core::MacroRenderer>(project.settings(),
                                                                  std::vector<sound_mind::core::HistoryEntry>{}, macro,

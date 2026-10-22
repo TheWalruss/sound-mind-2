@@ -24,7 +24,7 @@ constexpr double kMinErrorEnergy = 1e-30;
 
 /// @brief Forward real FFT: `n` real samples -> `n/2 + 1` complex bins.
 /// Duplicated rather than shared with sound-mind-codec's own private
-/// per-file copies (stream_frame_codec.h, pool_codec.cpp) - this module
+/// private copy (stream_frame_codec.h) - this module
 /// deliberately doesn't link sound-mind-codec's internal headers, only its
 /// public include/ surface, per this codebase's module-layering convention.
 void forwardRealFft(const std::vector<float>& samples, std::vector<std::complex<float>>& spectrum) {

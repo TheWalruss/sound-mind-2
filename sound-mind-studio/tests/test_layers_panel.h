@@ -19,9 +19,7 @@ private slots:
     void deleteButtonEmitsDeleteRequestedForNormalLayers();
     void duplicateButtonEmitsDuplicateRequestedForNormalLayers();
     void cleanUpPhaseButtonOnlyAppearsForASelectedRowWithContentAndEmitsCleanUpPhaseRequested();
-    void poolButtonOnlyAppearsForASelectedRowWithContentAndEmitsPoolRequested();
-    void poolButtonAppearsForASelectedBackgroundRowWithContentUnlikeDuplicateOrCleanUpPhase();
-    void filterAndEqualizerRowsShowNoPoolButtonEvenWhenSelected();
+    void aSelectedRowWithContentOffersNoPoolButton();
     void lockedLayersHaveNoDeleteButton();
     void lockedLayersHaveALockIconInsteadOfADragHandle();
     void nonNormalLayersShowATypeTag();

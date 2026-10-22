@@ -61,7 +61,6 @@ add_executable(sound-mind-core-tests
     test_playback_engine.cpp
     test_loop_engine.cpp
     test_record_engine.cpp
-    test_pooling.cpp
     test_project_export.cpp
     test_background_task.cpp
     test_generator.cpp

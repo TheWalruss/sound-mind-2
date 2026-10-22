@@ -34,16 +34,6 @@ private slots:
     void newProjectRefusesWhileCompositingForPlayback();
     void openProjectRefusesWhileCompositingForPlayback();
     void openProjectAtRefusesWhileCompositingForPlayback();
-    void poolTopmostLayerNowFailsGracefullyWithNoContent();
-    void poolTopmostLayerNowPoolsAnImportedLayer();
-    void poolLayerNowPoolsASpecificNonTopmostLayer();
-    void layersPanelsPoolButtonPoolsTheSelectedLayerViaMainWindow();
-    void poolTopmostLayerAsyncRunsInTheBackgroundAndShowsTheCancelButton();
-    void poolTopmostLayerAsyncCompletesSuccessfullyAndAppliesTheResult();
-    void cancelPoolDiscardsTheComputedResultWithoutApplyingIt();
-    void poolTopmostLayerAsyncDoesNothingWhileAlreadyRunning();
-    void closeRefusesWhileAPoolIsRunning();
-    void newProjectRefusesWhileAPoolIsRunning();
     void exportCompositeAudioNowFailsGracefullyWithNoContent();
     void exportCompositeAudioNowExportsAnImportedLayer();
     void exportCompositeAudioNowFailsForAnUnrecognizedExtension();
@@ -57,7 +47,6 @@ private slots:
     void cancelAudioExportStopsItAndDeletesThePartialFile();
     void exportCompositeAudioAsyncDoesNothingWhileAVideoExportIsRunning();
     void importAudioFileShowsProgressThenCompletionInTheStatusBar();
-    void poolTopmostLayerNowShowsProgressThenCompletionInTheStatusBar();
     void exportCompositeAudioNowShowsProgressThenCompletionInTheStatusBar();
     void aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMessage();
     void toggleLoopModeAddsALayerAndStartsTheEngine();
@@ -71,7 +60,6 @@ private slots:
     // Project Lifecycle (v0.Y.10.1)
     void newProjectStartsWithNoUnsavedChanges();
     void importAudioFileMarksUnsavedChanges();
-    void poolTopmostLayerNowMarksUnsavedChanges();
     void toggleLoopModeMarksUnsavedChangesWhenItStarts();
     void savingProjectClearsUnsavedChanges();
     void openProjectAtClearsUnsavedChangesFromThePreviousProject();
@@ -90,7 +78,7 @@ private slots:
     // Layers Panel (v0.Y.13.1)
     void layersPanelIsHiddenUntilAProjectExists();
     void refreshLayersPanelReflectsTheCurrentLayers();
-    void cycleLayerVisibilityStateEventuallyHidesALayerFromTopmostLookup();
+    void cycleLayerVisibilityStateGoesVisibleMutedInvisible();
     void cycleLayerVisibilityStateMarksUnsavedChanges();
     void setLayerOpacityChangesTheLayersOpacity();
     void renameLayerToRenamesTheLayer();

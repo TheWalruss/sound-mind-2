@@ -5,7 +5,6 @@
 #include <ios>
 #include <string>
 
-#include "sound_mind/codec/pool_file.h"
 #include "sound_mind/codec/stream_file.h"
 
 namespace sound_mind::core {
@@ -19,7 +18,7 @@ constexpr LayerId kBackgroundLayerId = 1;
 // will ever let anything else be appended above.
 constexpr LayerId kEqualizerLayerId = 2;
 
-/// @brief The directory a project's media/sources/pool/mindshots folders
+/// @brief The directory a project's media/sources/mindshots folders
 /// live under, per docs/sound-mind-architecture.md's Project File & Folder
 /// layout: a same-named folder next to the .smproj file.
 [[nodiscard]] std::filesystem::path projectFolder(const std::filesystem::path& projectFilePath) {
@@ -36,12 +35,6 @@ constexpr LayerId kEqualizerLayerId = 2;
 /// from its rendered content (`v0.1.43.1`, see Layer::baseContent()).
 [[nodiscard]] std::filesystem::path basePathFor(const std::filesystem::path& projectFilePath, LayerId layerId) {
     return projectFolder(projectFilePath) / "media" / ("layer_" + std::to_string(layerId) + ".base.smstream");
-}
-
-/// @brief The path a given layer's cached Pool render would live at,
-/// within a project's folder.
-[[nodiscard]] std::filesystem::path poolPathFor(const std::filesystem::path& projectFilePath, LayerId layerId) {
-    return projectFolder(projectFilePath) / "pool" / ("layer_" + std::to_string(layerId) + ".smpool");
 }
 }  // namespace
 
@@ -126,24 +119,17 @@ Project Project::load(const std::filesystem::path& path) {
     Project project = json.get<Project>();
 
     for (Layer& layer : project.layers_) {
-        std::optional<sound_mind::codec::PoolImage> pool;
-        const std::filesystem::path poolPath = poolPathFor(path, layer.id());
-        if (std::filesystem::exists(poolPath)) {
-            pool = sound_mind::codec::readPoolFile(poolPath);
-        }
         const std::filesystem::path mediaPath = mediaPathFor(path, layer.id());
         const std::filesystem::path basePath = basePathFor(path, layer.id());
         const nlohmann::json recipe = layer.baseRecipe();
         if (std::filesystem::exists(basePath)) {
             // A painted layer: its base, then its rendered content on top.
-            layer.setBaseContent(sound_mind::codec::readStreamFile(basePath), recipe, std::move(pool));
+            layer.setBaseContent(sound_mind::codec::readStreamFile(basePath), recipe);
             if (std::filesystem::exists(mediaPath)) {
                 layer.setContent(sound_mind::codec::readStreamFile(mediaPath));
             }
         } else if (std::filesystem::exists(mediaPath)) {
-            layer.setBaseContent(sound_mind::codec::readStreamFile(mediaPath), recipe, std::move(pool));
-        } else if (pool.has_value()) {
-            layer.setPoolContent(std::move(*pool));
+            layer.setBaseContent(sound_mind::codec::readStreamFile(mediaPath), recipe);
         }
     }
 
@@ -250,11 +236,6 @@ void Project::save(const std::filesystem::path& path) const {
             sound_mind::codec::writeStreamFile(basePath, *base);
         } else if (std::filesystem::exists(basePath)) {
             std::filesystem::remove(basePath);
-        }
-        if (layer.poolContent().has_value()) {
-            const std::filesystem::path poolPath = poolPathFor(path, layer.id());
-            std::filesystem::create_directories(poolPath.parent_path());
-            sound_mind::codec::writePoolFile(poolPath, *layer.poolContent());
         }
     }
 }

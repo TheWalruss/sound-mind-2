@@ -29,14 +29,13 @@ in-app behavior is correct and this guide is due an update.
 18. [Loop Mode](#loop-mode)
 19. [Macros](#macros)
 20. [Configure Devices](#configure-devices)
-21. [Pooling a Layer](#pooling-a-layer)
-22. [Exporting](#exporting)
-23. [Saving and Project Files](#saving-and-project-files)
-24. [Resource Browser](#resource-browser)
-25. [Analysis](#analysis)
-26. [Performance](#performance)
-27. [Licence and Credits](#licence-and-credits)
-28. [What's Not Here Yet](#whats-not-here-yet)
+21. [Exporting](#exporting)
+22. [Saving and Project Files](#saving-and-project-files)
+23. [Resource Browser](#resource-browser)
+24. [Analysis](#analysis)
+25. [Performance](#performance)
+26. [Licence and Credits](#licence-and-credits)
+27. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -494,9 +493,6 @@ stroke paints into) to reveal its full set of controls:
   that actually carries sound. A one-time cleanup, not an ongoing effect:
   whatever was painted on the layer becomes part of it. Undo (Ctrl+Z)
   takes it back.
-- A **Pool** button (⬇), for any selected layer that actually has content
-  (including **Background**, unlike duplicate/clean-up-phase above) - see
-  [Pooling a Layer](#pooling-a-layer).
 - A **delete** button (×), for any layer except the locked one(s) - also
   appears just by hovering over the row, even without selecting it first,
   so it's never more than a click away. Deleting a layer deletes
@@ -1323,7 +1319,7 @@ everything you do to a project, in the order you did it:
   layer setting (visibility, gain, balance, MindWave binding, position,
   rescale, blend mode, filter settings);
 - painting, filling, pasting, text, chords, Pick's edits and restacking;
-- pooling and phase cleanup;
+- phase cleanup;
 - creating, editing and removing MindWaves, Mind Shots, Mind Grains,
   Resonances, kernels, presets and MIDI mappings.
 
@@ -1337,8 +1333,8 @@ or Redo repeatedly, just in one step.
 
 **The history is saved with the project.** After reopening it, Undo still
 steps back through what you did before. A step that brings back an
-earlier version of a layer's audio (undoing a recording over a layer, a
-Loop take or pooling) needs that version, which isn't kept once the
+earlier version of a layer's audio (undoing a recording over a layer or a
+Loop take) needs that version, which isn't kept once the
 project is closed: the Studio remakes it by replaying the project's
 history from its sources (see [Saving and Project Files](#saving-and-project-files)),
 which can take a moment. In a project made with a version before 0.1.43.1
@@ -1878,7 +1874,7 @@ in the background rather than freezing the app - for a large project, a
 small **✕** button appears in the status bar to cancel it if you change
 your mind; cancelling just means playback doesn't start. New/Open Project
 and closing the Studio are all disabled while playback is being prepared,
-the same as while an import or a pool is running.
+the same as while an import is running.
 
 ### Repeat Playback
 
@@ -2057,23 +2053,6 @@ The Input combo (and its Gain) locks while Recording or Loop Mode is
 running; the Output combo (and its Gain) locks only while Loop Mode is
 running, since Recording never touches output.
 
-## Pooling a Layer
-
-Select a layer in the Layers panel, then click its own **Pool** (⬇) button
-(next to Duplicate/Clean Up Phase, once selected) to run it through a
-full, lossless round-trip encode - a slower but higher-fidelity
-representation than the fast, approximate one every import and recording
-normally uses. There's no visible difference for most material; it
-matters most before an audio export you want to sound as close as
-possible to the original. Only a layer with real content shows this
-button - a brand-new empty layer, or a Filter/Equalizer layer, has
-nothing to pool.
-
-Pooling runs in the background - you can keep working while it processes,
-and a small **✕** button appears in the status bar to cancel it if you
-change your mind; cancelling leaves the layer exactly as it was, as if
-pooling had never been started.
-
 ## Exporting
 
 **File → Export Audio...** saves the whole mix - every visible, unmuted
@@ -2133,7 +2112,6 @@ moving or copying one without the other breaks the project. The folder
 holds:
 
 - `media/` - every layer's encoded content;
-- `pool/` - once you've pooled at least one layer;
 - `sources/` - a copy of every file you imported (audio, images, MIDI),
   every recording and Loop take (as lossless FLAC files), and every layer
   brought in from another project. The project never depends on the
@@ -2475,7 +2453,7 @@ with it is yours. You may not redistribute or modify it. The full terms are
 in `LICENSE.md`, next to the program.
 
 It includes open-source software by others - Qt, FFmpeg, LAME, JUCE (with
-FLAC and Ogg Vorbis), LibTIFF, PocketFFT, Eigen and more - each under its
+FLAC and Ogg Vorbis), PocketFFT, Eigen and more - each under its
 own licence. `THIRD_PARTY_NOTICES.md` and the `licenses` folder next to the
 program list them all with their licence texts. Qt and FFmpeg are separate
 DLLs you're free to replace with your own builds; their source code is
@@ -2542,6 +2520,10 @@ These are scheduled after the Beta readiness check:
   configuring a tool.
 - **Superposition** (combining several MindWaves into one with a blend
   mode) was removed in v0.1.32.1. It may come back in a different form.
+- **Pooling a layer** was removed in v0.1.46.1, along with the Pool codec
+  behind it: it couldn't make a layer sound better than it already did.
+  A project saved by an older version still opens; its `pool/` folder is
+  ignored.
 - **Warp Selection** was removed: it didn't survive undo, redo or
   reopening a project, and was confusing to use.
 - **Video export** doesn't offer WebM/VP9 (it would need an extra encoder

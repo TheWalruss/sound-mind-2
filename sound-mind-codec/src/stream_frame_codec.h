@@ -135,9 +135,8 @@ inline void forwardRealFft(const std::vector<float>& frame, std::vector<std::com
 }
 
 /// @brief The center frequency of a config's `bin`-th log-spaced output
-/// bin - the same log-spacing formula every log-binned frequency axis in
-/// this codebase uses (see `pool_codec.cpp`'s own `centerFrequencyHz()`,
-/// duplicated there rather than shared, per this codebase's convention).
+/// bin - the log-spacing formula every log-binned frequency axis in this
+/// codebase uses.
 [[nodiscard]] inline float logBinCenterFrequencyHz(const StreamCodecConfig& config, std::uint32_t bin) noexcept {
     const float maxFrequencyHz = clampedMaxFrequencyHz(config);
     const float logRange = std::log(maxFrequencyHz / config.minFrequencyHz);

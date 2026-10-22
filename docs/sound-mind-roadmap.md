@@ -9,7 +9,7 @@ Status: **first draft, revised twice** (most recently 2026-09-27, re-sequencing 
 `vX.Y.Z.W`, per your instruction:
 
 - **X** stays `0` until the Studio is ready for its first actual release. It becomes `1` at `v1.0.0.0` and this roadmap doesn't go past that point.
-- **Y** increments when a breaking change is made to one of the main project file formats (the Project file, the Pool file, or the Stream file). Introducing a format for the first time isn't itself a breaking change - there's nothing yet to break - so Y stays put the first time each format appears; it only moves when an *already-established* format changes incompatibly afterward. Adding a new, separate file type (a portable `.smwave` or `.sminst`, say) doesn't bump Y either, since it doesn't break an existing format - that's a Z-level feature.
+- **Y** increments when a breaking change is made to one of the main project file formats (the Project file or the Stream file; the Pool file existed until `v0.1.46.1`). Introducing a format for the first time isn't itself a breaking change - there's nothing yet to break - so Y stays put the first time each format appears; it only moves when an *already-established* format changes incompatibly afterward. Adding a new, separate file type (a portable `.smwave` or `.sminst`, say) doesn't bump Y either, since it doesn't break an existing format - that's a Z-level feature.
 - **Z** increments for a feature release - one of the milestones below.
 - **W** increments every time a new binary should be built and released, including point releases with no new feature between them.
 - **Reset convention** (standard, not explicitly stated in your instruction - flagging the assumption): bumping Y resets Z and W to 0; bumping Z resets W to 0. W never resets anything, since nothing is smaller than it.
@@ -23,7 +23,7 @@ Exactly *when* Y will bump can't be predicted precisely this far out - it depend
 ## Sequencing principles
 
 1. **Full I/O and real-time infrastructure comes right after Foundation, before any creative feature.** Pool codec, Export, Live Mode, and Record all sit in Phase 2, immediately after the basic Project/Stream/Import/Playback loop exists - deliberately not creative-feature-first. This gets the hardest, most performance-sensitive paths (a full lossless codec round trip, real-time capture, file export) working and measurable as early as possible, so every later phase has a real, working performance baseline to check against, rather than a promise that it'll be fine once painting and filters and MindWaves are layered on. From Phase 3 onward, re-confirming that baseline still holds - both correctness and the ~100 ms / ~250 ms latency targets - is part of finishing each milestone, not a separate later pass.
-2. **Stream before Pool**, still. Per the design doc, the Studio operates in Stream mode by default; Pool is a deliberate, manual, higher-fidelity step layered on top. Stream comes first within Phase 1 so Pool (Phase 2) has a working fast path, and an FFT backend decision, to build on.
+2. **Stream before Pool**, still. Per the design doc, the Studio operates in Stream mode by default; Pool is a deliberate, manual, higher-fidelity step layered on top. Stream comes first within Phase 1 so Pool (Phase 2) has a working fast path, and an FFT backend decision, to build on. *(Pool was removed in `v0.1.46.1`, `v0.Y.82.3` below.)*
 3. **Every milestone is a working Studio**, not a library-only checkpoint. Each one below ends with something you can actually open, do a thing in, and see/hear the result of.
 4. **Dependency order, not design-doc reading order.** The sequence below follows what each capability actually needs to exist first, which isn't the same order the design doc presents things in. A few milestones below get a *simpler* first pass than their eventual design-doc scope, specifically because they're now scheduled before something they'd otherwise lean on (Live Mode before MindWaves, Record before Mind Shots) - each says so, and says which later milestone comes back to finish the job.
 5. **Open questions get resolved where the work that needs them happens**, not all up front. Each milestone that depends on one of `sound-mind-architecture.md`'s Decisions Needed / Deferred Decisions says so.
@@ -90,7 +90,7 @@ A dedicated pass over everything Phase 1 (Project & Canvas, Stream Codec, Import
 
 Everything in this phase is, in one way or another, getting data into or out of the Studio at full fidelity or in real time - the parts most likely to be expensive, and the parts every later creative feature will eventually have to coexist with performance-wise. Building it now, while the project is still simple, means there's something concrete to measure against from here on.
 
-### v0.Y.6.1 - Pool Codec ✅
+### v0.Y.6.1 - Pool Codec ✅ *(removed in `v0.1.46.1`, see `v0.Y.82.3`)*
 
 The near-lossless NSGT round-trip and the finalized Pool file format, reusing the FFT-backend groundwork from the Stream codec milestone; a first "Pool" action. Nothing has been painted yet at this point in the roadmap, so pooling works on imported content.
 
@@ -1067,7 +1067,7 @@ The three concrete gaps `v0.Y.63.1`'s own design doc surfaced, fixed before runn
 - ✅ **A-weighting**, for both codecs - the standard IEC 61672 curve, cosmetic (removed again before reconstructing audio). Resolves `docs/sound-mind-architecture.md`'s former *Decisions Needed* #4.
 - ✅ **Reflection padding at clip start/end - Stream only.** Implemented cleanly for Stream (`extractFrame()` now reflects instead of zero-filling). Attempted twice for Pool and **deferred, not shipped**: Pool's single whole-signal transform means padding requires growing the global FFT, and reconciling that against independent decode reconstruction surfaced a real, structural correctness problem (a signal-wide gain error up to 3-4x, not just a softer approximation) neither attempt resolved. See `docs/sound-mind-architecture.md`'s Decision #205 for the full account, including a real testing lesson (Pearson correlation is scale-invariant and was blind to the gain bug for an entire debugging pass).
 
-**Backlog addition**: a correct Pool reflection-padding implementation - needs either a different mechanism for representing a safe "don't-care" padding-region contribution in a single-global-spectrum reconstruction, or validating against a reference NSGT implementation rather than re-deriving the DFT identities by hand.
+**[Dropped 2026-10-22: the Pool codec was removed, `v0.Y.82.3`]** **Backlog addition**: a correct Pool reflection-padding implementation - needs either a different mechanism for representing a safe "don't-care" padding-region contribution in a single-global-spectrum reconstruction, or validating against a reference NSGT implementation rather than re-deriving the DFT identities by hand.
 
 ### `v0.Y.65.1` - Resource Browser enhancements (2026-10-09)
 
@@ -1125,7 +1125,7 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 - **Operation history persisted with the project**, so a project can be re-rendered from scratch if necessary - this is exactly the "final Project file schema" decision the *Explicit non-goals* section above already named as a deliberate near-beta concern (expect `Y` to move once, here).
 - **[Done in v0.1.36.1]** **A "filter preview" control** - loops a few seconds of audio through an in-progress filter configuration live, so a user can tune by ear without processing the whole canvas first.
 - ~~A resource browser panel~~ and ~~SoundMind "Toolkit" collections~~ (both extending `v0.Y.57.1`'s own "Portable Resources" milestone, above) - **folded into that milestone's own Installments C and D, 2026-10-09**, now that Portable Resources itself has been scoped into concrete installments to build them on, rather than left as a vaguer, unscoped pair of backlog entries.
-- **[Moved to after Beta, 2026-10-15]** **A correct Pool reflection-padding implementation** (see `v0.Y.64.1` above and `docs/sound-mind-architecture.md`'s Decision #205) - two attempts deferred after a real, measured gain-error problem; needs either a new mechanism or validation against a reference NSGT implementation.
+- **[Moved to after Beta, 2026-10-15; dropped 2026-10-22 with the Pool codec, `v0.Y.82.3`]** **A correct Pool reflection-padding implementation** (see `v0.Y.64.1` above and `docs/sound-mind-architecture.md`'s Decision #205) - two attempts deferred after a real, measured gain-error problem; needs either a new mechanism or validation against a reference NSGT implementation.
 
 **Backlog - from manual testing, 2026-10-11** (items 1-4 are being built immediately; 5-6 are backlog only):
 
@@ -1196,7 +1196,8 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.81.1` | History: every action recorded, sources in the project, Remaster (redesigned 2026-10-21) | `0.1.43.1`-`0.1.43.4` | #262-#266 |
 | `v0.Y.82.1` | Macros: record, play and export a performance (redesigned 2026-10-21) | `0.1.44.1`-`0.1.44.3` | #262, #267-#269 |
 | `v0.Y.82.2` | Video export overhaul, modelled on the legacy Studio (inserted 2026-10-22) | `0.1.45.1` | #270 |
-| - | Beta readiness check | *(after `v0.Y.82.2`)* | |
+| `v0.Y.82.3` | Remove the Pool codec (inserted 2026-10-22) | `0.1.46.1` | #271 |
+| - | Beta readiness check | *(after `v0.Y.82.3`)* | |
 | `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
 | `v0.Y.84.1` | Light and dark mode | - | |
 | `v0.Y.85.1` | Color mapping choice | - | |
@@ -1460,6 +1461,14 @@ User request (2026-10-22): review and improve video export, taking the legacy St
 - H.264/HEVC through Windows' Media Foundation encoders (LGPL-safe), ProRes, MPEG-4; percentage progress.
 - **Not planned:** WebM/VP9 (needs libvpx, a new dependency); the legacy's retry button (a failed export is simply started again).
 
+#### ✅ `v0.Y.82.3` - Remove the Pool codec (S) - inserted 2026-10-22; settled in `v0.1.46.1`, Decision #271
+
+User request (2026-10-22), after checking where Pool was used: "Remove Pool."
+- The Studio never used Pool for importing, painting, recording, Playback, Loop or export. Its only role was the per-layer Pool button, which round-tripped a layer's Stream content through Pool and back - it could only add error, and on real music Pool added audible noise (codec design doc, Section 11).
+- Removed: the Pool codec and file format (`pool_codec`, `pool_file`), `core::pooling`, `Layer`'s Pool content, the project's `pool/` folder, the "pool" History recipe, the Pool button and its background task.
+- Dependencies: libtiff (and libjpeg-turbo, liblzma, zlib, which only it used) leave `vcpkg.json` and the licence notices.
+- No compatibility work (standing decision): an older project opens, ignoring its `pool/` folder; undoing past a Pool step in it can't be replayed.
+
 #### Then: Beta readiness check
 
 - Full regression on Arm64 and x64.
@@ -1501,7 +1510,7 @@ Design-document features the plan above didn't cover, found by a design-doc-vers
 #### `v0.Y.85.1` - Color mapping choice (M)
 
 - The design doc's single, shared mapping: left and right amplitude always drive two of red, green and blue; the third carries phase, a blend of both channels, or nothing.
-- One choice used everywhere color is involved: displaying the canvas, image import, and rendering Pool data for viewing.
+- One choice used everywhere color is involved: displaying the canvas, image import, and image/video export.
 - Saved with the project. It replaces the fixed mapping in use since Phase 2.
 
 #### `v0.Y.86.1` - Composer Mode editing (L)
@@ -1552,7 +1561,7 @@ Calibrating the thresholds needs real report data first.
 
 **Moved to after Beta (2026-10-15):**
 - the remaining `v0.Y.52.1` analysis categories (spectral health, criticality/pattern);
-- a correct Pool reflection-padding implementation.
+- ~~a correct Pool reflection-padding implementation~~ - dropped 2026-10-22 with the Pool codec (`v0.Y.82.3`).
 
 **Decisions resolved 2026-10-15:**
 - Intensity value 1.0 = absolute full scale (option (A)). The codec is calibrated to dBFS (`v0.Y.73.1`), paired with clip indicators (`v0.Y.73.1` and `v0.Y.80.1`), output loudness normalization, and an optional master limiter (`v0.Y.80.1`).

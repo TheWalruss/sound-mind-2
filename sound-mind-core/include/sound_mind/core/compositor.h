@@ -20,11 +20,10 @@ namespace sound_mind::core {
  *
  * A distinct type, not a plain `std::runtime_error`, specifically so a
  * caller can tell "cancelled on request" apart from a genuine compositing
- * failure. A separate type from `sound_mind::core::PoolCancelled`,
- * `sound_mind::codec::ExportCancelled`, and `sound_mind::studio::
- * ImportCancelled` - each names the operation it actually belongs to, and
- * "pool cancelled"/"export cancelled" both read backwards for a cancelled
- * playback composite.
+ * failure. A separate type from `sound_mind::codec::ExportCancelled` and
+ * `sound_mind::studio::ImportCancelled` - each names the operation it
+ * actually belongs to, and "export cancelled" would read backwards for a
+ * cancelled playback composite.
  */
 class CompositeCancelled : public std::runtime_error {
 public:

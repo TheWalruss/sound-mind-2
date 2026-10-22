@@ -97,14 +97,6 @@ public:
     ///        to reflect it).
     void setProject(sound_mind::core::Project* project);
 
-    /// @brief The topmost *visible* layer with content, if any - what
-    ///        `MainWindow::poolTopmostLayerNow()` resolves to. (Export
-    ///        renders the whole composite instead - see
-    ///        `MainWindow::exportCompositeAudioNow()`.)
-    /// @return A mutable pointer to that layer, or `nullptr` if none
-    ///         qualifies, or no project is set.
-    [[nodiscard]] sound_mind::core::Layer* topmostLayerWithContent();
-
     /// @brief The layer with the given id, if the current project has one.
     /// @param id The layer to look up.
     /// @return A mutable pointer to that layer, or `nullptr` if no
@@ -119,8 +111,8 @@ public:
      * user has actually clicked. Falls back to the *bottommost* layer in
      * the stack (the Background layer, always present) whenever nothing
      * is selected - a fresh project, or a selection that was cleared -
-     * not `topmostLayerWithContent()` (which requires existing content
-     * and would make a fresh, still-empty new layer unpaintable), and not
+     * not the topmost layer with content (which would make a fresh,
+     * still-empty new layer unpaintable), and not
      * `.back()` (always the locked, content-less Equalizer layer, never a
      * sensible paint target).
      *
@@ -354,7 +346,7 @@ public:
      *        exactly one of each, and duplicating either would violate
      *        that).
      *
-     * A full copy of the source layer - content, Pool content, opacity
+     * A full copy of the source layer - content, opacity
      * (and its own bound MindWave, if any), blend mode, translation/
      * rescale, and `filterConfiguration()` all carry over unchanged, the
      * same "everything, as-is" contract a plain `Layer` copy already gives

@@ -952,7 +952,7 @@ void ResourceBrowserController::handleImportEntryRequested() {
                             // Kept without a source: not replayable from the original.
                         }
                     }
-                    copy.setBaseContent(*layer->content(), std::move(recipe), layer->poolContent());
+                    copy.setBaseContent(*layer->content(), std::move(recipe));
                 }
                 project_->addLayer(std::move(copy));
             }

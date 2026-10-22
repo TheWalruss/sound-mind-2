@@ -302,7 +302,7 @@ void PaintController::rebuildLayerContentAndCascade(sound_mind::core::LayerId la
     }
 
     // The layer's own base (v0.1.43.1): what an import, recording,
-    // generator, pooling or phase cleanup made it - or, for a layer with
+    // generator or phase cleanup made it - or, for a layer with
     // no content yet (the Background layer, which Project::createNew()
     // leaves content-less), silence, so every layer is paintable. A new
     // base means the replay cache describes something else.

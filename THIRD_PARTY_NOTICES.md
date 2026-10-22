@@ -17,10 +17,6 @@ The complete source code of the exact Qt, FFmpeg, LAME and Eigen versions used, 
 | Qt 6.8.3 (Qt Core, Gui, Widgets, Svg; Windows platform, style, icon-engine and image-format plugins) | 6.8.3 | LGPL-3.0-only | The user interface; separate DLLs you may replace |
 | FFmpeg (libavcodec, libavformat, libavutil, libswresample, libswscale) | 9.0.1 | LGPL-2.1-or-later | Video export and MP3 encoding; separate DLLs you may replace |
 | LAME | 3.100 | LGPL-2.0-only | MP3 encoding, built into the FFmpeg libavcodec DLL |
-| LibTIFF | 4.7.2 | libtiff | Pool file (.smpool) reading and writing |
-| libjpeg-turbo | 3.2.0 | IJG AND BSD-3-Clause AND Zlib | Used by LibTIFF |
-| XZ Utils (liblzma) | 5.8.3 | 0BSD | Used by LibTIFF |
-| zlib | 1.3.2 | Zlib | Used by LibTIFF |
 | PocketFFT | 2024-11-30 | BSD-3-Clause | Fast Fourier transforms |
 | JSON for Modern C++ (nlohmann/json) | 3.12.0 | MIT | Project and settings files |
 | Eigen | 5.0.1 | MPL-2.0 | Linear algebra (header-only, unmodified) |
@@ -52,35 +48,6 @@ The complete source code of the exact Qt, FFmpeg, LAME and Eigen versions used, 
 - Website: https://lame.sourceforge.io
 - Source: https://github.com/TheWalruss/sound-mind-2/releases/tag/third-party-sources-1
 - Licence text: [`licenses/mp3lame.txt`](licenses/mp3lame.txt)
-
-### LibTIFF
-
-- Version: 4.7.2
-- Licence: libtiff
-- Website: https://libtiff.gitlab.io/libtiff/
-- Licence text: [`licenses/tiff.txt`](licenses/tiff.txt)
-
-### libjpeg-turbo
-
-- Version: 3.2.0
-- Licence: IJG AND BSD-3-Clause AND Zlib
-- Website: https://libjpeg-turbo.org
-- This software is based in part on the work of the Independent JPEG Group.
-- Licence text: [`licenses/libjpeg-turbo.txt`](licenses/libjpeg-turbo.txt)
-
-### XZ Utils (liblzma)
-
-- Version: 5.8.3
-- Licence: 0BSD
-- Website: https://tukaani.org/xz/
-- Licence text: [`licenses/liblzma.txt`](licenses/liblzma.txt)
-
-### zlib
-
-- Version: 1.3.2
-- Licence: Zlib
-- Website: https://zlib.net
-- Licence text: [`licenses/zlib.txt`](licenses/zlib.txt)
 
 ### PocketFFT
 

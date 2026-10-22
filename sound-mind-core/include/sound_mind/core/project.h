@@ -146,11 +146,11 @@ public:
     /**
      * @brief Loads a project from its `.smproj` JSON file on disk.
      *
-     * Any layer whose media/pool file (see save()'s docs for the paths)
-     * exists alongside the project is loaded back into that layer's
-     * `Layer::content()`/`poolContent()`; a layer with no such file yet
-     * (never rendered, or never Pooled) simply has no content there, same
-     * as a freshly-created one.
+     * Any layer whose media file (see save()'s docs for the paths) exists
+     * alongside the project is loaded back into that layer's
+     * `Layer::content()`; a layer with no such file yet (never rendered)
+     * simply has no content there, same as a freshly-created one. A `pool/`
+     * folder left by a version before 0.1.46.1 is ignored.
      *
      * @param path Path to the project file.
      * @return The loaded project.
@@ -165,13 +165,11 @@ public:
      * Per `docs/sound-mind-architecture.md`'s Project File & Folder layout,
      * any layer with cached content (see `Layer::content()`) also gets that
      * content written as its own Stream file, to `<path's folder>/<path's
-     * stem>/media/layer_<id>.smstream`; any layer with Pool content (see
-     * `Layer::poolContent()`) likewise gets `.../pool/layer_<id>.smpool` -
-     * both created if they don't exist yet.
+     * stem>/media/layer_<id>.smstream`, created if it doesn't exist yet.
      *
      * @param path Destination path.
-     * @throws std::ios_base::failure if the file (or a layer's media/pool
-     *         file) can't be written.
+     * @throws std::ios_base::failure if the file (or a layer's media file)
+     *         can't be written.
      */
     void save(const std::filesystem::path& path) const;
 
@@ -196,7 +194,7 @@ public:
      *        a caller never needs to check for a name collision itself.
      * @return The id actually assigned to the appended layer. Ids are
      *         never reused, even after removeLayer() - anything still keyed
-     *         by a removed layer's id (caches, Pool files) can't attach to
+     *         by a removed layer's id (caches, media files) can't attach to
      *         a later layer. The counter is saved with the project.
      */
     LayerId addLayer(Layer layer);
@@ -386,7 +384,7 @@ public:
     [[nodiscard]] const std::vector<Layer>& layers() const noexcept { return layers_; }
 
     /// @brief This project's layer stack, in bottom-to-top order - mutable
-    ///        access, for in-place changes (renaming, opacity, Pooling,
+    ///        access, for in-place changes (renaming, opacity,
     ///        and eventually painting) that don't change the stack's
     ///        membership or order (addLayer() is still how a new layer
     ///        gets appended).

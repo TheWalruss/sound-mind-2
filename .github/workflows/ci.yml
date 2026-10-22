@@ -94,7 +94,7 @@ jobs:
           & "${{ runner.temp }}\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
 
       # Without this, every run rebuilds every dependency (JUCE, ffmpeg,
-      # tiff, pocketfft, catch2, nlohmann-json...) from source every single
+      # pocketfft, catch2, nlohmann-json...) from source every single
       # time - vcpkg has no memory of a previous run's builds otherwise.
       # Keyed on vcpkg.json's own content (so a dependency/feature/version
       # change invalidates it) plus the matrix leg (x64 and Arm64 build
