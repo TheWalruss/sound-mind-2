@@ -35,6 +35,7 @@ find_package(FFMPEG REQUIRED)
 add_library(sound-mind-codec
     src/version.cpp
     src/stream_codec.cpp
+    src/audio_resample.cpp
     src/parallel.cpp
     src/stream_incremental_encoder.cpp
     src/stream_file.cpp

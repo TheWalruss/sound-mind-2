@@ -27,6 +27,7 @@ void RecordEngine::start() {
 
     capturedAudio_.left.clear();
     capturedAudio_.right.clear();
+    capturedAudio_.sampleRateHz = sampleRateHz_;
     captureFifo_.reset();
     deviceProblem_.clear();
 
@@ -40,6 +41,15 @@ void RecordEngine::start() {
         deviceAvailable_ = error.isEmpty();
         if (deviceAvailable_) {
             deviceManager_.addAudioCallback(this);
+            // The take is at whatever rate the device actually runs at - the
+            // constructor's rate is only a request it needn't honor
+            // (v0.1.49.3). Encoding converts it to the project's.
+            if (juce::AudioIODevice* device = deviceManager_.getCurrentAudioDevice()) {
+                const double deviceRate = device->getCurrentSampleRate();
+                if (deviceRate > 0.0) {
+                    capturedAudio_.sampleRateHz = static_cast<std::uint32_t>(std::lround(deviceRate));
+                }
+            }
         } else {
             deviceProblem_ = "Could not open the input device: " + error.toStdString();
         }

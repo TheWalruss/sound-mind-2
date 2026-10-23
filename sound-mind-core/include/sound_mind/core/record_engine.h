@@ -61,11 +61,11 @@ class RecordEngine : private juce::AudioIODeviceCallback {
 public:
     /// @brief Constructs a RecordEngine. Capture doesn't start until
     ///        start() is called.
-    /// @param sampleRateHz The sample rate the resulting AudioBuffer is
-    ///        tagged with - the actual input device is trusted to run at
-    ///        this rate (matching PlaybackEngine/LiveEngine's own
-    ///        simplification: neither validates a real device's actual
-    ///        negotiated rate against what its caller expects either).
+    /// @param sampleRateHz The rate a take is tagged with when no input
+    ///        device is open (`AudioDeviceMode::None`, or none could be
+    ///        opened). With a device open, the take is tagged with the
+    ///        device's own rate instead (`v0.1.49.3`) - before, every take
+    ///        claimed this rate whatever the device ran at.
     /// @param deviceMode `Real` (the default) attaches to the system's
     ///        real input device on start(), falling back gracefully
     ///        (isDeviceAvailable() == false) if none exists; `None` never
@@ -197,8 +197,9 @@ public:
     /// @brief The audio captured so far (or in total, once stopped) -
     ///        reflects only what the last drainAvailable() call moved out
     ///        of the ring buffer.
-    /// @return The accumulated capture, tagged with the sample rate given
-    ///         at construction.
+    /// @return The accumulated capture, tagged with the input device's own
+    ///         sample rate (or the constructor's, with no device open) -
+    ///         which needn't be the project's; encoding converts it.
     [[nodiscard]] const sound_mind::codec::AudioBuffer& capturedAudio() const noexcept;
 
     /**

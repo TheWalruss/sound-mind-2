@@ -30,4 +30,8 @@ private slots:
     void exportProjectAudioNowFailsForAnUnrecognizedExtension();
     void exportProjectAudioNowFailsWithNothingToExport();
     void exportProjectVideoNowWritesARealFile();
+
+    // v0.1.49.3 - audio at another rate than the project's.
+    void audioAtAnotherRateSplitsByTheProjectsRealDuration();
+    void audioAtAnotherRateFillsTheSameColumnsAsAtTheProjectsRate();
 };

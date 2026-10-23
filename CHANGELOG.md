@@ -6,6 +6,13 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.49.3] - 2026-10-23
+
+### Fixed
+
+- **Recordings at a different sample rate than the project now keep their pitch and timing.** A recording used to claim 44100 Hz whatever rate your input device actually ran at, so on a 48 kHz device takes came out at the wrong pitch and length. Recordings are now tagged with the device's real rate and converted to the project's rate.
+- **Imported audio at a different sample rate than the project is converted to the project's rate** as it's read. Before, a 44.1 kHz file in a 48 kHz project (or the other way round) landed at the wrong pitch and length, and was split into snippets of the wrong duration.
+
 ## [0.1.49.2] - 2026-10-23
 
 ### Fixed

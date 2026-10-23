@@ -1,5 +1,6 @@
 #include "test_import_export.h"
 
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <vector>
@@ -438,4 +439,39 @@ void ImportExportTest::exportProjectVideoNowWritesARealFile() {
 
     QVERIFY(ok);
     QVERIFY(exists);
+}
+
+// v0.1.49.3 - a 44.1 kHz file in a 48 kHz project is converted when it's
+// read, so it splits at the project's real duration (before, the split
+// counted 48 kHz samples of 44.1 kHz audio: about 9% too long).
+void ImportExportTest::audioAtAnotherRateSplitsByTheProjectsRealDuration() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-other-rate-split.wav";
+    writeTestWavFileWithFrameCount(path, 44100 * 2 + 441);  // 2.01 s at 44.1 kHz.
+    ProjectSettings settings;
+    settings.sampleRateHz = 48000;
+    settings.canvasWidth = 100;  // 1 s at the 10 ms timestep.
+    Project project = Project::createNew(settings);
+
+    const auto snippets = sound_mind::studio::audioSnippetsForFile(project, path);
+    std::filesystem::remove(path);
+
+    QCOMPARE(snippets.size(), std::size_t{3});
+    QVERIFY(std::abs(snippets[0].endSeconds - 1.0) < 1e-6);
+    QVERIFY(std::abs(snippets[1].startSeconds - 1.0) < 1e-6);
+}
+
+void ImportExportTest::audioAtAnotherRateFillsTheSameColumnsAsAtTheProjectsRate() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-other-rate-columns.wav";
+    writeTestWavFileWithFrameCount(path, 44100);  // exactly 1 s at 44.1 kHz.
+    ProjectSettings settings;
+    settings.sampleRateHz = 48000;
+    settings.canvasWidth = 100;  // 1 s.
+    const auto layers = sound_mind::studio::encodeAudioSnippets(settings, path, {0}, {});
+    std::filesystem::remove(path);
+
+    QCOMPARE(layers.size(), std::size_t{1});
+    QVERIFY(layers.front().content().has_value());
+    // 1 s of 10 ms columns, the same as a 48 kHz file would give.
+    QVERIFY(std::abs(static_cast<int>(layers.front().content()->frameCount) - 100) <= 1);
+    QCOMPARE(layers.front().content()->config.sampleRateHz, std::uint32_t{48000});
 }

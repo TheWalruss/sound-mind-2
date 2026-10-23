@@ -8,6 +8,7 @@
 #include <QImage>
 
 #include "sound_mind/codec/audio_file.h"
+#include "sound_mind/codec/audio_resample.h"
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/polar_projection.h"
 #include "sound_mind/codec/stream_codec.h"
@@ -28,14 +29,21 @@ QString tr(const char* text) {
     return QCoreApplication::translate("ImportExport", text);
 }
 
+/// @brief Reads an audio file and converts it to `sampleRateHz` - the
+///        project's own (`v0.1.49.3`), so the snippet split below, which
+///        counts samples, is measured at the project's real duration.
+sound_mind::codec::AudioBuffer readAudioFileAt(const std::filesystem::path& path, std::uint32_t sampleRateHz) {
+    return sound_mind::codec::resample(sound_mind::codec::readAudioFile(path), sampleRateHz);
+}
+
 }  // namespace
 
 std::vector<AudioSnippetPickerDialog::RowData> audioSnippetsForFile(const sound_mind::core::Project& project,
                                                                       const std::filesystem::path& path,
                                                                       QString* errorMessage, double offsetSeconds) {
     try {
-        const auto audio = sound_mind::codec::readAudioFile(path);
         const auto config = sound_mind::core::streamCodecConfigFor(project.settings());
+        const auto audio = readAudioFileAt(path, config.sampleRateHz);
         const auto loopLengthSamples =
             static_cast<std::size_t>(project.settings().canvasWidth) * static_cast<std::size_t>(config.hopLength);
         if (loopLengthSamples == 0 || audio.sampleRateHz == 0) {
@@ -88,8 +96,8 @@ std::vector<sound_mind::core::Layer> encodeAudioSnippets(const sound_mind::core:
                                                            const std::function<bool()>& shouldCancel,
                                                            QString* errorMessage, double offsetSeconds) {
     try {
-        const auto audio = sound_mind::codec::readAudioFile(path);
         const auto config = sound_mind::core::streamCodecConfigFor(settings);
+        const auto audio = readAudioFileAt(path, config.sampleRateHz);
         const auto loopLengthSamples =
             static_cast<std::size_t>(settings.canvasWidth) * static_cast<std::size_t>(config.hopLength);
         const std::size_t totalSamples = audio.frameCount();

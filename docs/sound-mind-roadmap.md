@@ -1199,7 +1199,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.82.3` | Remove the Pool codec (inserted 2026-10-22) | `0.1.46.1` | #271 |
 | `v0.Y.82.4` | Responsiveness and modularity pass (inserted 2026-10-22) | `0.1.47.1`-`0.1.47.4` | #272-#275 |
 | `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1`-`0.1.48.11` | #276-#286 |
-| `v0.Y.83.1` | New projects match the output device's sample rate (inserted 2026-10-23) | `0.1.49.1`-`0.1.49.2` | #287-#288 |
+| `v0.Y.83.1` | New projects match the output device's sample rate (inserted 2026-10-23) | `0.1.49.1`-`0.1.49.3` | #287-#289 |
 | - | Beta readiness check | *(after `v0.Y.83.1`)* | |
 | `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
 | `v0.Y.84.1` | Light and dark mode | - | |
@@ -1511,7 +1511,10 @@ Steps 4 and 5 of the 2026-10-22 code scan, so changes from beta feedback stay ch
     - A note under the field says which applies.
   - **Not changed:** `ProjectSettings{}` keeps 44.1 kHz, and existing projects keep their own rate.
 - ✅ **Fix found by the regression suite.** Settled in `v0.1.49.2`, Decision #288: a late Cancel no longer adds an audio import's layers.
-- **Follow-up found, not yet scheduled:** the Record engine labels captured audio 44.1 kHz whatever rate the input device runs at, and neither recordings nor imports are resampled to the project's rate. See Decision #287.
+- ✅ **Recording and import sample rates.** Settled in `v0.1.49.3`, Decision #289 (user, 2026-10-23: "Fix the recording sample rate issue, both points 1 and 2").
+  - Takes are tagged with the input device's real rate.
+  - The codec converts any audio at another rate to the project's: in `encode()`, and on reading an import.
+- **Still open:** Loop Mode assumes the device runs at the project's rate. Converting there would have to happen in real time, in the audio callback. New projects match the device, so this only affects older projects at another rate. See Decision #289.
 
 #### Then: Beta readiness check
 

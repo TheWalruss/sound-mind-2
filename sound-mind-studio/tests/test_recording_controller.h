@@ -12,4 +12,5 @@ private slots:
     void nothingCapturedChangesNothing();
     void toggleStartsAndStopsWithoutAddingALayerWhenNothingWasCaptured();
     void toggleRefusesWhileNotAllowedOrWithNoProject();
+    void aTakeAtAnotherRateIsConvertedToTheProjects();
 };

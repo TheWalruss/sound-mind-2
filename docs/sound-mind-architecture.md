@@ -3311,6 +3311,32 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Export's completion still reports a file a late Cancel couldn't stop. That's truthful: the file exists.
       - Recording's save, Loop's backing, analysis and the edit-playback job already honor `cancelled`.
     - **Test:** Studio `ImportControllerTest::aCancelAfterTheWorkFinishedStillAddsNothing`. It starts a short import, keeps the UI thread busy until the encode is done, then cancels. It failed before the fix (a layer was added) and passes now.
+289. **Audio at another sample rate is converted to the project's: recordings and imports.** Settled in `v0.1.49.3`, the follow-up Decision #287 found.
+    - **`codec::resample(audio, targetRateHz)` (new, `audio_resample.h`).**
+      - A band-limited windowed-sinc converter with a Kaiser window (beta 8, about 80 dB of stopband) and 64 taps each side, counted at the lower rate.
+      - The cutoff is 0.94 of the lower rate's Nyquist limit, so converting down removes rather than aliases what the new rate can't hold.
+      - The kernel comes from a 512-entries-per-tap table with linear interpolation, and the work runs on `parallelFor()`.
+      - The duration is kept, at `round(frames * target / source)`.
+      - It is our own code, not JUCE's `WindowedSincInterpolator`, because that one doesn't low-pass when converting down. No new dependency.
+    - **`codec::encode()` converts first**, whenever the audio's rate differs from `config.sampleRateHz` (and neither is 0). Before, it overwrote the configuration's rate with the audio's. This one place covers recordings, recipe replays of `record` and `loopTake` sources, and anything else that encodes foreign-rate audio.
+    - **Imports convert on read.** `audioSnippetsForFile()` and `encodeAudioSnippets()` read through `readAudioFileAt()`, so the snippet split (which counts samples) and its offset are measured at the project's real duration. Before, a 44.1 kHz file in a 48 kHz project split about 9% long.
+    - **`RecordEngine` tags each take with the input device's real rate.** It reads `getCurrentSampleRate()` right after opening the device, on the UI thread in `start()`. Without a device, a take keeps the constructor's rate.
+    - **`RecordingController`'s live view and position bar use the take's own rate.**
+      - The live encoder uses the project's timestep and frequency range at the take's rate, so it lines up with the canvas without converting every tick.
+      - The position bar compares seconds, not samples.
+      - The saved FLAC source keeps the device's rate and is converted when it's encoded.
+    - **Still open: Loop Mode.**
+      - `LoopEngine` opens the device without asking for a rate. It plays the backing audio and treats the take at the project's rate.
+      - Converting there would need real-time, allocation-free conversion in the audio callback, so it's out of scope here. Asking the device for the project's rate is possible, but shared-mode drivers may refuse.
+      - New projects match the device (Decision #287), so this only affects older projects at another rate. The User Guide says so.
+    - **Performance:** a debug build converts about 1 s of stereo audio in 0.03-0.07 s on all cores, roughly 2 s per minute; a release build is several times faster. It runs on the import and recording-save background jobs, never the audio thread.
+    - **Tests:**
+      - Codec `[resample]`, 6 cases: same-rate identity; empty input; duration kept both ways; a 1 kHz tone at 44.1 kHz matches one generated at 48 kHz within 1e-3; 23 kHz removed (below -40 dB) and 10 kHz kept when converting 48 to 44.1 kHz; `encode()` of 44.1 kHz audio with a 48 kHz configuration matches native 48 kHz in columns and pitch.
+      - Core `[record_engine]`: with no device, a take keeps the constructor's rate.
+      - Studio `ImportExportTest`: a 44.1 kHz file splits at a 48 kHz project's real duration, and fills the same columns.
+      - Studio `RecordingControllerTest`: a 44.1 kHz take becomes 48 kHz content of the same length.
+      - The device-rate tag needs real hardware, so it's a manual test.
+      - Updated: codec `Encoding carries the codec config and sample count needed to decode` encoded 48 kHz audio with a default (44.1 kHz) configuration, expecting the audio's rate to win - the old behavior. It now gives the configuration the audio's own rate, since the cross-rate case is `[resample]`'s.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

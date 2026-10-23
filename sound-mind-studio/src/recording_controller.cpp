@@ -87,11 +87,16 @@ void RecordingController::drain() {
     if (project == nullptr) {
         return;
     }
-    const auto config = sound_mind::core::streamCodecConfigFor(project->settings());
     const sound_mind::codec::AudioBuffer& captured = engine_.capturedAudio();
     if (liveView_) {
         if (!liveEncoder_) {
-            liveEncoder_ = std::make_unique<sound_mind::codec::StreamIncrementalEncoder>(config);
+            // At the take's own rate (the input device's, v0.1.49.3): the
+            // project's timestep and frequency range, so the live view lines
+            // up with the canvas without converting every tick.
+            sound_mind::core::ProjectSettings liveSettings = project->settings();
+            liveSettings.sampleRateHz = captured.sampleRateHz;
+            liveEncoder_ = std::make_unique<sound_mind::codec::StreamIncrementalEncoder>(
+                sound_mind::core::streamCodecConfigFor(liveSettings));
             liveFed_ = 0;
         }
         if (captured.frameCount() > liveFed_) {
@@ -103,11 +108,16 @@ void RecordingController::drain() {
     }
     // The playback position bar follows the recording, from the canvas's
     // own start, until it reaches the end.
-    const double canvasSamples =
-        static_cast<double>(project->settings().canvasWidth) * static_cast<double>(config.hopLength);
-    const double recorded = static_cast<double>(captured.frameCount());
-    context_.setPlayheadFraction(canvasSamples > 0.0 ? std::optional<double>(std::min(1.0, recorded / canvasSamples))
-                                                      : std::nullopt);
+    // In seconds, since the take's rate needn't be the project's (v0.1.49.3).
+    const double canvasSeconds =
+        static_cast<double>(project->settings().canvasWidth) * project->settings().timestepMs / 1000.0;
+    const double recordedSeconds =
+        captured.sampleRateHz > 0
+            ? static_cast<double>(captured.frameCount()) / static_cast<double>(captured.sampleRateHz)
+            : 0.0;
+    context_.setPlayheadFraction(canvasSeconds > 0.0
+                                     ? std::optional<double>(std::min(1.0, recordedSeconds / canvasSeconds))
+                                     : std::nullopt);
 }
 
 bool RecordingController::commit(const sound_mind::codec::AudioBuffer& captured) {

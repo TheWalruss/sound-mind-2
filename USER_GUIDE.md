@@ -333,6 +333,11 @@ useful for lining up a specific moment in the recording with a snippet
 boundary. Changing it recomputes the list live; every row resets to
 checked, since a changed offset is a genuinely new split.
 
+Audio at a different sample rate than the project (a 44.1 kHz file in a
+48 kHz project, say) is converted to the project's rate as it's read, so
+it keeps its pitch and length, and splits into snippets of the right
+duration.
+
 Importing runs in the background - you can keep working while it encodes,
 and a small **✕** button appears in the status bar to cancel it if you
 change your mind; cancelling adds nothing to the project at all, as if it
@@ -1928,8 +1933,9 @@ recording goes:
   stop, the recorded layer shows in the stack as usual.
 
 Recording captures from the input device chosen in [Configure
-Devices](#configure-devices), encoded the same way an imported file would
-be when you stop. That happens in the background - the status bar says
+Devices](#configure-devices), at whatever sample rate that device runs at,
+and is converted to the project's rate and encoded the same way an
+imported file would be when you stop. That happens in the background - the status bar says
 "Saving the recording..." - and the layer appears when it's done, so a
 long take doesn't freeze the window. New Project, Open Project and
 closing the Studio wait for it, so a take is never lost. While recording, the playback position bar moves
@@ -1942,7 +1948,10 @@ The **Loop** panel turns the Studio into a loop station that plays along
 with your whole project:
 
 - **Start Loop** plays the whole project from the start and, at the same
-  time, records your input into the **Loop Input** layer. (While the
+  time, records your input into the **Loop Input** layer. Loop Mode
+  assumes your audio device runs at the project's sample rate - new
+  projects match it automatically; for an older project at another rate,
+  set the device to the project's rate in your system sound settings. (While the
   project's sound is being prepared, the status bar says "Preparing
   loop..." for a moment.)
 - When playback reaches the end, the take you just recorded replaces the

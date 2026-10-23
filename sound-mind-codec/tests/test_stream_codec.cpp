@@ -100,6 +100,7 @@ TEST_CASE("A genuinely stereo tone still round-trips recognizably", "[stream_cod
 TEST_CASE("Encoding carries the codec config and sample count needed to decode", "[stream_codec]") {
     const AudioBuffer original = makeSineTone(1000.0f, 0.5f, 48000);
     StreamCodecConfig config;
+    config.sampleRateHz = 48000;  // the audio's own rate - another rate is converted first (v0.1.49.3, [resample]).
     config.binCount = 256;
     config.hopLength = 480;
 

@@ -7,6 +7,7 @@
 
 #include <pocketfft_hdronly.h>
 
+#include "sound_mind/codec/audio_resample.h"
 #include "sound_mind/codec/parallel.h"
 #include "stream_frame_codec.h"
 
@@ -97,6 +98,11 @@ struct LogBinSample {
 }  // namespace
 
 StreamImage encode(const AudioBuffer& audio, const StreamCodecConfig& configIn) {
+    // Audio at another rate is converted first, so it keeps its pitch and
+    // timing in the configuration's columns and bins (v0.1.49.3).
+    if (audio.sampleRateHz != 0 && configIn.sampleRateHz != 0 && audio.sampleRateHz != configIn.sampleRateHz) {
+        return encode(resample(audio, configIn.sampleRateHz), configIn);
+    }
     StreamCodecConfig config = configIn;
     config.sampleRateHz = audio.sampleRateHz;
 

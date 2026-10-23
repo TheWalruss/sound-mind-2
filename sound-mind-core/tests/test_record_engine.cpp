@@ -179,3 +179,12 @@ TEST_CASE("processBlock tracks the most recent block's own peak level, post-gain
 
     engine.stop();
 }
+
+// v0.1.49.3 - with no device open, a take carries the constructor's rate
+// (with one, the device's own - not testable without hardware).
+TEST_CASE("With no device open, a take is tagged with the constructor's rate", "[record_engine]") {
+    RecordEngine engine(48000, AudioDeviceMode::None);
+    engine.start();
+    CHECK(engine.capturedAudio().sampleRateHz == 48000);
+    engine.stop();
+}

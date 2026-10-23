@@ -126,8 +126,12 @@ struct StreamImage {
  * @param audio The audio to encode.
  * @param config Encode parameters; the same values are needed again to
  *        decode, and are carried on the returned StreamImage for that
- *        reason. `config.sampleRateHz` is overwritten with `audio`'s own
- *        sample rate.
+ *        reason. Audio at a different sample rate than
+ *        `config.sampleRateHz` is converted to it first (resample(),
+ *        `v0.1.49.3`), so its pitch and timing land correctly in this
+ *        configuration's bins and columns. (Before, `config.sampleRateHz`
+ *        was overwritten with `audio`'s own rate instead.) A rate of `0` on
+ *        either side skips the conversion.
  * @return The encoded representation.
  *
  * @note CPU-only for now - see `docs/sound-mind-architecture.md`'s GPU /

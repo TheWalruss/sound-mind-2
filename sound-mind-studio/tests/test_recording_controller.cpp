@@ -179,3 +179,19 @@ void RecordingControllerTest::toggleRefusesWhileNotAllowedOrWithNoProject() {
     QVERIFY(!fixture.controller.isRecording());
     QCOMPARE(fixture.aboutToStartCount, 0);
 }
+
+// v0.1.49.3 - a take at the input device's rate (here 44.1 kHz) lands in a
+// 48 kHz project at 48 kHz, covering the same time.
+void RecordingControllerTest::aTakeAtAnotherRateIsConvertedToTheProjects() {
+    Fixture fixture;
+    sound_mind::core::ProjectSettings settings;
+    settings.sampleRateHz = 48000;
+    fixture.project = Project::createNew(settings);
+
+    QVERIFY(fixture.controller.commit(recordedTone(0.5f)));  // 0.2 s at 44.1 kHz.
+
+    const auto& content = topmostTake(fixture.project).content();
+    QVERIFY(content.has_value());
+    QCOMPARE(content->config.sampleRateHz, std::uint32_t{48000});
+    QVERIFY(std::abs(static_cast<int>(content->frameCount) - 20) <= 1);  // 0.2 s of 10 ms columns.
+}
