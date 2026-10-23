@@ -6,6 +6,22 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.52.2] - 2026-10-23
+
+### Changed
+
+- **The User Guide is rewritten.**
+  - **New structure.** It now leads you from first steps to reference, in seven parts: getting started, building a project, drawing and editing, listening and recording, measuring the sound, files, and reference.
+  - **New chapters:** a ten-minute first session and a keyboard-shortcut table.
+  - **Tables and own chapters.** Filters, MindWave types and brush types are in tables. MindWaves, Undo and History, and Paths and Resonance profiles have chapters of their own.
+  - **Corrections:**
+    - the File menu now lists Import MIDI and Export Image;
+    - copying picked objects is described as working, which it does;
+    - every MindWave binding is covered;
+    - a layer's level is called **Gain** throughout, as on its row;
+    - development-history notes are gone.
+  - It's about a third shorter.
+
 ## [0.1.52.1] - 2026-10-23
 
 Roadmap slot `v0.Y.83.1`, brought forward from after the Beta readiness check.

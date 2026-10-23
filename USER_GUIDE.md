@@ -1,2543 +1,1611 @@
 # Sound Mind Studio - User Guide
 
-This guide covers every screen and control in the current build. Sound
-Mind Studio is under active development - `CHANGELOG.md` lists exactly
-what's shipped, and the [What's Not Here Yet](#whats-not-here-yet) section
-at the end of this guide is honest about what's planned but not yet
-usable. If something described here doesn't match what you see, the
-in-app behavior is correct and this guide is due an update.
+This guide explains how to use Sound Mind Studio, from your first project to
+the details of every panel. Read the first two parts in order; after that,
+each chapter stands on its own, so jump to whatever you need.
+
+The guide describes what the current build does. `CHANGELOG.md` lists what
+changed in each version, and [What's Not Here Yet](#whats-not-here-yet) at
+the end lists what's planned but not usable yet. If the guide and the
+Studio ever disagree, the Studio is right and the guide is due an update.
 
 ## Contents
 
+**Part 1 - Getting started**
+
 1. [What Sound Mind Studio Is](#what-sound-mind-studio-is)
 2. [Starting Out](#starting-out)
-3. [Creating a Project](#creating-a-project)
+3. [A First Session](#a-first-session)
 4. [The Main Window](#the-main-window)
-5. [Canvas Navigation](#canvas-navigation)
-6. [Importing Media](#importing-media)
-7. [Working with Layers](#working-with-layers)
-8. [Painting](#painting)
-9. [Pick](#pick)
-10. [Selection and Fill](#selection-and-fill)
-11. [Path Tool](#path-tool)
-12. [Text Tool](#text-tool)
-13. [Axis Labels](#axis-labels)
-14. [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid)
-15. [Playback](#playback)
-16. [Recording](#recording)
-17. [Loop Mode](#loop-mode)
-18. [Macros](#macros)
-19. [Configure Devices](#configure-devices)
-20. [Exporting](#exporting)
-21. [Saving and Project Files](#saving-and-project-files)
-22. [Resource Browser](#resource-browser)
-23. [Analysis](#analysis)
-24. [Performance](#performance)
-25. [Licence and Credits](#licence-and-credits)
-26. [What's Not Here Yet](#whats-not-here-yet)
+5. [Working with the Canvas](#working-with-the-canvas)
+
+**Part 2 - Building a project**
+
+6. [Importing](#importing)
+7. [Layers](#layers)
+8. [Filter Layers](#filter-layers)
+9. [MindWaves](#mindwaves)
+
+**Part 3 - Drawing and editing**
+
+10. [Painting](#painting)
+11. [Pick](#pick)
+12. [Selections](#selections)
+13. [Paths and Resonance Profiles](#paths-and-resonance-profiles)
+14. [Text](#text)
+15. [Grids, Axis Labels and Snapping](#grids-axis-labels-and-snapping)
+16. [Undo and History](#undo-and-history)
+
+**Part 4 - Listening and recording**
+
+17. [Playback](#playback)
+18. [Recording](#recording)
+19. [Loop Mode](#loop-mode)
+20. [Configure Devices](#configure-devices)
+21. [Macros](#macros)
+
+**Part 5 - Measuring the sound**
+
+22. [Analysis](#analysis)
+
+**Part 6 - Files**
+
+23. [Saving and Project Files](#saving-and-project-files)
+24. [Exporting](#exporting)
+25. [Remastering](#remastering)
+26. [Resource Browser](#resource-browser)
+
+**Part 7 - Reference**
+
+27. [Performance](#performance)
+28. [Keyboard Shortcuts](#keyboard-shortcuts)
+29. [What's Not Here Yet](#whats-not-here-yet)
+30. [Licence and Credits](#licence-and-credits)
+
+---
+
+# Part 1 - Getting started
 
 ## What Sound Mind Studio Is
 
-Sound Mind Studio encodes sound as a **spectrogram** - a picture of that
-sound - and can decode any spectrogram-shaped picture back into sound. The
-two are treated as one continuous thing, not a conversion with something
-lost in translation:
+Sound Mind Studio treats sound and pictures as the same thing. Every sound
+is shown as a **spectrogram** - a picture of the sound - and every picture
+can be played as sound:
 
 - **Horizontal axis** - time, left to right.
-- **Vertical axis** - frequency, low at the bottom, high at the top.
-- **Brightness** - loudness at that frequency, at that moment.
-- **Color** - red is the left channel's loudness, green is the right
+- **Vertical axis** - frequency (pitch), low at the bottom, high at the
+  top.
+- **Brightness** - how loud that frequency is at that moment.
+- **Color** - red is the left channel's loudness, green the right
   channel's, and blue carries phase (roughly, the fine detail that shapes
-  timbre rather than pitch or volume).
+  the character of a sound rather than its pitch or volume).
 
-Import an audio file and you'll see its spectrogram. Import an ordinary
-photo and the Studio will treat its pixels as amplitude/phase data and let
-you hear it - "sound and image are one continuous surface" is the
-project's own design principle for this, not a side effect.
+Import an audio file and you see its spectrogram; import a photo and you can
+hear it. You can paint, filter, select and rearrange the picture with
+image-editing tools, and every change is something you hear.
+
+### Key ideas
+
+A few words come up throughout this guide:
+
+- **Project** - one piece of work: a fixed length of time and frequency
+  range (the **canvas**), and everything in it.
+- **Layer** - like a layer in an image editor. Each holds its own sound;
+  the canvas shows, and Playback plays, all visible layers combined.
+- **Filter layer** - a layer that reshapes the layers beneath it instead of
+  holding sound of its own.
+- **Stroke** - a brush mark. Strokes stay editable: you can select one later
+  and move it or change how it was painted.
+- **MindWave** - a reusable shape that varies over time or frequency (a
+  sine wave, an envelope, noise...). MindWaves make settings change across
+  the canvas instead of staying fixed.
+- **Mind Shot / Mind Grain** - a piece of the canvas captured as a brush.
+- **Resonance profile** - a spectrum captured from a drawn curve, used as a
+  brush.
+- **Macro** - a recorded performance: the project playing and everything you
+  did while it played.
 
 ## Starting Out
 
-Launching the Studio shows the **start screen**: a left-aligned header
-(the Studio's own logo and name) above two side-by-side columns, each
-scrolling independently if its own content doesn't fit the window:
+Launching the Studio shows the **start screen**:
 
-- **Left column**:
-  - **New Project...** - opens the [Create Project wizard](#creating-a-project).
-  - **Open Project...** - browse to an existing `.smproj` file.
-  - **Recent Projects** - your most recently opened projects, click one
-    to reopen it directly.
-- **Right column**:
-  - **Documentation** - Quick Start, Readme, User Guide, Changelog, and
-    About - the same five links the Help menu offers once a project is
-    open, available here too.
-  - **Device Configuration** - the same input/output device, gain, and
-    "Test" controls [Configure Devices](#configure-devices) offers once
-    a project is open, available here too - so you can pick and test
-    your audio devices before creating or opening anything. Either copy
-    of these controls stays in sync with the other automatically.
+- **New Project...** opens the Create Project wizard (below).
+- **Open Project...** opens an existing `.smproj` file.
+- **Recent Projects** lists the projects you opened last; click one to
+  reopen it.
+- **Documentation** opens the Quick Start, Readme, User Guide, Changelog
+  and About - the same as the **Help** menu.
+- **Device Configuration** lets you choose and test your audio input and
+  output before opening anything. These are the same controls as
+  [Configure Devices](#configure-devices), and the two stay in sync.
 
-## Creating a Project
+### Creating a project
 
-The Create Project wizard asks for:
+The **Create Project** wizard asks for:
 
-- **Name** - the project's display name and file name.
-- **Save Folder** - where the project file and its data folder are
-  created (use **Browse...** to pick one).
-- **Duration** - roughly how much time the canvas holds, in seconds. This
-  sets the canvas's width in practice - importing audio longer than this
-  splits it into duration-length pieces you choose from individually (see
-  [Importing Audio](#importing-audio)) rather than truncating it.
+- **Name** - the project's name, also used for its file name.
+- **Save Folder** - where the project is saved (**Browse...** to choose).
+- **Duration** - how much time the canvas holds, in seconds. Audio longer
+  than this can still be imported: it's split into Duration-length pieces
+  you choose from (see [Importing Audio](#importing-audio)).
 
-Click **Advanced** to also set:
+**Advanced** shows the canvas's resolution. The defaults suit most work:
 
-- **Sample Rate** - the audio sample rate new imports/recordings are
-  encoded at (Hz). It starts at the rate your output device runs at, so
-  playback plays at the right speed; if the device's rate isn't known, it
-  starts at 48000 Hz, the most common output rate. The note under the
-  field tells you which.
-- **Min Frequency** / **Max Frequency** - the frequency range the
-  spectrogram covers. Content outside this range isn't represented.
-- **Bin Count** - how many frequency bins tall the spectrogram is - more
-  bins means finer vertical (pitch) resolution, at the cost of more data
-  per layer.
-- **Timestep** - milliseconds per horizontal pixel - smaller means finer
-  time resolution, and more columns for the same Duration.
+- **Sample Rate** - the audio rate the project works at. It starts at the
+  rate your output device runs at, so playback runs at the right speed; if
+  that can't be found out, it starts at 48000 Hz, the most common rate. A
+  note under the field says which.
+- **Min Frequency** / **Max Frequency** - the frequency range the canvas
+  covers. Sound outside it isn't kept.
+- **Bin Count** - how many rows the canvas has from bottom to top. More rows
+  mean finer pitch detail, and more data per layer.
+- **Timestep** - milliseconds per column. Smaller means finer timing, and
+  more columns for the same Duration.
 
-The defaults are reasonable for general use; there's no wrong answer to
-start with, and nothing here is locked in stone until real data is
-imported at that resolution.
+These settings are fixed once the project exists. To change them later,
+rebuild the project with [Remastering](#remastering).
+
+## A First Session
+
+This walk-through touches the main features in ten minutes. Every step links
+to the chapter that covers it in full.
+
+1. **Create a project** - **New Project...** on the start screen; give it a
+   name and folder and click **OK**. The canvas opens, dark and empty.
+2. **Import a sound** - **File → Import Audio...**, or drag an audio file
+   onto the window. Its spectrogram appears as a new layer in the
+   **Layers** panel on the right. ([Importing](#importing))
+3. **Listen** - choose **Playback** from the **Input/Output** button at the
+   top right, and press **Play**. A line sweeps across the canvas as it
+   plays. ([Playback](#playback))
+4. **Paint** - choose **Paint** from the **Tool** button in the toolbar,
+   click your layer's name in the Layers panel, and drag across the canvas.
+   Press Play again to hear your stroke. Open **Configure → Tool
+   Configuration** to change the brush. ([Painting](#painting))
+5. **Change it afterwards** - choose **Pick**, click your stroke, and drag it
+   somewhere else, or change its settings in Tool Configuration.
+   ([Pick](#pick))
+6. **Add an effect** - click **+ Add Filter Layer** in the Layers panel,
+   choose a **Filter Type** such as **Spectral Reverb**, and play again.
+   ([Filter Layers](#filter-layers))
+7. **Undo** - **Ctrl+Z** steps back through anything you did.
+   ([Undo and History](#undo-and-history))
+8. **Save and share** - **Ctrl+S** saves; **File → Export Audio...**,
+   **Export Video...** or **Export Image...** make something to share.
+   ([Exporting](#exporting))
 
 ## The Main Window
 
-Once a project is open, the title bar shows the project's name next to
-"Sound Mind Studio", and the window has:
+With a project open, the window has:
 
-- **The canvas** (center) - shows the current spectrogram. See
-  [Working with Layers](#working-with-layers) for exactly which layer
-  that is.
-- **Tool dropdown** - a single toolbar button choosing the canvas's
-  current tool: **Pan** (the default - navigate the canvas without
-  painting, picking, or placing anything), **Paint**, **Pick**,
-  **Select**, **Path**, or **Text**. Its own label always names whichever
-  one is active; turning a tool off (rather than choosing a different one)
-  falls back to Pan automatically. See each tool's own section below.
-- **Layers panel** (right, by default) - lists every layer in the
-  project, top of the stack first. Shown by default; toggled from the
-  **Layers** toolbar button.
-- **Input/Output dropdown** (top-right of the menu bar) - choose
-  **Playback**, **Record**, or **Loop** to show that panel; each is
-  covered in its own section below. Only one of the three stays open at
-  a time - choosing another closes whichever one was open. All three
-  start hidden; whichever one you have open (or none) stays that way
-  across New/Open Project, within the same run of the Studio.
-- **Configure dropdown** - choose **Tool Configuration**, **MIDI
-  Configuration**, **Selection Configuration**, **Grid**, **Filter
-  Configuration**, or **MindWaves** to show that
-  panel; each is covered in its own section below. Unlike Input/Output,
-  any number of these can stay open together.
-- **Macro dropdown** (top-right of the menu bar, next to Input/Output) -
-  **Record Macro**, **Play Macro**, **Export Macro Video...** and
-  **Manage Macros...** - see [Macros](#macros) below.
-- **File menu** - New/Open/Save/Save As, Remaster (see
-  [Remastering](#remastering)), Import Audio/Image, Export Audio/Video.
-- **View menu** - Zoom controls (see [Canvas Navigation](#canvas-navigation)
-  below), a **Hardware Acceleration** checkbox: turn GPU compute off to
-  compare speed/results against the CPU path, or if you suspect it's
-  causing a problem (stays as you left it across restarts), **Sound
-  Flower** (see [Canvas Navigation](#canvas-navigation) below), and
-  **Composer Mode** (see [What's Not Here Yet](#whats-not-here-yet)
-  below).
-- **Help menu** - Quick Start, Readme, User Guide, and Changelog (each
-  opens a styled HTML page in your default browser), plus About Sound
-  Mind Studio.
-- **Status bar** (bottom) - the left side shows the mouse cursor's
-  position while it's over the canvas, both in pixels and in time/
-  frequency (e.g. `30, 10 px   |   0.300 s, 523 Hz`), clearing once the
-  cursor leaves. A temporary message (e.g. "Imported ...") briefly covers
-  it when one is shown.
+- **The canvas** (centre) - all visible layers combined.
+- **The toolbar**, with:
+  - **Tool** - the canvas's current tool: **Pan** (the default: just look
+    around), **Paint**, **Pick**, **Select**, **Path** or **Text**. The
+    button names the active tool. Turning a tool off returns to Pan.
+  - **Layers** - shows or hides the Layers panel (shown by default).
+  - **Configure** - opens the setup panels: **Tool Configuration**, **MIDI
+    Configuration**, **Selection Configuration**, **Grid**, **Filter
+    Configuration** and **MindWaves**. Any number can be open at once.
+  - **History** - shows or hides the History panel.
+  - **Zoom out**, **Zoom in**, **Fit to Window** and **Actual Size**.
+- **Input/Output** (top right) - opens **Playback**, **Record** or
+  **Loop**. Only one of the three is open at a time.
+- **Macro** (top right) - **Record Macro**, **Play Macro**, **Export Macro
+  Video...** and **Manage Macros...** ([Macros](#macros)).
+- **The menus:**
+  - **File** - New, Open, Save and Save As; Remaster; Import Audio, Image
+    and MIDI; Export Audio, Video and Image.
+  - **Edit** - Undo and Redo, Delete, and submenus for stack order, path
+    editing, selections, the clipboard, capturing brushes, picked-path
+    tools and layers; also **Image Mode** and **Decimal Separator**.
+  - **View** - Zoom, **Hardware Acceleration**, **Sound Flower**, **Show
+    Clipping**, **Composer Mode** and **Analysis**.
+  - **Resource Browser** - opens the [Resource Browser](#resource-browser).
+  - **Help** - the documentation and **About Sound Mind Studio**.
+- **The status bar** (bottom) - shows the position under the mouse, in
+  pixels and in time and frequency (`30, 10 px | 0.300 s, 523 Hz`), and
+  short messages. Long tasks (importing, exporting, preparing playback) show
+  their progress here, with a **✕** button to cancel.
 
-Every dock panel can be dragged to a different edge of the window, or
-floated, like any Qt dock widget. Every panel can also be resized - drag
-the edge between two stacked panels (or between a panel and the canvas)
-to make one taller/shorter or wider/narrower; if a panel's own content no
-longer fits at the size you've given it, a scrollbar appears inside it
-rather than the panel refusing to shrink.
+Entries in the menus and right-click menus that don't apply right now - for
+example **Paste** with nothing copied - are greyed out.
 
-By default, opening a panel on the right-hand side adds it as a full-size
-tab alongside whatever else is already open there and switches to it
-immediately, rather than a smaller panel stacked below the others left
-hidden behind whichever tab was already showing - click a tab to switch
-between them yourself afterward. Dragging a panel's tab out (to a
-different edge, or to float it) breaks it out of that shared tab group
-into its own stack, if you'd rather see two of them at once.
+### Arranging panels
 
-## Canvas Navigation
+Panels open on the right, as tabs; opening one brings its tab to the front.
+Drag a panel's title bar to move it to another edge of the window or float
+it on its own, and drag the edge between panels to resize them. A panel
+whose content doesn't fit shows a scrollbar.
 
-By default the canvas always shrinks or grows to exactly fill the space
-available (**Fit to Window**) - the same behavior the Studio always had.
-Zooming in switches to a fixed size instead, scrollbars appearing once
-the canvas no longer fits.
+## Working with the Canvas
 
-**Keyboard modifiers** carry one consistent meaning here and (as it's
-built out further) anywhere else an action could affect time and
-frequency independently: **Alt** restricts to the **frequency axis**
-(vertical), **Shift** restricts to the **time axis** (horizontal), and
-**Ctrl** is for **proportional** control - both axes together. (Starting a
-*new* Select-mode selection is the one exception - Shift/Alt there mean
-Add/Subtract instead; see [Selection and Fill](#selection-and-fill)'s own
-"Combining selections".)
+### Zooming and scrolling
 
-Zoom, in the **View → Zoom** menu (the four most common of these are also
-toolbar buttons):
+By default the canvas fills the space available (**Fit to Window**). Zooming
+in gives it a fixed size, with scrollbars once it no longer fits.
 
-- **Zoom In**/**Zoom Out** - `]`/`[` - proportional, the normal step.
-- **Zoom In (Frequency Only)**/**Zoom Out (Frequency Only)** -
-  `Alt+]`/`Alt+[` - stretches or compresses the vertical axis only; the
-  horizontal axis doesn't change.
-- **Zoom In (Time Only)**/**Zoom Out (Time Only)** - `Shift+]`/`Shift+[` -
-  the horizontal-axis counterpart.
-- **Zoom In (Coarse)**/**Zoom Out (Coarse)** - `Ctrl+]`/`Ctrl+[` -
-  proportional, at a bigger step than plain `]`/`[`. (Ctrl usually means
-  "proportional," but plain `]`/`[` is already proportional by default -
-  here Ctrl means a bigger step instead.)
-- **Fit to Window** - `Ctrl+0` - back to the default, always-fills-the-
-  space behavior.
-- **Actual Size** - `Ctrl+1` - exactly 100%, one screen pixel per encoded
-  pixel.
-- The **mouse wheel**, over the canvas, zooms the same way under the same
-  modifiers (Ctrl/Alt/Shift). An unmodified wheel scrolls the canvas
-  instead, once it's larger than the visible area.
+The zoom commands are in **View → Zoom**, and the most common are on the
+toolbar:
+
+| Command | Shortcut | Effect |
+|---|---|---|
+| Zoom In / Zoom Out | `]` / `[` | Both axes |
+| Zoom In / Out (Frequency Only) | `Alt+]` / `Alt+[` | Vertical axis only |
+| Zoom In / Out (Time Only) | `Shift+]` / `Shift+[` | Horizontal axis only |
+| Zoom In / Out (Coarse) | `Ctrl+]` / `Ctrl+[` | Both axes, a bigger step |
+| Fit to Window | `Ctrl+0` | Fill the space available |
+| Actual Size | `Ctrl+1` | One screen pixel per canvas cell |
+
+The **mouse wheel** zooms the same way with the same modifier keys. Without a
+modifier it scrolls the canvas, once the canvas is larger than the window.
+
+The modifier keys mean the same thing here as elsewhere: **Alt** acts on the
+frequency axis only, **Shift** on the time axis only. When you start a new
+selection, Shift and Alt mean add and subtract instead (see
+[Selections](#selections)).
 
 ### Number fields
 
-Every number setting is a **slider with a text box** beside it:
+Every number setting is a **slider with a text box**:
 
-- Drag the slider to pick any value in the allowed range. The text box
-  previews the value as you drag; it's applied when you let go.
-- Click the slider or use the arrow keys (once the slider has focus) to
-  nudge the value - that applies straight away.
-- Type an exact value in the text box. Nothing changes until you press
-  **Enter** or click elsewhere. Typing is forgiving: surrounding spaces,
-  leading or trailing zeros, and a unit after the number ("12 dB") are
-  all fine, and either `.` or `,` works as the decimal mark. Values
-  outside the allowed range are clamped to it, and anything that isn't a
-  number (e.g. "1.2.3") just reverts. The box then shows the value it
-  actually used.
-- A few sliders cover only the useful part of a wider range, so they're
-  easier to set finely: **Brush Size** and **Interval** in Tool
-  Configuration. You can still type a larger value into the text box; the
-  slider then just sits at its end.
+- **Drag the slider** to choose a value; it's applied when you let go.
+  Clicking the slider, or using the arrow keys once it has focus, applies
+  straight away.
+- **Type in the text box** and press **Enter** (or click elsewhere). Typing
+  is forgiving: spaces, a unit after the number ("12 dB") and either `.` or
+  `,` as the decimal mark are fine. A value outside the allowed range is
+  clamped to it; text that isn't a number is ignored.
+- Some sliders cover only the useful part of what you can type - for
+  example a brush's **Brush Size**, or a MindWave's **Period**. Type a
+  larger value and the slider simply sits at its end.
 
-**Edit → Decimal Separator** chooses whether numbers are shown with a
-period (1.5) or a comma (1,5). It's saved with the project.
+**Edit → Decimal Separator** chooses whether numbers show a period (1.5) or a
+comma (1,5); it's saved with the project.
 
-Wherever you set a loudness level - a stroke's **Left/Right Intensity**,
-Spectral Gate's **Noise floor** - a small **dB / value** drop-down beside
-those fields switches how they're shown: in dB (-96 to 0), or as a value
-from 0 (silence) to 1 (full scale), the same scale the canvas's
-brightness uses. It's only a display choice; switching never changes the
-level itself.
+Wherever you set a loudness - a stroke's intensity, a filter's noise floor,
+text - a small **dB / value** drop-down beside it switches between decibels
+(-96 to 0) and a value from 0 (silence) to 1 (full scale). It only changes
+how the number is shown.
 
-### Brightness and clipping
+### Brightness and loudness
 
-The canvas's brightness follows how loud each spot really is, on one
-absolute scale: black is silence (-96 dBFS), full brightness is full scale
-(0 dBFS). Imported, recorded, and painted content all use this same scale.
+Brightness follows loudness on one absolute scale: black is silence
+(-96 dBFS) and full brightness is full scale (0 dBFS). Imported, recorded
+and painted sound all use this scale, so a painted stroke as bright as an
+imported sound is about as loud.
 
 **View → Show Clipping** marks every spot louder than full scale with a
-magenta/black checker. Those spots will distort when played or exported
-- full brightness can't show how far over they are, so this is how to
-find them.
+magenta and black checker. Those spots will distort when played or exported.
 
-### Sound Flower (Polar View)
+### Sound Flower (polar view)
 
-**View → Sound Flower** (`Ctrl+Alt+F`) is a checkable action that projects
-the canvas onto a circular disk instead of the familiar flat rectangle -
-time wraps around the ring (twelve o'clock = the very start, advancing
-clockwise) and frequency radiates outward from the centre (lowest at the
-centre, highest at the outer edge). It's purely a different way of looking
-at, and working with, the exact same data - toggling it never modifies
-your project, and it isn't saved with it (a project always opens back in
-flat view).
+**View → Sound Flower** (`Ctrl+Alt+F`) wraps the canvas into a disk: time
+runs clockwise around the ring from twelve o'clock, and frequency rises from
+the centre outwards. It's another way to look at the same project - it
+changes nothing, and projects always open in the flat view.
 
-Every paint tool, Pick, Selection, Path, and Text still work while
-Sound Flower is active - clicks and drags are automatically translated
-between the disk and the same underlying canvas coordinates flat view
-uses, so a stroke painted on the flower lands in exactly the same place a
-stroke painted on the flat view would. The playback position indicator
-becomes a rotating ray from the centre instead of a moving vertical line.
-A MindWave preview (see [MindWaves](#mindwaves)) warps onto the disk the
-same way the canvas itself does, so it's still visible while you work.
+All the drawing tools work on the flower and land in the same place they
+would in the flat view. The playback position becomes a turning ray, and a
+MindWave preview wraps onto the disk too.
 
-A few things are hidden while Sound Flower is active, rather than drawn
-incorrectly: Overlay Grids, Axis Labels, Show bounding
-boxes/path geometry, and a Rectangle-shaped Pick or Selection's own
-highlight box (a Lasso selection's own curve still shows correctly).
-Snap to Grid is also suspended while it's active. All of this returns
-the moment you switch back to flat view.
+While the flower is shown, Overlay Grids, Axis Labels, bounding boxes and
+path geometry, the analysis overlays and a rectangular Pick or Selection
+outline are hidden, and Snap to Grid is paused. They return in the flat
+view.
 
-### Polar Image Import
+Images that are already flower-shaped can be unwrapped on import - see
+[Polar images](#polar-images).
 
-You can import a source image that's already encoded in polar form - a
-spectrogram exported as a circular flower from elsewhere, or any image
-whose content radiates from a centre point. The Image Import wizard
-un-warps it back to a rectangular layer automatically.
+---
 
-1. Open **File → Import Image...** and choose a single image file (Polar
-   is only offered for a single file - a multi-file import has no one
-   source image to preview or pick against).
-2. In the size-mode list, select **Polar - un-warp a polar/flower-shaped
-   image to rectangular**.
-3. Click **Set origin...**, next to that option, to open the graphical
-   picker.
+# Part 2 - Building a project
 
-The picker shows your source image with four draggable handles:
+## Importing
 
-| Handle | Appearance | What it controls |
-|--------|-----------|-------------------|
-| **Crosshair** | Yellow lines spanning the whole preview | The flower's own centre |
-| **Ring** | Yellow circle, dragged from its own top point | The maximum sampling radius |
-| **Arc start** | Blue square on the ring | Where the unwrapped image's own left edge samples from (0° = twelve o'clock, clockwise) |
-| **Arc end** | Pink square on the ring | Where its own right edge samples from - equal to Arc start means a full circle |
+### Importing audio
 
-Every handle has a matching number field (Origin X/Y, Radius, Arc start/end in
-degrees) kept in sync both ways - drag a handle and its own number field
-updates live; type a value and the handle jumps to match. An **Output
-width** field sets the unwrapped layer's own width in pixels - it starts
-out tracking the radius automatically (roughly enough pixels for square
-arc pixels) until you type a value directly, after which it stays put
-regardless of further radius changes. A duration label next to it shows
-how long the resulting layer will play at your project's own timestep.
+**File → Import Audio...** reads WAV, MP3, FLAC, Ogg, AIFF, M4A and Opus
+files.
 
-Click **OK** in the picker, then **OK** in the wizard, to import. The
-unwrapped result becomes a new layer, exactly like any other image
-import - sized to your project's own canvas height and the output width
-you chose.
-
-## Importing Media
-
-### Importing Audio
-
-**File → Import Audio...** prompts for an audio file - WAV, MP3, FLAC, Ogg,
-AIFF, M4A, or Opus. If it's no longer than your project's Duration, it's
-imported directly as one new layer. If it's longer, it's split into
-consecutive Duration-length snippets and you're shown a list to
-check/uncheck - only the checked snippets become layers, named
-`<filename>_0000`, `<filename>_0001`, and so on.
-
-An **Offset** field above that list discards that much audio off the very
-start before splitting, so the whole split restarts fresh at that point
-instead of the grid always being anchored to the file's own beginning -
-useful for lining up a specific moment in the recording with a snippet
-boundary. Changing it recomputes the list live; every row resets to
-checked, since a changed offset is a genuinely new split.
+- A file no longer than the project's Duration becomes one new layer.
+- A longer file is split into Duration-length **snippets**. A list lets you
+  tick the ones to import; each becomes a layer named `<file>_0000`,
+  `<file>_0001`, and so on.
+- **Offset** skips that much of the start of the file before splitting, so
+  you can line up a particular moment with the start of a snippet. Changing
+  it recomputes the list.
 
 Audio at a different sample rate than the project (a 44.1 kHz file in a
-48 kHz project, say) is converted to the project's rate as it's read, so
-it keeps its pitch and length, and splits into snippets of the right
-duration.
+48 kHz project, say) is converted to the project's rate, keeping its pitch
+and length.
 
-Importing runs in the background - you can keep working while it encodes,
-and a small **✕** button appears in the status bar to cancel it if you
-change your mind; cancelling adds nothing to the project at all, as if it
-had never been started. New/Open Project and closing the Studio are all
-disabled while an import is running, so it always finishes (or gets
-cancelled) against the same project it started with.
+Importing runs in the background - keep working while it encodes, or click
+**✕** in the status bar to cancel, which adds nothing. New Project, Open
+Project and closing the Studio wait until it's done.
 
-### Importing Images
+### Importing images
 
-**File → Import Image...** lets you select one or more image files
-(PNG/JPG/JPEG/BMP/TGA/WebP), then asks how to fit each to the project's
-canvas dimensions:
+**File → Import Image...** reads PNG, JPEG, BMP, TGA and WebP files, one or
+several at a time, and asks how to fit each one to the canvas:
 
-- **Rescale to fit project** - stretched to exactly fill the canvas,
-  ignoring the source's own aspect ratio. The default.
-- **Scale vertically to fit project, keep horizontal resolution** - height
-  matches the canvas; width stays the source's own native pixel width.
+- **Rescale to fit project** (the default) - stretched to fill the canvas
+  exactly.
+- **Scale vertically to fit project, keep horizontal resolution** - the
+  height fits the canvas; the width stays the image's own.
 - **Scale horizontally to fit project, keep vertical resolution** - the
-  mirror of the option above.
+  other way round.
 - **Scale vertically to fit project, rescale horizontal in proportion** -
-  height matches the canvas; width scales to preserve the source's aspect
-  ratio.
-- **Keep native resolution** - no rescaling at all.
+  the height fits, keeping the image's proportions.
+- **Keep native resolution** - no scaling.
 
-If you selected more than one file, an **Import as sequence** checkbox
-also appears. Checking it disables the options above (a sequence always
-scales proportionally) and lays the images out end-to-end in time instead
-of stacking them independently - files are sequenced in alphabetical
-order regardless of the order you selected them in, which makes a set of
-files like `frame001.png`, `frame002.png`, ... land in the right order
-automatically.
+With several files selected, **Import as sequence** places them end to end
+in time on one layer, in alphabetical order (so `frame001.png`,
+`frame002.png`... land in order), instead of one layer each.
+
+#### Polar images
+
+A picture that's already a flower - a polar spectrogram from elsewhere, or
+any image radiating from a centre - can be unwrapped into an ordinary layer:
+
+1. **File → Import Image...** and choose a single image.
+2. Choose **Polar - un-warp a polar/flower-shaped image to rectangular**.
+3. Click **Set origin...** and place the handles on the preview:
+
+| Handle | Looks like | Sets |
+|---|---|---|
+| Crosshair | Yellow lines | The flower's centre |
+| Ring | Yellow circle, dragged from its top | How far out to read |
+| Arc start | Blue square on the ring | Where the layer's left edge is read from (0° = twelve o'clock, clockwise) |
+| Arc end | Pink square on the ring | Where its right edge is read from; the same as Arc start reads the full circle |
+
+Each handle has a matching number field. **Output width** sets the new
+layer's width; it follows the radius until you type a value. The label
+beside it shows how long the layer will play.
 
 ### Importing MIDI
 
-**File → Import MIDI...** prompts for a Standard MIDI File (`.mid`/`.midi`).
-Unlike audio or image import, a MIDI-imported layer stays fully editable
-afterward - every note is Pickable and modifiable, since it's stored as a
-real, non-destructive paint operation rather than a fixed picture.
+**File → Import MIDI...** reads Standard MIDI Files (`.mid`, `.midi`). Every
+note becomes an editable stroke, so you can Pick, move and change notes
+afterwards.
 
-If the file has just one channel and fits within your project's own
-Duration, it imports immediately as one new layer named
-`<filename> - Ch<N> (<instrument name>)` - no picker, nothing to choose.
-Otherwise, a picker lets you:
+A file with one channel that fits the project imports at once, as a layer
+named `<file> - Ch<N> (<instrument>)`. Otherwise a dialog lets you:
 
-- Check which channels to import (each row shows the channel number, its
-  instrument name, and how many notes it has).
-- Choose **Separate layer per channel** (checked by default) to give each
-  channel its own layer, or uncheck it to merge every checked channel into
-  one shared layer instead.
-- Choose **Import whole file** (checked by default) to import each
-  checked channel's entire content as-is, or uncheck it to instead pick
-  specific project-length snippet(s) of a longer file - the same
-  "snippets" concept **Import Audio...** already uses, listed below the
-  checkbox once it's unchecked.
+- tick which channels to import (each shows its instrument and note count);
+- **Separate layer per channel** (on by default), or merge the ticked
+  channels into one layer;
+- **Import whole file** (on by default), or untick it to choose
+  Duration-length snippets, as for audio.
 
-### MIDI Configuration
+#### MIDI Configuration
 
-**MIDI Configuration**, in the **Configure** dropdown, opens a dockable
-panel (off by default) mapping a MIDI instrument (a General MIDI
-program, 0-127) to one of your saved Tool Presets:
+**Configure → MIDI Configuration** decides how each instrument's notes are
+painted. Each row maps a General MIDI program (0-127) to:
 
-- **Add Mapping** - pick a program from the drop-down beside it, then
-  click to add a row for it. Each program can only be mapped once; once
-  added, it disappears from the drop-down.
-- **Tool Preset** - which saved preset that program's notes paint
-  through. Leave it "None" to use the plain default brush (an opaque
-  circular Procedural tip) - the same thing every program used before
-  this panel existed.
-- **Duration Scale** - multiplies how long each note on that program
-  lasts (`2.0` doubles it, `0.5` halves it).
-- **Pitch Offset (st)** - shifts every note on that program up or down
-  by this many semitones (`12` is one octave up, `-12` one octave down).
-- **Delete** - removes that program's mapping, making it paint through
-  the plain default brush again and putting it back in the Add Mapping
-  drop-down.
+- **Tool Preset** - a saved brush its notes paint with; **None** uses the
+  plain default brush.
+- **Duration Scale** - lengthens or shortens its notes (`2.0` doubles them).
+- **Pitch Offset (st)** - transposes its notes by semitones (`12` is an
+  octave up).
 
-Every change here applies immediately - there's no separate save step.
-A mapping is stored with the project and reused automatically the next
-time you import a MIDI file that uses the same program, not just the one
-you had open when you set it up. There's still no way to adjust a note's
-own strength/velocity - nothing in this build's paint model yet
-represents how hard a note was played.
+**Add Mapping** adds a row for the program chosen beside it; **Delete**
+removes a row. Changes apply at once and are saved with the project, so
+every later MIDI import uses them.
 
-### Drag and Drop
+### Drag and drop
 
-Dragging files onto the main window imports/opens them, by extension, with
-the same choices the File menu offers: dropped images show the same
-scaling/sequencing picker **File → Import Image...** does; a dropped audio
-file (WAV, MP3, FLAC, Ogg, AIFF, M4A, or Opus) with more than one computed
-snippet shows the same snippet picker **File → Import Audio...** does, one
-picker per such file; a dropped MIDI file (`.mid`/`.midi`) shows the same
-channel/snippet picker **File → Import MIDI...** does, whenever the file
-actually has more than one channel or snippet to choose from (skipped,
-same as the menu action, for a file with nothing to choose); `.smproj`
-opens that project (after confirming if your current project has unsaved
-changes). Anything else is ignored. **Cancelling any one of these pickers
-cancels the whole drop** - nothing in it is imported or opened, even files
-unrelated to the dialog you cancelled. If a dropped file fails to import
-for some other reason, you'll see a message in the status bar rather than
-a popup, so one bad file in a multi-file drop doesn't interrupt the rest.
+Drop files onto the window to import them: images, audio and MIDI files open
+the same dialogs as the File menu, and a `.smproj` file opens that project
+(after asking about unsaved changes). Other files are ignored. Cancelling any
+dialog cancels the whole drop. If one file fails, the status bar says so and
+the others still import.
 
-## Working with Layers
+## Layers
 
-The **Layers** panel lists every layer, top of the stack first. A **+ Add
-Layer** button above the list adds a new, empty (silent) layer and
-selects it immediately - the only way to get a layer to paint onto from
-scratch, rather than from an import. A second button, **+ Add Filter
-Layer**, adds a Filter layer instead - see
-[Filter Layers](#filter-layers) below. Layer names are kept unique
-automatically - adding or renaming a layer to a name that's already
-taken appends `" (2)"`, `" (3)"`, and so on.
+The **Layers** panel lists every layer, top of the stack first. What you see
+and hear is all the visible layers combined.
 
-Each row's name is shown overlaid on a small preview of that layer's own
-content (a plain background for a layer type with nothing to preview -
-Filter/Background/Equalizer). Any row with real content also shows a
-small **loudness indicator** - `avg X dB / peak Y dB` over the whole
-layer while playback is stopped, switching to a single live `X dB`
-reading at the current position once Playback or Loop starts, and
-freezing at whatever it last showed while paused. This is shown whether
-or not the row is selected. An unselected row shows only that preview,
-the loudness indicator (if any), and a **visibility button** (an open
-eye/crossed-out speaker/closed eye icon) - click it to cycle the layer
-through
-**Visible** (open eye - seen and heard), **Muted** (crossed-out speaker -
-still shown on the canvas, but silent during playback), and **Invisible**
-(closed eye - excluded from both, same as turning visibility off always
-worked); **click a row's name to select it**
-(see [Painting](#painting) below - the selected layer is the one a brush
-stroke paints into) to reveal its full set of controls:
+### The layer list
 
-- A **drag handle** (⠿) to reorder it, or a **lock icon** (🔒) if it can't
-  be reordered or deleted - the **Background** layer (always present,
-  bottom of the stack) and the **Equalizer** layer (always present, top
-  of the stack - see [Filter Layers](#filter-layers) below) are both
-  locked, and show their lock icon whether selected or not.
-- A **type tag**, for any layer type other than the ordinary kind you get
-  from importing.
-- A **Gain** slider (the layer's opacity, 0-100%), a **Balance** slider
-  (pans this layer's own contribution between left and right - centered
-  leaves it completely unchanged; panning either way holds the channel
-  you're panning toward at full strength and fades out only the other
-  one), each with tick marks and a readout beside it ("75%", "C",
-  "L 40%"). Drag freely: the readout follows the handle, and the change
-  is applied when you let go (arrow keys apply straight away). Also an
-  **opacity-MindWave combo** (see [MindWaves](#mindwaves) below),
-  **translation**/**rescale** number fields (see
-  [Layer Timing](#layer-timing) below), and a **Blend Mode** combo (see
-  [Compositing](#compositing) below) - except on the **Background**
-  layer's row, which has none of these: it's always fully opaque and
-  always first in time, so none of them apply to it.
-- A **duplicate** button (⧉), for any layer except the locked one(s) -
-  copies it, and everything about it (content, opacity and its own bound
-  MindWave, blend mode, translation/rescale, filter configuration), into
-  a new layer, named uniquely and selected immediately.
-- A **clean up phase** button (✦), for any selected layer that actually
-  has content - zeroes out phase data anywhere the layer is already
-  silent (both left and right channels below the display floor).
-  Imported audio's own silent stretches often decode with random,
-  meaningless phase that shows up as visual noise on the canvas despite
-  being completely inaudible; this clears it without touching any cell
-  that actually carries sound. A one-time cleanup, not an ongoing effect:
-  whatever was painted on the layer becomes part of it. Undo (Ctrl+Z)
-  takes it back.
-- A **delete** button (×), for any layer except the locked one(s) - also
-  appears just by hovering over the row, even without selecting it first,
-  so it's never more than a click away. Deleting a layer deletes
-  everything painted on it. If Mind Grain strokes on other layers read
-  from it, you're asked whether to delete those strokes too or cancel. To keep a layer's content but get
-  it out of the way, hide it instead.
-- An **edit filter** button (⚙), always visible (no need to select the
-  row first) on any **Filter** or **Equalizer** layer - jumps straight to
-  that layer's own configuration, selecting it and opening the Filter
-  Configuration panel if it isn't already open. See
-  [Filter Layers](#filter-layers) below.
+Above the list:
 
-Double-clicking a row's name renames it, whether the row is currently
-selected or not. A layer whose opacity is bound to a MindWave shows a
-smaller, indented row directly beneath it, with that MindWave's own
-grayscale preview.
+- **+ Add Layer** adds an empty layer to paint on.
+- **+ Add Filter Layer** adds a [Filter layer](#filter-layers).
+- **+ Generate Layer** adds a layer filled by a generator (see
+  [Generated layers](#generated-layers)).
 
-**Right-click any layer's row** for **Hide other layers** - hides every
-other layer in the project, remembering each one's own exact prior state
-(a layer that was already Muted comes back Muted, not fully Visible).
-Once used, the same menu also offers **Unhide other layers**, restoring
-them all in one step; both are undoable as a single step too.
+Every project has two fixed layers, marked with a lock: the **Background**
+at the bottom, and the **Equalizer** at the top (see
+[The Equalizer](#the-equalizer)). They can't be moved or deleted.
 
-**Keyboard shortcuts** (Edit → Layers menu) work without touching the mouse:
-**Page Up**/**Page Down** select the layer above/below the currently
-selected one; **Shift+Page Up**/**Shift+Page Down** move the selected
-layer up/down one position in the stack; **Ctrl+Page Up**/**Ctrl+Page
-Down** nudge its opacity up/down by 5%. Each is a no-op where it doesn't
-apply - nothing selected, already at the top/bottom of the stack, or
-blocked by the locked Background/Equalizer layer.
+Each row shows the layer's name over a small preview of its content, and a
+**loudness reading** (`avg -18 dB / peak -6 dB` while stopped; the level at
+the playback position while playing). The **eye button** cycles the layer
+through:
 
-### Generating a Layer
+- **Visible** (open eye) - seen and heard;
+- **Muted** (speaker crossed out) - seen, not heard;
+- **Invisible** (closed eye) - neither.
 
-**+ Generate Layer** (in the Layers panel) adds a new layer filled by a
-generator - an ordinary layer afterwards, fully paintable and filterable.
-Pick the **Generator**, set its options, and click OK. Every generator
-takes a **Seed**: the same seed always reproduces exactly the same result
-(**Randomize** picks a new one).
+**Click a layer's name to select it.** The selected layer is the one you
+paint, fill and paste onto, and its row opens to show its controls:
 
-- **Lattice** - an organic, self-similar texture. The **Chaos ↔ Order**
-  slider runs from broadband noise (Chaos) through rich, coherent texture
-  (the middle) to smooth, rigid structure (Order).
-- **Fractal** - a branching tree of tones: one long tone across the canvas,
-  with branches sprouting from it at musical intervals, and branches from
-  those, each a little quieter. The **Chaos ↔ Order** slider sets how
-  orderly it is: toward Order, branches split evenly at octaves, fifths and
-  thirds and hold their pitch - a rigid, repeating shape; toward Chaos,
-  they sprout at random moments and intervals and slide in pitch; in
-  between, the branching melodic shapes it's meant for.
-- **Streaming** - eight voices that keep changing over the whole length of
-  the layer, each gliding around its own register and swelling and fading,
-  all pushing and pulling on each other. Toward **Order** they settle into
-  a steady drone; around the middle they keep evolving without losing
-  shape; toward **Chaos** they wander restlessly.
-- **Noise** - colored noise across the whole canvas:
-  - **Color** - **White** (equal energy at every frequency), **Pink**
-    (equal energy per octave - the most natural-sounding), **Red /
-    Brownian** (deeper, bass-heavy), **Purple / Violet** (bright,
-    treble-heavy), **Gray** (sounds equally loud at every frequency - reads
-    flat on the canvas), or **Custom spectrum**.
-  - **Level** - how loud the noise reads at 1 kHz (for Gray, everywhere),
-    in dB or as a 0-1 value.
-  - **Horizontal / Vertical resolution** - how many time columns /
-    frequency rows one noise "cell" spans: 1 is fine-grained hiss; larger
-    values give blockier, slower-changing noise.
+- **Drag handle** (⠿) - drag to reorder.
+- **Gain** - the layer's level, 0-100%.
+- **Balance** - pans the layer left or right. Centred leaves it unchanged;
+  panning keeps the side you pan towards at full level and fades the other.
+- **MindWave** - lets a [MindWave](#mindwaves) vary the layer's gain across
+  the canvas (it multiplies the Gain setting).
+- **Translation** and **Rescale** - see [Layer timing](#layer-timing).
+- **Blend Mode** - see [Blending](#blending).
+- **Duplicate** (⧉) - copies the layer with everything about it.
+- **Clean up phase** (✦) - removes the random phase noise imported audio
+  often has in its silent parts, which shows as speckle but can't be heard.
+  Nothing audible changes.
+- **Delete** (×, also shown when you hover over a row) - deletes the layer
+  and everything painted on it. If Mind Grain strokes elsewhere read from
+  it, you're asked what to do with them. To keep a layer but get it out of
+  the way, hide it instead.
+- **Edit filter** (⚙, on Filter layers and the Equalizer) - selects the
+  layer and opens Filter Configuration.
+
+The Background layer has no Gain, Balance, MindWave, timing or Blend Mode
+controls: it's always fully present and always first.
+
+Double-click a name to rename it; names are kept unique by adding " (2)",
+" (3)" and so on. A layer whose gain follows a MindWave shows that
+MindWave's preview in a small row beneath it.
+
+**Right-click a row** for **Hide other layers**, which hides every other
+layer and remembers how each one was; **Unhide other layers** restores them.
+
+**Keyboard** (also in **Edit → Layers**): **Page Up** / **Page Down** select
+the layer above or below; **Shift+Page Up** / **Shift+Page Down** move the
+selected layer; **Ctrl+Page Up** / **Ctrl+Page Down** raise or lower its gain
+by 5% (the menu calls these Increase and Decrease Layer Opacity).
+
+### Blending
+
+**Blend Mode** decides how a layer combines with the layers beneath it:
+
+- **Normal** (the default) - layers add together like instruments playing at
+  once: two layers at full gain both come through in full. Gain is the
+  layer's volume in that mix.
+- **Overwrite** - replaces what's beneath, in proportion to Gain (100%
+  replaces it entirely; 0% leaves it untouched).
+- **Multiply**, **Screen**, **Overlay**, **Difference** and **Add** - the
+  familiar image-editor blend modes, combining a layer with what's beneath
+  it the way an image editor would.
+
+A layer's gain and blend mode affect only that layer.
+
+### Layer timing
+
+- **Translation** - moves a layer's content earlier (negative) or later
+  (positive), in canvas columns.
+- **Rescale** - stretches (above `1.0x`) or squeezes (below) a layer's
+  timeline, to match the pace of two clips.
+
+Both change what you hear as well as what you see, in Playback, Loop Mode
+and every export.
+
+### Generated layers
+
+**+ Generate Layer** fills a new layer from a generator; afterwards it's an
+ordinary layer you can paint on and filter. Choose the **Generator**, set its
+options and click **OK**. Every generator takes a **Seed** - the same seed
+always gives the same result; **Randomize** picks a new one.
+
+- **Lattice** - an organic, self-similar texture. **Chaos ↔ Order** runs from
+  broadband noise, through rich texture, to smooth, rigid structure.
+- **Fractal** - a branching tree of tones: one long tone with branches at
+  musical intervals, and branches from those, each a little quieter. Towards
+  **Order** the branches split evenly at octaves, fifths and thirds and hold
+  their pitch; towards **Chaos** they sprout at random and slide.
+- **Streaming** - eight voices that keep changing over the whole layer,
+  gliding and swelling, pulling on each other. Order gives a steady drone,
+  the middle keeps evolving, Chaos wanders.
+- **Noise** - coloured noise over the whole canvas:
+  - **Color** - **White** (equal energy at every frequency), **Pink** (equal
+    per octave, the most natural-sounding), **Red / Brownian** (bass-heavy),
+    **Purple / Violet** (treble-heavy), **Gray** (equally loud to the ear at
+    every frequency) or **Custom spectrum**.
+  - **Level** - how loud it is at 1 kHz (everywhere, for Gray).
+  - **Horizontal / Vertical resolution** - how many columns and rows one
+    noise cell covers: 1 is fine hiss, larger is blockier and slower.
   - **Custom spectrum** - draw the noise's shape with the gradient editor
-    (lowest frequency at the left, highest at the right; each stop's left
-    and right intensity are the two channels' levels).
-  - **MindWave bindings** - next to each resolution, and under the custom
-    spectrum, pick a MindWave to vary it across the canvas: where the
-    MindWave reads 0, the resolution is the finest (1) or the custom
-    spectrum is silent; where it reads 1, it's the value you set. Binding
-    the custom spectrum to a time-axis MindWave makes the noise swell and
-    fade over time.
+    (low frequencies on the left).
+  - **MindWave** bindings next to each resolution and under the custom
+    spectrum vary them across the canvas. Binding the custom spectrum to a
+    time-axis MindWave makes the noise swell and fade.
 
-### Compositing
+## Filter Layers
 
-Every visible layer with content contributes to what the canvas shows
-and Playback plays. **Blend Mode** (a drop-down on each layer's own row,
-except Background) chooses how: **Normal** mixes layers together rather
-than one covering another - two layers at full opacity both come through
-in full, exactly like two instruments or voices sounding at once; a
-layer's own **Opacity** slider acts as its own volume in that mix, from
-silent (`0%`) to full strength (`100%`), rather than making it "more
-see-through" the way opacity works in an image editor. **Overwrite**
-replaces whatever's beneath a layer set to this mode, faded by that
-layer's own Opacity the same way every other blend mode is - full Opacity
-replaces it entirely, `0%` leaves it untouched, and values in between mix
-the two proportionally. **Multiply**,
-**Screen**, **Overlay**, **Difference**, and **Add** are the familiar
-image-editor blend modes, each combining a layer with what's beneath it
-by the same formula an image editor would, rather than summing real
-acoustic energy the way Normal does. Turning a layer's opacity down, or
-changing its blend mode, never affects any other layer - each one mixes
-in independently. Every layer defaults to Normal, matching how
-compositing has always worked.
+A **Filter layer** holds no sound of its own. It takes every visible layer
+beneath it - down to the next Filter layer, if there is one - and reshapes
+the result. Moving a Filter layer up or down changes what it affects. A
+Filter layer with nothing visible beneath it does nothing.
 
-### Layer Timing
+### Adding and configuring a filter
 
-Two more controls, useful once you have multiple layers you want to line
-up in time:
+Click **+ Add Filter Layer** in the Layers panel. Selecting a Filter layer
+opens **Filter Configuration** with its settings. The panel can also be
+opened from **Configure** before any Filter layer exists: dial in a filter
+first, then click **+ Add Filter Layer**, and the new layer starts with those
+settings.
 
-- **Translation** - shifts a layer's content earlier or later, in
-  spectrogram columns (roughly proportional to time - the exact column
-  width depends on your project's Timestep). Positive moves it later,
-  negative moves it earlier.
-- **Rescale** - stretches (`>1.0x`) or compresses (`<1.0x`) a layer's own
-  timeline, for matching the pacing of two clips that don't quite line
-  up.
+At the top of the panel:
 
-Both affect Playback too, not just what the canvas shows - a layer's
-translation/rescale shifts where its own content lands before mixing
-into the composite, so "lining up" two layers visually is exactly what
-you'll hear lined up as well, in Playback, Loop Mode and every export.
+- **Filter Preset** - **Save...** stores the whole configuration under a
+  name (if the name is taken you can replace the old one, choose another
+  name, or cancel); choosing a preset from the drop-down loads it. Saved
+  presets also appear in the [Resource Browser](#resource-browser), where
+  they can be shared as `.smfilter` files. Under the row, "Preset: <name>"
+  shows which preset is loaded, and turns orange with "* (modified)" once
+  you change something.
+- **Loop Preview** - tune a filter by ear. A few seconds loop with the
+  filter applied - your selection's time range if you have one, otherwise
+  about 4 seconds from the playback position - and every change is heard on
+  the next time round. What you hear:
+  - with a Filter or Equalizer layer selected: the whole project, with that
+    layer using the settings you're adjusting;
+  - otherwise, with a canvas selection: the filter inside the selection,
+    as **Apply Filter to Selection** would do it;
+  - otherwise: the filter over the whole mix.
 
-### MindWaves
+  Click again to stop. Starting playback or opening another project stops
+  it too.
+- **Filter Type** - which filter. A new Filter layer starts as
+  **Frequency-Axis Gradient**. Each type shows only its own settings, and
+  switching types keeps what you'd entered for the others.
 
-The **MindWaves** panel (toggle it from the **Configure** dropdown) manages a small
-library of reusable waveforms - each one a shape that varies across the
-canvas (over time, over frequency, or both) rather than a single fixed
-number. A MindWave can bind to a **layer's own opacity** (instead of a
-flat volume, the layer fades in and out following the MindWave's own
-shape as it plays) or to one of a **Filter layer's own scalar
-parameters** (see [Filter Layers](#filter-layers) below) - in both cases
-the bound value varies across the canvas following the MindWave's own
-shape instead of staying fixed.
+### Filter types
 
-- **+ Add MindWave** creates a new one with a sensible default (a plain,
-  audible sine wave) and selects it. Double-click a MindWave's name to
-  rename it (renaming to a name another MindWave already has offers
-  Replace/Rename/Cancel, like every other saved resource in this app -
-  Replace here means the *other* MindWave with that name goes away,
-  replaced by this one); the **×** button deletes it.
-- Every MindWave-binding drop-down (a layer's own Opacity MindWave, any
-  Instrument/Filter parameter binding) also offers **Create New
-  MindWave...** at the bottom of its list - picking it creates a new
-  MindWave the same way **+ Add MindWave** does, binds it immediately,
-  and brings this panel into view so you can shape it right away, without
-  switching over to this panel first. The option's drop-down then shows
-  the new MindWave as selected.
-- Every row shows a small grayscale mini-preview of its own field,
-  always on - regardless of selection, and independent of the Preview
-  toggle below (which does something different - see its own entry). The
-  same small thumbnail the Layers panel already shows for a layer with a
-  MindWave-bound opacity.
-- **Preview** shows the currently selected MindWave's own field directly
-  on the canvas, as a live grayscale overlay (black where it's 0, white
-  where it's 1) - updating instantly as you change its generator type
-  or parameters, and as you select a different
-  MindWave while Preview stays on. A judgment aid only - it never affects
-  the actual composite, and switches off automatically when you open or
-  create a different project, or when you close this panel.
-- Selecting a MindWave shows its own editor: a **Generator Type** (Periodic,
-  Envelope, Stepped/Noise, Spatial, Fractal, Drawn, Step Grid, Continuous,
-  Resonance, or Noise), then that type's own settings, then the shared
-  ones it uses:
-  - **Axis & Timing** - which axis the wave runs along, and its
-    **Period**.
-  - **Randomness** - the **Seed** and **Noise Scale**, for the random
-    shapes.
-  - **Advanced** (click to open) - **Phase** (one cycle is 0 to 6.283
-    radians), **Noise Octaves** and **Noise Persistence**, and **Reversed**
-    (run the wave backwards, e.g. a decay becomes a build-up) and
-    **Inverted** (flip the result, so loud becomes quiet).
+| Filter | What it does | Settings |
+|---|---|---|
+| **Frequency-Axis Gradient** | Pushes each frequency's loudness towards a target, following a gradient from low (left) to high (right) frequencies. A new one does nothing until you raise an Opacity. | A gradient editor (see below): **Intensity** is the target loudness, **Opacity** how strongly to push (`0` none, `1` all the way). **Link Channels** edits left and right together. |
+| **Uniform Blur** | Softens evenly in every direction. | **Sigma** (strength) |
+| **Edge-Preserving Blur** | Softens without smearing across sharp edges. | **Size** |
+| **Directional Blur** | Softens along one direction. | **Length**, **Angle** (0° along time, 90° along frequency) |
+| **Sharpen** | Tightens detail. | **Amount** |
+| **Tone Curve** | Remaps loudness through a curve you draw: click to add a point, drag to move it, double-click to remove it. Starts as a straight line (no change). | The curve |
+| **Speckle Add** | Boosts a scattering of cells towards full loudness. The pattern stays fixed unless you change the settings or the content beneath. | **Density**, **Intensity** |
+| **Speckle Remove** | Removes isolated loud or quiet flecks without softening real detail. | **Threshold** |
+| **Denoise** | Turns down everything below a loudness floor. | **Noise Floor**, **Reduction** |
+| **Bit-Depth Crush** | A crunchy, lo-fi effect that steps loudness into fewer levels. | **Amount** (`0` none) |
+| **Granular Noise** | Adds a coarse, blocky noise texture. Fixed like Speckle Add. | **Grain Size**, **Grain Amount** |
+| **Dynamic Speckle** | Like Speckle Add, but the pattern changes on every redraw - a flickering texture. Shares Speckle Add's settings. | **Density**, **Intensity** |
+| **Feedback Distortion** | A resonant, ringing smear along time. | **Amount** |
+| **Spectral Wavefold** | A wavefolder: folds loudness back on itself for a harsh, dense sound. | **Fold Gain** (`1` none) |
+| **Channel Balance** | Moves loudness between left and right. `0.5` leaves a balanced sound unchanged. | **Balance** (`0` all left, `1` all right) |
+| **Invert** | Quiet becomes loud and loud becomes quiet. | None |
+| **Convolve** | Applies a hand-edited convolution kernel (see below). | **Preset**, **Kernel Size**, the grid, **Normalize**, **Amount** |
+| **Displace** | Shifts content in a direction, blending smoothly between cells. | **Distance**, **Angle** |
+| **Channel Cycle** | Rotates left loudness, right loudness and phase into each other - a wild, glitchy effect. | **Angle** (`0`/`360`° none; each `120`° is one full step) |
+| **Spectral Reverb** | Extends sound through time like a room. | **Pre-Delay** and **Decay** (in frames), **Room Size** (shortens the decay), **Diffusion** (smoother tail), **Absorption** (damps highs faster), **Mix** (`0` dry, `1` fully wet) |
+| **Downsample** | Pixelates over square blocks. | **Mode** (**Block Hold** for hard edges, **Block Average** for a softer look), **Block Size** (`1` none) |
 
-  Only the settings the chosen type and shape actually use are shown -
-  for example **Duty Cycle** appears only for a Pulse wave, and the
-  Randomness group only for random shapes. Each slider covers a useful
-  range (Period up to a minute on the Time axis, or 512 bins on the
-  Frequency axis); type into the field for anything beyond it. Periodic
-  offers a **Rectified Sine** shape, and Envelope offers **Peak (Bell)**
-  and **Ramp**.
-- **Drawn** shapes come from a curve you draw yourself, rather than a
-  formula: draw an ordinary stroke anywhere on the canvas, switch to Pick
-  and select it, then choose **Edit → Picked Path Tools → Use Picked Path as
-MindWave Shape**
-  - this applies the picked curve to whichever MindWave is currently
-  selected in this panel, switching its own Generator Type to Drawn along
-  the way. The shape then loops using the same **Period** control every
-  other generator type has, independent of how long the stroke itself took
-  to draw, and its own lowest/highest points always map to the field's own
-  `0`/`1` range regardless of where on the canvas you drew it. The Drawn
-  editor itself shows only a status line (how many points were captured,
-  or instructions if nothing has been yet) - there's nothing else to type
-  numbers into for this generator type.
-- **Step Grid** cycles through a hand-typed list of values instead of a
-  formula or a drawn curve: a **Steps** number field sets how many, and each
-  one gets its own plain value box (`0`-`1`) below it - a fresh Step Grid
-  starts with four steps rising from `0.25` to `1.0`. Loops using the same
-  **Period** control every other generator type has, one equal-length
-  segment per step. There's no visual grid to click on yet - just the
-  numbered list of value boxes.
-- **Continuous** offers three controls instead of picking a generator
-  type by hand: **Shape** sweeps from a clean sine cycle (`0`) toward
-  fractal noise (`1`); **Skew** biases the cycle earlier or later (`0.5`
-  is no bias); **Character** layers fine turbulence on top, independent of
-  Shape - it does something even at Shape `0`. Each one has both a real
-  turnable dial (drag up/down to adjust by ear) and an exact numeric field
-  beside it - edit either one and the other updates to match. A live
-  preview graph above all three plots the actual resulting shape, updating
-  as you turn any dial or the shared Period/Phase fields above them. All
-  three values are saved with your project, so reopening one shows them
-  exactly where you left them.
-- **Resonance** repeats a captured Resonance profile's own spectrum
-  shape once per period, the same way Step Grid repeats a hand-typed list -
-  a **Resonance Profile** drop-down picks which captured profile to use (see
-  [Pick](#pick)'s "Create Resonance from Picked Path..." for how
-  to capture one). With nothing picked yet, or nothing captured in the
-  project at all, the generator produces a flat neutral value instead.
-- **Noise** fills the canvas with cells of random values - **Cell Width**
-  (seconds) and **Cell Height** (frequency rows) set how coarse they are.
-  The **Color** decides how the values move from one cell to the next along
-  the MindWave's axis: **White** jumps freely, **Pink** wanders, **Red /
-  Brownian** drifts slowly and smoothly, **Purple / Violet** flickers back
-  and forth, and **Custom slope** lets you dial anywhere from -2 (red)
-  through 0 (white) to +2 (purple). The **Seed** picks which random values
-  you get.
-- **Warp**, in its own group below, lets one MindWave distort the position
-  another is sampled at, giving a wavier, less mechanically regular result
-  than either shape alone - check **Enable Warp** to reveal a **Strength**
-  number field and a nested editor for the warp source ("Warped by"), with
-  its own generator type and settings, edited the same way as a top-level
-  MindWave. Higher strength values push the distortion further; unchecking
-  Enable Warp hides these again and removes the warp entirely.
-- Back in the **Layers** panel, each row's opacity-MindWave combo lets you
-  bind that layer's opacity to any MindWave in the library, or set it back
-  to **None** for a plain, fixed opacity. A binding multiplies the layer's
-  own opacity slider by the MindWave's own shape at every point - it
-  doesn't replace the slider, so both still matter together.
+**Convolve** in detail:
 
-### Filter Layers
+- **Preset** drops a classic kernel into the grid (Identity, Sharpen, Edge
+  Detect, Emboss, Box Blur, Gaussian Blur, Sobel X, Sobel Y), ready to edit.
+- **Kernel Size** sets the grid's size (always odd); changing it starts a
+  fresh grid.
+- Each grid cell is the weight of one neighbouring cell.
+- **Normalize** scales the kernel so a blur doesn't brighten or darken.
+- **Save As New Kernel** stores the grid under a name for reuse in any
+  Filter layer or project; **Load Saved Kernel** copies a saved one into the
+  grid.
 
-A **Filter layer** doesn't hold its own painted content - instead, it
-composites every visible layer beneath it (down to the next Filter layer
-below it, if there is one) and reshapes the result. Click **+ Add Filter
-Layer** to add one; it's tagged **Filter** in its own row, and selecting
-it (click its name, the same as any other layer) opens the **Filter
-Configuration** panel with its own controls.
+**MindWave bindings.** Most filter settings have a **MindWave** drop-down
+beside them. Binding one makes that setting vary across the canvas,
+following the MindWave: the number you set is the setting's value where the
+MindWave is at its peak. Settings that work on a whole neighbourhood at once
+- Kernel Size, Grain Size, and Spectral Reverb's Pre-Delay, Decay, Room Size,
+Diffusion and Absorption - can't be bound.
 
-The Filter Configuration panel (also reachable directly from the
-**Configure** dropdown) is available even before you've added a
-Filter layer at all - dial in the settings you want first, then click
-**+ Add Filter Layer**, and the new layer lands already configured that
-way rather than starting from scratch. Whatever you last set stays in
-place for the *next* Filter layer too, so adding several in a row can
-start each one from the same settings.
+**The gradient editor** (used by Frequency-Axis Gradient, the Equalizer,
+brushes and Fill Selection): click a stop on the bar to select it and edit
+its **Left/Right Intensity** and **Left/Right Opacity** below; double-click
+the bar to add a stop; drag a stop to move it; **Delete Stop** removes the
+selected one. The two end stops can't be moved or deleted.
 
-**Loop Preview** (just under the Filter Preset row) lets you tune a filter
-by ear. Click it and a few seconds loop over and over with the filter
-applied: your selection's time range if you have one, otherwise about 4
-seconds from the playback position. Every change you make in the panel is
-heard from the next time round the loop. What you hear depends on what's
-selected:
+### The Equalizer
 
-- **A Filter (or Equalizer) layer selected** - the whole project, with that
-  layer using the settings you're dialling in: exactly what playback will
-  sound like.
-- **Otherwise, with a canvas selection** - the filter applied inside the
-  selection only, the way **Apply Filter to Selection** would, but without
-  changing anything until you actually apply it.
-- **Neither** - the filter applied to the whole mix, as if a Filter layer
-  sat at the top.
+Every project has one special Filter layer, the **Equalizer**, locked at the
+top of the stack. It starts with no effect. Selecting it opens Filter
+Configuration in Equalizer mode:
 
-Click **Loop Preview** again to stop. Starting normal playback, or opening
-another project, stops it too.
+- a gradient bar whose stops have **Left Cut** and **Right Cut** (`0` leaves
+  that frequency alone, `1` silences it) - the Equalizer only ever cuts;
+- a **vertical EQ curve** beside it, lined up with the canvas (high at the
+  top). Drag a point up or down to move it, click to add one, double-click
+  to remove one. The curve and the gradient bar are the same thing, shown
+  two ways;
+- **Preview on Canvas**, which darkens the canvas where the Equalizer cuts.
+  It stays on for the session.
 
-The Tool, Filter and Grid panels all show the **active preset** just under their preset row: "Preset: <name>" after you load or save one, and "Preset: <name> * (modified)" in orange as soon as you change any setting afterwards.
+## MindWaves
 
-A **Filter Preset** row sits above the Filter Type dropdown - **Save...**
-stores the panel's own current, complete configuration (whichever type is
-selected, with every one of its own settings) under a name you choose
-(if that name is already taken, you're asked to Replace the existing
-preset, pick a different name, or cancel), and the drop-down beside it
-lists every Filter Preset you've saved;
-picking one loads it immediately (switching Filter Type if needed) and
-the drop-down resets to its own placeholder, ready to pick again. Saved
-presets also show up in the **Resource Browser**'s own Filter Preset
-category, where they can be exported to a `.smfilter` file and imported
-into another project.
+A **MindWave** is a reusable shape that varies across the canvas - over
+time, over frequency, or both - with values from 0 to 1. Binding a MindWave
+to a setting makes that setting follow the shape instead of staying fixed.
+You can bind MindWaves to:
 
-The Filter Configuration panel starts with a **Filter Type** dropdown -
-every new Filter layer starts as **Frequency-Axis Gradient**. Choosing a
-different type shows only that type's own controls below the dropdown;
-switching back and forth doesn't lose whatever you entered into a
-group's own controls while it was hidden.
+- a layer's **Gain** ([Layers](#layers));
+- most **filter settings** ([Filter Layers](#filter-layers));
+- a brush's **Opacity**, **Size** and **Color**, and an Instrument brush's
+  **Vibrato** and **Tremolo** ([Painting](#painting));
+- a generated noise layer's resolution and spectrum
+  ([Generated layers](#generated-layers)).
 
-- **Frequency-Axis Gradient** shows a draggable gradient bar spanning
-  low frequency (left) to high frequency (right), the same gradient
-  editor Painting's own brush and Fill Selection use: click a stop on
-  the bar to select it and edit its **Left Intensity**/**Left
-  Opacity**/**Right Intensity**/**Right Opacity** below, double-click
-  anywhere on the bar to add a new stop there, and drag an interior stop
-  left/right to move it (the two endpoint stops, at the far left/right,
-  can't be moved or deleted - **Delete Stop** is disabled while one of
-  them is selected). At each frequency, the composite's own loudness
-  blends toward the nearest stops' own interpolated Intensity, by their
-  interpolated Opacity (`0` leaves it untouched, `1` forces it all the
-  way to Intensity). **Link Channels** mirrors every edit onto both
-  Left/Right fields at once, for the common case of an identical stereo
-  effect. A fresh Filter layer starts fully transparent (every stop at
-  `0` opacity) - it does nothing until you raise an Opacity.
-- **Uniform Blur** softens evenly in every direction - one **Sigma**
-  control (the blur's own strength, in bins/columns).
-- **Edge-Preserving Blur** softens without smearing across a sharp
-  boundary the way Uniform Blur would - one **Size** control (the
-  window's own size, in bins/columns).
-- **Directional Blur** softens along one direction only - **Length**
-  (how far the smear reaches) and **Angle** (0° smears along time,
-  90° along frequency).
-- **Sharpen** is Blur's own opposite, tightening detail instead of
-  softening it - one **Amount** control (higher pushes further).
-- Each of those five controls (**Sigma**, **Size**, **Length**, **Angle**,
-  **Amount**) has its own MindWave combo right beside its number field - the
-  same **None**-or-pick-a-MindWave choice as a layer's own opacity
-  binding (see [MindWaves](#mindwaves) above), but with a genuinely
-  different effect here: binding one of these varies *that filter's own
-  parameter* across the canvas, so the filter itself computes a different
-  blur/sharpen at every cell instead of applying one fixed strength
-  everywhere. The number field still sets that parameter's ceiling value
-  (what the MindWave's own peak maps to); **None** leaves it at a flat,
-  unvarying value the way it always worked before.
-- **Tone Curve** remaps loudness through a curve you draw yourself: click
-  anywhere on the curve area to add a point, drag a point to move it, and
-  double-click a point (other than the two fixed endpoints) to remove it.
-  The curve always passes exactly through every point, smoothly and
-  without overshooting past a point's own neighbors, however steep the
-  curve gets between them. A fresh Filter layer of this type starts as a
-  straight diagonal line (input equals output - no effect) until you
-  drag a point.
-- **Speckle Add** randomly boosts a scattering of cells toward full
-  loudness - **Density** (how many cells get hit) and **Intensity** (how
-  far they jump toward full loudness when hit). The pattern is fixed for
-  a given Filter layer - it won't change on its own from one repaint to
-  the next, only if you touch these controls or the content underneath.
-- **Speckle Remove** cleans up isolated loud/quiet flecks without
-  softening real detail the way Edge-Preserving Blur would - one
-  **Threshold** control (how far a cell has to stand out from its own
-  immediate surroundings before it's corrected).
-- **Denoise** quietens anything below a loudness floor - **Noise Floor**
-  (the threshold) and **Reduction** (how much quieter anything below it
-  gets).
-- **Bit-Depth Crush** is a lo-fi, "crunchy" quantization effect - one
-  **Amount** control (`0` is no effect at all; higher values quantize
-  loudness into fewer and fewer discrete steps).
-- **Granular Noise** overlays a coarse, blocky noise texture - **Grain
-  Size** (how big each block is) and **Grain Amount** (how loud the
-  texture is). Like Speckle Add, its own pattern stays fixed until you
-  change these controls or the content underneath.
-- **Dynamic Speckle** is Speckle Add's live counterpart - the same
-  **Density**/**Intensity** controls (editing either Speckle Add's or
-  Dynamic Speckle's own copy updates both, since they're the same
-  setting), but the pattern genuinely re-randomizes on every repaint
-  instead of staying put - a flickering, static-like texture rather than
-  a fixed one.
-- **Feedback Distortion** pushes a passage into a resonant, decaying
-  smear along time - one **Amount** control (higher rings/smears longer).
-- **Spectral Wavefold** is a classic wavefolder distortion - one **Fold
-  Gain** control (`1` is no effect; higher values fold loudness back on
-  itself repeatedly for a harsher, more harmonically dense sound).
-- **Channel Balance** redistributes loudness between the left and right
-  channels - one **Balance** control (`0` sends everything to the left
-  channel, `1` to the right; `0.5` leaves an already-balanced signal
-  untouched, but isn't a no-op if the two channels differ - loudness is
-  redistributed from their shared total, not scaled independently).
-- **Invert** flips loudness inside out - quiet becomes loud, loud becomes
-  quiet. No controls of its own.
-- **Convolve** applies an arbitrary, hand-edited convolution kernel over
-  the spectrogram:
-  - **Preset** picks one of eight classic starting kernels (Identity,
-    Sharpen, Edge Detect, Emboss, Box Blur, Gaussian Blur, Sobel X, Sobel
-    Y) and drops it straight into the grid below, ready for further
-    hand-editing - it's a one-time starting point, not a sticky choice,
-    so the dropdown resets itself right after.
-  - **Kernel Size** sets the grid's own side length (always odd - an even
-    value rounds up); changing it replaces the current kernel with a
-    fresh, blank (identity) one of the new size rather than trying to
-    preserve the old values.
-  - The grid itself is a size-by-size block of editable cells - each one
-    a coefficient the corresponding neighboring pixel is weighted by.
-  - **Normalize** divides the kernel by the sum of its own positive
-    coefficients first, so a pure-positive kernel (a blur) doesn't
-    brighten or darken the image overall.
-  - **Amount** is a dry/wet mix - `0` is no effect regardless of the
-    kernel, `1` is the fully convolved result.
-  - **Save As New Kernel** asks for a name (defaulting to "Kernel 1",
-    "Kernel 2", and so on, still editable; a name that's already taken
-    offers Replace/Rename/Cancel the same way Filter Preset's own Save...
-    does) and stores the current grid permanently under it, for reuse
-    later - on this Filter layer, a different one, or a different project
-    entirely. **Load
-    Saved Kernel** drops a previously saved kernel's own values into the
-    grid (again, a one-time copy you can keep editing, not a live link -
-    editing it afterward doesn't change the saved copy, and deleting the
-    saved copy later wouldn't affect this Filter layer).
-- **Displace** shifts content sideways from a source position - **Distance**
-  (how far) and **Angle** (`0`° shifts along time, `90`° along frequency),
-  smoothly blended between cells rather than jumping in whole steps.
-- **Channel Cycle** continuously rotates left loudness, right loudness, and
-  phase into each other - one **Angle** control (`0`°/`360`° is no effect;
-  every `120`° is one full step of the rotation, with anything in between
-  blending smoothly). This is a wild, glitchy creative effect - the result
-  won't sound or look like a "corrected" version of the original, and
-  that's the point.
-- **Spectral Reverb** extends a sound through time the way a physical
-  space would:
-  - **Pre-Delay** and **Decay** (both in frames) shape the reverb tail's
-    own timing - Pre-Delay is a gap before the tail begins, Decay is how
-    long the tail itself takes to fade out.
-  - **Room Size** scales Decay down - a smaller room decays faster than
-    the full configured length.
-  - **Diffusion** smears the tail across nearby frequencies, for a
-    smoother, less metallic-sounding reverb.
-  - **Absorption** damps higher frequencies faster than lower ones, the
-    way a real room's own walls and air would.
-  - **Mix** blends the reverberated result back in with the original -
-    `0` is no effect at all, `1` is fully wet.
-- **Downsample** is a "pixelate" effect - reduces effective resolution
-  over square blocks:
-  - **Mode** picks how a block's own value is chosen: **Block Hold** reads
-    the block's own top-left corner cell, for the classic, hard-edged
-    blocky look; **Block Average** takes the mean of the block's own
-    cells instead, for a smoother, more "lo-fi resample" feel.
-  - **Block Size** sets how big each block is, in bins/columns - `1` is no
-    effect at all.
+Every MindWave drop-down also offers **Create New MindWave...**, which
+creates one, binds it, and opens the MindWaves panel so you can shape it.
 
-Every one of the twenty-one designed filter types now has a real, working
-algorithm, completing this milestone. Every one of them except Invert (no
-parameters of its own) also has at least one MindWave-binding combo, the
-same "None" or any MindWave `setAvailableMindWaves()` currently lists you
-already know from Sigma/Size/Length/Angle/Amount above - Speckle Add's and
-Dynamic Speckle's Density and Intensity, Speckle Remove's Threshold,
-Denoise's Noise Floor and Reduction, Bit-Depth Crush's Amount, Granular
-Noise's Grain Amount, Feedback Distortion's Amount, Spectral Wavefold's
-Fold Gain, Channel Balance's Balance, Convolve's Amount, Displace's
-Distance and Angle, Channel Cycle's Angle, Spectral Reverb's Mix, and
-Downsample's Block Size. Three parameters have no binding combo,
-deliberately - Convolve's Kernel Size, Granular Noise's Grain Size, and
-Spectral Reverb's Pre-Delay/Decay/Room Size/Diffusion/Absorption - each
-shapes a fixed-size grid or a computation spanning many cells at once,
-not a single value one cell owns on its own. Downsample's own Block Size
-*is* bindable, unlike Granular Noise's near-identical-sounding Grain
-Size - the difference is what a MindWave-bound value would mean: Granular
-Noise's own per-block *random* offset has no well-defined per-cell
-version, while Downsample's block size is a plain kernel-shape parameter
-(the same treatment Sigma/Size/Length already get), so it can genuinely
-vary smoothly across the canvas.
+### The MindWaves panel
 
-A Filter layer with nothing beneath it (or with everything beneath it
-hidden) has nothing to filter, so it has no effect. An ordinary Filter
-layer isn't locked - it can be reordered or deleted like a Normal layer,
-and reordering one changes exactly what it composites (everything
-between it and the next Filter layer down).
+**Configure → MindWaves** shows your MindWaves, each with a small preview of
+its shape.
 
-**Every project has one special Filter layer: the Equalizer**, always
-present, locked at the very top of the stack (it can't be reordered or
-deleted - see [Working with Layers](#working-with-layers) above). It
-starts with no effect (its Cut is `0` everywhere). Selecting it opens the
-Filter Configuration panel in a dedicated mode: no Filter Type
-drop-down (the Equalizer is always Frequency-Axis Gradient underneath,
-so there's nothing to switch), just the same draggable gradient bar
-Frequency-Axis Gradient uses, but with both Intensity fields hidden and
-the Opacity fields relabeled **Left Cut**/**Right Cut** - `0` leaves that
-frequency untouched, `1` silences it completely. Unlike the ordinary
-Frequency-Axis Gradient editor, there's no Intensity to set here - the
-Equalizer only ever cuts toward silence, never toward some other target
-loudness. It's a real multi-stop gradient, the same as any other - drag
-the bar to add, move, or remove cut points, not just a single start/end
-value.
+- **+ Add MindWave** creates one (an audible sine wave) and selects it.
+- Double-click a name to rename it; **×** deletes it.
+- **Preview** shows the selected MindWave on the canvas as a grayscale
+  overlay (black is 0, white is 1), updating as you edit it. It never
+  changes the sound, and switches off when you open another project or close
+  the panel.
 
-Alongside the gradient bar sits a **vertical EQ curve** - a frequency-
-response-style plot of the same curve, oriented to match the canvas
-beside it (highest frequency at the top, lowest at the bottom). Drag a
-point on it up or down to retune which frequency it affects; click empty
-space to add a new point there; double-click an interior point to remove
-it. It's kept in sync with the gradient bar automatically - edit either
-one and the other updates to match. Check **Preview on Canvas** to
-overlay the curve's own effect directly on the spectrogram (darker means
-more cut), so you can see what the Equalizer is about to do before
-committing to it; the checkbox stays checked for the rest of the session
-even if you switch to a different layer and back.
+Selecting a MindWave opens its editor:
+
+1. **Generator Type** - the kind of shape (below).
+2. That type's own settings.
+3. **Axis & Timing** - which **Axis** the shape runs along (Time or
+   Frequency), and its **Period** (the length of one cycle, in seconds or
+   bins).
+4. **Randomness** - the **Seed** (which random values you get) and **Noise
+   Scale**, for the random shapes.
+5. **Advanced** (click to open) - **Phase** (where the cycle starts; one
+   cycle is 0 to 6.283 radians), **Noise Octaves** and **Noise Persistence**
+   (detail in fractal noise), **Reversed** (run backwards: a decay becomes a
+   build-up) and **Inverted** (flip it: 0 becomes 1).
+
+Only the settings the chosen type actually uses are shown.
+
+### Generator types
+
+| Type | Shape | Its own settings |
+|---|---|---|
+| **Periodic** | A repeating wave. | **Waveform**: Sine, Triangle, Square, Sawtooth, Pulse (with **Duty Cycle**) or Rectified Sine |
+| **Envelope** | A one-shot shape around a **Center**. | **Shape**: Exponential Decay or Decaying Oscillation (with **Decay Rate**), S-Curve, Peak (Bell) or Ramp (with **Steepness**) |
+| **Stepped/Noise** | Steps or smooth random values. | **Shape**: Stepped (with **Step Count**), Gaussian Noise or Fractal Noise |
+| **Spatial** | A two-dimensional pattern across both axes. | **Pattern**: Ripples (with **Center X/Y**), Checkerboard, Cellular, or Domain-Warped Noise (with **Domain Warp Strength**) |
+| **Fractal** | A jagged, self-similar line. | **Roughness**, **Iterations** |
+| **Drawn** | A curve you drew (below). | None - a status line says how many points were captured |
+| **Step Grid** | A repeating list of values you type. | **Steps**, and one value (0-1) per step |
+| **Continuous** | One shape you sweep between clean and wild. | **Shape** (sine to fractal noise), **Skew** (earlier or later in the cycle; `0.5` is none), **Character** (fine turbulence). Each has a dial and a number field, and a live graph shows the result. |
+| **Resonance** | A captured [Resonance profile](#paths-and-resonance-profiles)'s spectrum, repeated once per Period. | **Resonance Profile** |
+| **Noise** | Cells of random values. | **Color** (how values change from cell to cell along the axis: White jumps, Pink wanders, Red drifts, Purple flickers, Custom slope from -2 to +2), **Cell Width** (seconds), **Cell Height** (rows) |
+
+**Drawing a MindWave.** Draw a stroke or a path on the canvas, select it with
+[Pick](#pick), then choose **Edit → Picked Path Tools → Use Picked Path as
+MindWave Shape**. The selected MindWave becomes a Drawn MindWave with that
+curve. It repeats once per Period, and the curve's lowest and highest points
+become 0 and 1.
+
+### Warp
+
+The **Warp** group under the editor lets a second MindWave bend the first:
+the first is read at positions pushed back and forth by the second, giving a
+less mechanical result. Tick **Enable Warp** to show **Strength** and a
+second editor for the warping MindWave ("Warped by"). Untick it to remove
+the warp.
+
+---
+
+# Part 3 - Drawing and editing
 
 ## Painting
 
-Choose **Paint** from the **Tool** dropdown to switch the canvas into
-paint mode; choose **Pan** (or any other tool) to leave it. While it's on,
-dragging on the canvas draws a stroke - you'll see it live as a black-outlined white
-line while drawing (visible over any painted color underneath, including
-a matching one), and it's applied to the spectrogram once you release
-the mouse.
+Choose **Paint** from the **Tool** button and drag on the canvas. A white
+outline follows your stroke, and it's painted when you let go.
 
-**Which layer gets painted**: whichever layer's name you last clicked in
-the Layers panel (see [Working with Layers](#working-with-layers)). If
-you haven't clicked one yet, painting targets the **Background** layer -
-it's a real, paintable canvas like any other, not just a fixed floor to
-import onto (never the locked Equalizer layer at the top, which has
-nothing to paint onto in the first place).
+**The selected layer is painted** - the one whose name you last clicked in
+the Layers panel. With none selected, you paint on the Background layer.
 
-**Sound-mode vs. Image-mode**: **Edit → Image Mode** toggles how a brush
-stamp's own shape is measured on the frequency axis, for the Procedural,
-Heal, Soften, Smudge, and Order/Chaos tools. Unchecked (Sound-mode, the
-default), a stroke's frequency-axis extent is fixed in Hz - since the
-canvas's vertical axis is logarithmic, a circular stamp actually reads as
-a wide oval near the top of the frequency range and a tall egg shape near
-the bottom. Checked (Image-mode), a stamp instead keeps a fixed *pixel*
-footprint on the canvas - a circle looks like a circle no matter where you
-paint it (with **Fit to Window** zoom, the canvas keeps square cells in
-Image-mode, with black bars filling any leftover space, so round stays
-round on screen), and Along Curve / Frequency Axis stamp spacing is
-counted in canvas pixels, so it's even across the whole canvas - at the
-cost of a moved/painted sound's own pitch relationships
-no longer lining up the way they would in Sound-mode. This is saved with
-the project, so it stays set the way you left it. Switching modes never
-changes anything you've already painted - only new strokes reflect it.
+Configure the brush in **Configure → Tool Configuration**.
 
-**Tool Configuration**, in the **Configure** dropdown, opens a dockable
-panel (off by default) with the brush's own settings:
+### Tool presets
 
-- **Tool Preset** - a drop-down at the top of the panel listing every
-  preset saved in the current project, empty ("(none saved yet)") until
-  you save your first one. Picking one loads every setting below - Tool
-  Type and everything under it - at once. **Save...** prompts for a name
-  (a name that's already taken offers Replace/Rename/Cancel, the same
-  as every other saved resource in this app) and stores the panel's
-  *current* settings as a new preset; **Delete**
-  removes whichever preset is currently selected (no confirmation - like
-  removing a saved MindWave, this never affects anything already painted
-  with it). There's no Wizard yet (see "What's Not Here Yet" below) - this
-  is a plain save/load of the panel as it stands. A saved **Instrument**
-  or **Resonance** preset shows a small icon of its own
-  harmonic/spectral content next to its name, so you can recognize one at
-  a glance without loading it first; other preset types show no icon.
-  Next to Save/Delete, **Preview** plays the panel's own *current*
-  settings - whether or not you've saved them yet - as a representative
-  3-second stroke, so you can audition a brush before painting with it;
-  it becomes **Stop** while playing.
-- **Tool Type** - **Procedural** (the default), **Instrument**,
-  **Resonance**, **Mind Shot**, **Mind Grain**, **Heal**,
-  **Soften**, **Smudge**, or **Order/Chaos**; picks which set of controls
-  below applies (Tip Shape for Procedural, Harmonics/Inharmonicity for
-  Instrument, a picker plus Decay Rate/Frequency Scale/Time Span for
-  Resonance, a picker
-  for Mind Shot/Mind Grain, an Amount slider for Order/Chaos -
-  Heal/Soften/Smudge add no controls of their own at all, see their own
-  entries below). The panel
-  also hides whichever of the shared controls below (Falloff, Brush Size,
-  Stamp Mode, Stamp Interval, Color, Opacity, Blend Mode) the selected type
-  doesn't actually use - see each control's own entry for which types hide
-  it.
-  Switching still keeps every shared value as it was underneath, even a
-  currently-hidden one - only the type-specific controls reset to the
-  newly-picked type's own defaults.
-- **Tip Shape** (Procedural only) - the stroke's cross-section: Circle,
-  Square, Diamond, Triangle (pointing up), Single Stroke (one diagonal
-  bar), Cross (+), Star (five points), Corner (an L), Arc (the top half of
-  a ring), Dot Spatter (scattered small dots), or Dapple (a few large soft
-  blotches).
-- **Thickness** (Procedural only, for the shapes it applies to) - the line
-  width of Single Stroke, Cross, Star, Corner and Arc, or the dot size of
-  Dot Spatter and Dapple, as a fraction of Brush Size. Hidden for Circle,
-  Square, Diamond and Triangle.
-- **Harmonics** (Instrument only) - how many overtones above the
-  fundamental to synthesize, each with its own **strength** number field
-  (fundamental first) - a fresh Instrument starts with a plausible
-  falling four-harmonic series (`1.0, 0.5, 0.25, 0.125`). Each harmonic
-  paints as a single exact-frequency spike rather than a soft geometric
-  blob - a stroke's own Falloff/Size still soften and bound it, but only
-  along the *time* axis (how the stroke fades in/out as you paint it),
-  not across frequency. Alongside the numeric strength fields sits a
-  **draggable bar chart** of the same series - click or drag any bar to
-  set that harmonic's strength by eye/ear instead of typing a number; the
-  two stay in sync, so editing either one updates the other.
-- **Inharmonicity** (Instrument only) - stretches the harmonic series
-  sharp of a pure integer series, the way a real vibrating body's own
-  overtones do (a piano string, for instance). `0` (the default) is
-  perfectly harmonic; small positive values (try `0.01`-`0.05`) give
-  higher harmonics an audibly metallic, bell-like stretch.
-- **Vibrato**/**Tremolo** (Instrument only) - each a depth number field paired
-  with a MindWave bind combo. Binding a MindWave makes it modulate pitch
-  (Vibrato, in semitones) or strength (Tremolo, as a fraction toward
-  silence) across the course of a stroke, following that MindWave's own
-  shape - a longer stroke shows more of the shape, a short one only a
-  sliver of it. Set back to **None** for no modulation at all, regardless
-  of the depth value. This tracks the stroke's own position along itself,
-  not real elapsed time, so the same MindWave shape always plays out fully
-  over any one stroke, however long or short it is.
-- **Resonance Profile** (Resonance only) - a
-  drop-down of every Resonance profile you've captured so far (see
-  [Pick](#pick)'s own "Create Resonance from Picked Path..."),
-  empty until you capture your first one. Paints the captured spectrum as
-  a series of partials above the stroke's own pitch, the same spirit as
-  Instrument's own harmonic series, but with each partial's own strength
-  coming from the curve's own shape instead of hand-typed numbers. Unlike
-  every other paintable tool, Resonance has no Falloff dial of its own
-  (fixed at a hard edge) and replaces the shared Brush Size with two
-  controls of its own:
-  - **Decay Rate** controls how quickly loudness decays across the
-    stroke, as if the curve were struck once at the stroke's own start and
-    left to ring out - `0` (the default) is full, constant sustain for the
-    whole stroke; higher values make it fade out faster as you keep
-    painting.
-  - **Frequency Scale** controls how many octaves above the painted pitch
-    the spectrum spreads - the bottom of the spectrum always stays
-    exactly on the pitch you painted; a larger value stretches the rest
-    of it further upward.
-  - **Time Span** controls this brush's own stamp duration, the same role
-    Brush Size plays for every other tool.
-- **Mind Shot** (Mind Shot only) - a drop-down of every Mind Shot you've
-  captured so far (see [Selection and Fill](#selection-and-fill)'s own
-  "Capture as Mind Shot"), empty until you capture your first one.
-  Painting with it stamps the captured content back at its own original
-  size, not scaled by Falloff/Size the way Procedural/Instrument are -
-  combined with what's already there per its own **Blend Mode** control
-  (Overwrite by default, reproducing the original "stamps back exactly
-  as it was captured" behavior). If the picked Mind Shot has a
-  Fundamental Frequency set (see "Capture as Mind Shot"), each stamp is
-  also pitch-shifted to match wherever it lands - painting the same Mind
-  Shot at a higher or lower pitch on the canvas genuinely changes its own
-  pitch, not just its position; a Mind Shot with no Fundamental Frequency
-  set stamps back at the same pitch everywhere, as it always has. The
-  panel hides Falloff, Brush Size, Color, and Opacity for Mind Shot,
-  since none of them have any effect on it - only Stamp Mode/Interval
-  (which control the stamp's own placement, not its content) still apply.
-- **Mind Grain** (Mind Grain only) - a drop-down of every Mind Grain you've
-  captured so far (see [Selection and Fill](#selection-and-fill)'s own
-  "Capture as Mind Grain"), empty until you capture your first one. The
-  opposite of Mind Shot: no pixels are ever captured, only a reference to
-  the region and the layer it was selected on - painting with it always
-  reads that layer's *current* content, and repainting the source layer
-  updates every Mind Grain stroke that reads from it immediately, wherever
-  it's painted, not just the next time that stroke's own layer happens to
-  be redrawn for some other reason. Combines with what's already there per
-  its own **Blend Mode** control, same as Mind Shot above.
+At the top of Tool Configuration, **Tool Preset** lists the brushes saved in
+this project. Choosing one loads all of its settings. **Save...** saves the
+current settings under a name (a taken name can be replaced, renamed or
+cancelled); **Delete** removes the chosen preset, without affecting anything
+already painted. Instrument and Resonance presets show a small picture of
+their spectrum. **Preview** plays the current settings as a 3-second stroke
+so you can hear a brush before using it; it reads **Stop** while playing.
+"Preset: <name>" under the row shows which preset is loaded, turning orange
+with "* (modified)" once you change something.
 
-  **A Mind Grain can only paint onto a layer above its own source** - the
-  panel won't even let you attempt it on the wrong layer: the Mind Grain
-  group turns red (with a tooltip explaining why) whenever the active
-  layer isn't above the configured grain's source, the Layers panel marks
-  every disallowed layer with a red **✕**, and the Tool dropdown's own
-  **Paint** entry is disabled (its own tooltip explains why) - switch to a layer
-  higher in the stack, or reorder the layers, to paint with it. Reordering
-  or deleting a layer that would break an *already-painted* Mind Grain
-  stroke's own ordering is refused outright too, with a dialog explaining
-  which stroke(s) would break and why. The panel hides Falloff, Brush Size,
-  Color, and Opacity for Mind Grain, the same as Mind Shot.
-- **Heal** (Heal only, no controls of its own) - a temporal blur: instead of
-  painting a target color, each pixel blends toward the average of its own
-  neighboring cells *in time* (same frequency) - useful for erasing a
-  short, stray mark without disturbing the surrounding texture. **Brush
-  Size doubles as the blur window** (a bigger brush averages across more
-  neighboring moments, as well as covering more canvas), **Opacity is the
-  blend strength** (how much of the averaged result replaces the original -
-  100% fully replaces it, lower values only partially smooth it), and the
-  Gradient editor's Intensity fields hide entirely (there's no fixed
-  target color for a blur to paint toward). Repeated or overlapping
-  strokes over the same spot blur it further each time, the same way a
-  real blur brush would. **Stamp Mode is always Along Curve and Stamp
-  Interval is always fixed to 66% of Brush Size** - both hidden from the
-  panel, for consistent results; see Stamp Mode's own entry below.
-- **Soften** (Soften only, no controls of its own) - the same idea as Heal,
-  but blurs uniformly in every direction (time *and* frequency) rather than
-  time alone, for a general softening instead of Heal's own
-  defect-erasing, single-axis blend. Brush Size/Opacity/Gradient work
-  exactly the same way Heal's own do, and Stamp Mode/Interval are fixed
-  the same way too.
-- **Smudge** (Smudge only, no controls of its own) - drags pixels along the
-  direction you're actually dragging the stroke, the way a finger smudges
-  wet paint. Brush Size/Falloff/Opacity/Gradient all work the same way
-  Heal's/Soften's own do, and Stamp Mode/Interval are fixed the same way
-  too; the smear's own direction and reach come from how you're moving the
-  stroke itself, not a separate control. A single click (no drag) has
-  nothing to smear along, so it does nothing.
-- **Order/Chaos** (Order/Chaos only) - pushes a region toward spectral order
-  or spectral chaos, via one **Amount** slider from `-1` (full Chaos) to
-  `+1` (full Order), `0` (the default) having no effect:
-  - **Chaos** (negative) scrambles a random selection of pixel intensities
-    within the brush - at `-1`, every pixel in the stroke's own footprint
-    gets randomly reshuffled among themselves, leaving the overall loudness
-    and color of that area unchanged, just rearranged.
-  - **Order** (positive) finds the loudest moment and loudest frequency
-    within the brush and pulls a random selection of pixels toward them -
-    the loudest pixels end up closest, the quietest end up farthest,
-    building up horizontal and vertical structure. Audibly, this can turn
-    noise into a steady tone, sharpen a transient, or steady a wavering
-    pitch.
+### Tool types
 
-  Smaller Amount magnitudes affect a smaller, randomly-chosen fraction of
-  the brush's own pixels rather than all of them. Opacity still works the
-  same way it does for Heal/Soften/Smudge - how strongly each affected
-  pixel's own new value actually replaces the original - while Amount
-  itself controls how much of the brush participates at all; the Color
-  swatch has no effect, and Stamp Mode/Interval are fixed the same way as
-  Heal/Soften/Smudge.
-- **Falloff** - how soft the stroke's edge is, from a hard edge (`0`) to
-  fully soft (`1`). Hidden for Mind Shot/Mind Grain, which don't use it.
-- **Brush Size** - the tip's own radius: in seconds on the time axis, and
-  the equivalent frequency span on the frequency axis (using this
-  project's own Hz-per-second scale, so the same number always describes
-  the same *shape*, not the same pixel size, regardless of canvas
-  resolution) - unless **Edit → Image Mode** is checked (see below), which
-  changes what that frequency-axis shape actually looks like. The panel's
-  own default (`0.2`) is a comfortably visible stroke on a typical project
-  without covering too much of it at once. The slider runs up to `5`; type
-  a value up to `100` into the box for a bigger brush. Hidden for Mind
-  Shot/Mind Grain, which don't use it.
-- **Stamp Mode** - how densely the brush's tip is stamped along a stroke's
-  path, from a drop-down. **Hidden for Heal, Soften, Smudge, and
-  Order/Chaos**, where it's fixed to Along Curve instead - manual testing
-  showed these four tools only look consistently good with dense,
-  curve-following stamping, so they no longer expose the choice:
-  - **Stroke** (the default) - stamped exactly as densely as the path
-    itself was drawn, with no gaps; unchanged from how painting has always
-    worked. Not an even spacing - drawing slowly stamps more densely over
-    a given distance than drawing quickly, and the spacing has nothing to
-    do with Brush Size, unlike every mode below.
-  - **Along Curve** - stamped at even intervals measured along the path's
-    own length, so a longer stroke gets proportionally more stamps.
-  - **Time Axis** - stamped every time the path crosses an evenly-spaced
-    moment in time (see [Axis Labels](#axis-labels); "Interval" below is
-    in seconds).
-  - **Frequency Axis** - stamped every time the path crosses an
-    evenly-spaced frequency, the same idea rotated onto the other axis
-    ("Interval" is in Hz).
+**Tool Type** chooses what the brush does. Each type shows only the settings
+it uses.
 
-  Choosing any mode but Stroke enables the **Interval** number field next
-  to it, which sets the spacing (seconds for Along Curve/Time Axis, Hz for
-  Frequency Axis - or, with **Edit → Image Mode** on, canvas pixels for
-  Along Curve and frequency bins for Frequency Axis; the field's own unit
-  label always says which) - it's disabled and ignored under Stroke, where
-  an interval wouldn't mean anything. Its slider runs from 0 to the size of
-  the open project in that unit: the project's whole duration in seconds,
-  its width in pixels, or the full height of the frequency axis in Hz or
-  bins. Type a value into the box to go beyond that. This is the same idea as the legacy
-  Studio's "Curve" tool. For
-  Heal/Soften/Smudge/Order-Chaos, Interval is likewise hidden - it's always
-  66% of Brush Size, so it stays proportional as Brush Size changes.
-- **Stamp Pattern** (Along Curve only) - an optional text field, shown right
-  below Interval only while Stamp Mode is Along Curve, for cycling through a
-  non-uniform sequence of spacings instead of one fixed Interval. Enter
-  whitespace-separated steps, each a number followed by `ms` (milliseconds)
-  or `b` (beats, at this project's own tempo) - for example, `100ms 200ms`
-  alternates a short gap and a long one along the stroke, repeating for as
-  long as the stroke lasts. Leave it blank to use the fixed Interval above,
-  unchanged. An invalid entry (a step missing its `ms`/`b` suffix, or any
-  other malformed text) shows a red error message underneath and simply
-  falls back to the fixed Interval until fixed - it's never rejected
-  outright, so an in-progress edit is never lost. Not available for Time
-  Axis/Frequency Axis - a repeating pattern has no consistent meaning
-  measured against a fixed time/frequency grid the way it does along a
-  stroke's own length.
-- **Gradient** - the same draggable gradient bar/stop editor Filter
-  Configuration's Frequency-Axis Gradient uses (see [Filter
-  Layers](#filter-layers) above), here editing the stroke's own
-  gradient: click a stop to select it and edit its **Left
-  Intensity**/**Left Opacity**/**Right Intensity**/**Right Opacity**,
-  double-click the bar to add a new stop, drag an interior stop to move
-  it. This is how loud the stroke paints, *and* its stereo balance, at
-  once - Left/Right Intensity set each channel's own target loudness,
-  Left/Right Opacity set how strongly the stroke actually pushes toward
-  it (`0` leaves the canvas untouched, `1` paints at full strength). A
-  gradient with more than two stops varies continuously along the
-  stroke's own length as you draw it, the same way Fill Selection's own
-  gradient varies across a selection. Intensity is in dBFS, from -96
-  (silence) to 0 (full scale, as loud as a single tone can be without
-  distorting) - the same scale imported and recorded audio is shown on,
-  so a stroke as bright as some imported sound is also about as loud.
-  The panel's own default (both endpoint stops at -20 dB, full opacity)
-  paints clearly audibly on both channels right away, no setup
-  required. Hidden for
-  Mind Shot and Mind Grain, which don't paint toward a fixed target at
-  all; for Heal, Soften, Smudge, and Order/Chaos, only the Intensity
-  fields hide - Opacity stays, as the blend's own strength (see each
-  tool's own entry below).
-- **Opacity MindWave / Size MindWave / Color MindWave** - three MindWave-
-  binding drop-downs (**None** or pick a MindWave from the library), one
-  per parameter, available for every tool except Mind Shot/Mind Grain
-  (which don't use a gradient or a footprint radius at all). Each is
-  sampled at every stamp's own real position on the canvas as you paint -
-  the same fixed-mask-over-the-whole-piece behavior a layer's own opacity
-  binding already uses (see [MindWaves](#mindwaves) below), not tied to
-  the stroke's own position along itself the way Vibrato/Tremolo are (see
-  below):
-  - **Opacity MindWave** multiplies the stamp's own strength at that
-    point - dark areas of the field paint faintly or not at all, bright
-    areas paint at full strength.
-  - **Size MindWave** scales the stamp's own footprint at that point -
-    dark areas shrink the stamp down (all the way to nothing, at the
-    field's own darkest), bright areas paint at the full Brush Size
-    configured above.
-  - **Color MindWave** changes *where along the stroke's own Gradient*
-    that stamp samples its color/intensity from, instead of the stroke's
-    own position - so the same stroke can pick up different colors from
-    its own Gradient bar depending purely on where it crosses the bound
-    field, independent of drawing order or direction. For Heal, Soften,
-    Smudge, and Order/Chaos (whose own Gradient only exposes Opacity, not
-    Intensity - see Gradient's own entry above), this still changes which
-    stop's own Opacity gets used, just never an Intensity value none of
-    those four tools read anyway.
-  
-  None of the three bind a MindWave by default - painting behaves exactly
-  as before this existed until you deliberately pick one.
-- **Binding Frame** - **Canvas Space** (the default) or **Operation-
-  Relative**, choosing how *all three* of the combos above are sampled.
-  Canvas Space samples each field at a stamp's own real position on the
-  canvas, as described above - two identical strokes drawn at different
-  points look different, since each sees a different part of the same
-  fixed field. Operation-Relative instead samples by progress along the
-  stroke itself, the same way Vibrato/Tremolo already do (see above) - two
-  identical strokes drawn anywhere in the piece look the same as each
-  other, since each one sees the bound field's own shape play out fully
-  over its own length, however long or short that stroke is.
-- **Blend Mode** - how a Mind Shot/Mind Grain stamp combines with what's
-  already there: **Overwrite** (the default) replaces it entirely, same
-  as before this control existed; **Normal**, **Multiply**, **Screen**,
-  **Overlay**, **Difference**, and **Add** blend it in instead - see
-  [Compositing](#compositing) above for what each one does. Shown *only*
-  for Mind Shot/Mind Grain - every other tool type paints via its own
-  Opacity/Falloff gradient blend instead, which has no blend mode choice
-  of its own.
+| Type | What it paints | Its own settings |
+|---|---|---|
+| **Procedural** (default) | A plain brush in the gradient's colour. | **Tip Shape**: Circle, Square, Diamond, Triangle, Single Stroke, Cross, Star, Corner, Arc, Dot Spatter or Dapple; **Thickness** for the line and dot shapes |
+| **Instrument** | A pitched tone with overtones. | **Harmonics** (how many, and each one's strength - type them, or drag the bars of the chart), **Inharmonicity** (`0` pure; small values such as `0.01`-`0.05` give a bell-like stretch), **Vibrato** and **Tremolo** (see below) |
+| **Resonance** | A captured [Resonance profile](#paths-and-resonance-profiles) as partials above the painted pitch. | **Resonance Profile**, **Decay Rate** (`0` sustains; higher fades out sooner along the stroke), **Frequency Scale** (how many octaves the spectrum spreads above the pitch), **Time Span** (the stamp's length, instead of Brush Size) |
+| **Mind Shot** | Stamps a captured piece of canvas (see [Capturing brushes](#capturing-brushes)). | **Mind Shot**, **Blend Mode** |
+| **Mind Grain** | Stamps a live piece of another layer (see below). | **Mind Grain**, **Blend Mode** |
+| **Heal** | Blurs along time only - erases a short stray mark without disturbing what's around it. | None |
+| **Soften** | Blurs in every direction. | None |
+| **Smudge** | Drags content along your stroke, like a finger in wet paint. A click without dragging does nothing. | None |
+| **Order/Chaos** | Pushes content towards order or chaos. | **Amount**, from `-1` (Chaos: shuffles the cells under the brush) to `+1` (Order: pulls them towards the loudest moment and pitch, which can turn noise into a tone or steady a wavering pitch). `0` does nothing; smaller amounts affect fewer cells. |
 
-Two checkboxes at the top of the panel, both off by default:
+**Vibrato and Tremolo** (Instrument) - each a depth and a MindWave. Binding a
+MindWave makes it bend the pitch (Vibrato, in semitones) or the strength
+(Tremolo) over the course of each stroke, so the whole shape plays out over
+any stroke, long or short. **None** turns it off.
 
-- **Show bounding boxes** - outlines (cyan) every stroke's overall extent
-  on the currently-shown layer.
-- **Show path geometry** - traces (magenta) every stroke's own drawn
-  path. A stroke actively being drawn is always traced, regardless of
-  this checkbox.
+**Mind Shot** stamps exactly what was captured, at its own size. If the Mind
+Shot has a Fundamental Frequency, each stamp is pitch-shifted to wherever you
+paint it.
 
-**Undo** (Ctrl+Z) and **Redo** (Ctrl+Y), in the **Edit** menu, apply to
-everything you do to a project, in the order you did it:
+**Mind Grain** stores no picture - it reads its source layer's region each
+time, so repainting the source updates every stroke made with it. A Mind
+Grain can only paint on layers **above** its source: on other layers the
+Mind Grain settings turn red, the Layers panel marks those layers with a red
+**✕**, and **Paint** is disabled. Moving or deleting a layer in a way that
+would break an existing Mind Grain stroke is refused, with an explanation.
 
-- importing audio, images and MIDI, recording, Loop takes and generated
-  layers;
-- adding, deleting, duplicating, renaming and reordering layers, and every
-  layer setting (visibility, gain, balance, MindWave binding, position,
-  rescale, blend mode, filter settings);
-- painting, filling, pasting, text, Pick's edits and restacking;
-- phase cleanup;
-- creating, editing and removing MindWaves, Mind Shots, Mind Grains,
-  Resonances, kernels, presets and MIDI mappings.
+For **Heal**, **Soften** and **Smudge**, **Brush Size** is also how far the
+blur reaches, and **Opacity** how strongly it applies. Heal, Soften, Smudge
+and Order/Chaos always stamp densely along the stroke, so they hide Stamp
+Mode and Interval.
 
-Zooming, scrolling, choosing tools and panels, selections and device
-settings aren't part of it.
+### Shared settings
 
-The **History** panel (toggle it from the toolbar) lists everything in the
-project's history, in order, with your current position highlighted.
-Double-click any entry to jump straight to it - the same as clicking Undo
-or Redo repeatedly, just in one step.
+- **Falloff** - how soft the edge is, from hard (`0`) to fully soft (`1`).
+- **Brush Size** - the tip's radius: in seconds along time, and the matching
+  span along frequency. The default (`0.2`) is a clearly visible stroke. The
+  slider goes to `5`; type up to `100` for a larger brush.
+- **Stamp Mode** - how often the tip is stamped along the stroke:
+  - **Stroke** (default) - wherever the mouse was sampled, with no gaps;
+    slow drawing stamps more densely than fast drawing.
+  - **Along Curve** - at even distances along the stroke.
+  - **Time Axis** - each time the stroke crosses an evenly spaced moment.
+  - **Frequency Axis** - each time it crosses an evenly spaced frequency.
+- **Interval** - the spacing for the last three modes, in seconds (or Hz
+  for Frequency Axis; in Image Mode, pixels and rows). Its label shows the
+  unit.
+- **Stamp Pattern** (Along Curve only) - cycle through uneven spacings
+  instead of one Interval: steps separated by spaces, each a number followed
+  by `ms` or `b` (beats at the project's tempo). `100ms 200ms` alternates a
+  short and a long gap. A mistake shows in red underneath, and the plain
+  Interval is used until you fix it.
+- **Gradient** - the stroke's loudness and stereo balance, in the
+  [gradient editor](#filter-types): **Left/Right Intensity** is each
+  channel's loudness (-96 to 0 dB), **Left/Right Opacity** how strongly the
+  stroke applies it. A gradient with more stops changes along the stroke as
+  you draw. The default (both stops at -20 dB, full opacity) is clearly
+  audible. Heal, Soften, Smudge and Order/Chaos show only the Opacity.
+- **Opacity MindWave**, **Size MindWave**, **Color MindWave** - bind a
+  [MindWave](#mindwaves) to vary each stamp's strength, size, or which point
+  of the Gradient it takes its colour from.
+- **Binding Frame** - how those three read their MindWave: **Canvas Space**
+  (the default) at each stamp's position on the canvas, so identical strokes
+  in different places differ; **Operation-Relative** along the stroke
+  itself, so identical strokes look the same anywhere.
+- **Blend Mode** (Mind Shot and Mind Grain) - how a stamp combines with what
+  was there: **Overwrite** (default) or the [blend modes](#blending).
 
-**The history is saved with the project.** After reopening it, Undo still
-steps back through what you did before. A step that brings back an
-earlier version of a layer's audio (undoing a recording over a layer or a
-Loop take) needs that version, which isn't kept once the
-project is closed: the Studio remakes it by replaying the project's
-history from its sources (see [Saving and Project Files](#saving-and-project-files)),
-which can take a moment. In a project made with a version before 0.1.43.1
-that isn't possible, and Undo stops at such a step.
+At the top of the panel, **Show bounding boxes** outlines every stroke on
+the shown layer in cyan, and **Show path geometry** draws every stroke's path
+in magenta.
 
-Only **Procedural**, **Instrument** (harmonic series + inharmonicity only so
-far - no noise, body resonance, or envelope yet), **Mind Shot**
-(capture-and-restamp), **Mind Grain** (a live reference that updates
-immediately, everywhere it's used, the moment its source is repainted),
-**Heal** (temporal blur), **Soften** (radial blur), **Smudge** (directional
-smear), and **Order/Chaos** (spectral order/chaos push) exist today - see
-[What's Not Here Yet](#whats-not-here-yet) for the rest of what's planned
-around painting.
+### Image Mode
+
+**Edit → Image Mode** changes how a brush's shape is measured along the
+frequency axis (for Procedural, Heal, Soften, Smudge and Order/Chaos). Off
+(the default), a brush covers a fixed range of frequencies, so on the
+canvas's logarithmic frequency axis a circle looks wide near the top and tall
+near the bottom. On, a brush keeps a fixed size in canvas pixels - a circle
+looks like a circle everywhere, and stamp spacing is even across the canvas -
+but painted sounds no longer keep their musical intervals when moved. The
+choice is saved with the project and only affects new strokes.
 
 ## Pick
 
-Choose **Pick** from the **Tool** dropdown to switch the canvas into pick
-mode; choose **Pan** (or any other tool) to leave it. While it's on,
-clicking any painted object - a brush stroke, a filled selection, or a
-pasted region - selects it - shown with a white outline around it,
-regardless of the "Show bounding boxes" setting - ready to:
+Choose **Pick** from the **Tool** button and click anything you've painted,
+filled, pasted or written - it's outlined in white. Then:
 
-- **Move** it - click and drag it to a new position. Moving (or
-  modifying) an object never changes where it sits relative to anything
-  else - a stroke you cut or filled over stays cut/filled over, even
-  after you move or modify it.
-- **Modify** it - open **Tool Configuration** (if it isn't already);
-  it's pre-filled with exactly the settings the stroke was painted with,
-  tool type included. Change anything (tool type, tip shape/harmonics,
-  falloff, size, stamp mode/interval, color, opacity) and the selected
-  stroke updates to match. Only a brush stroke has settings to reopen this
-  way - a filled selection or a pasted region can still be moved and
-  deleted, just not "modified" through this panel.
-- **Delete** it - **Edit → Delete** (or the Delete key).
-- **Restack** it within its own layer - **Edit → Stack Order → Bring to
-  Front** (Ctrl+Shift+Up), **Send to Back** (Ctrl+Shift+Down), **Bring
-  Forward** (Ctrl+Up), or **Send Backward** (Ctrl+Down). This only changes
-  which object renders on top where they overlap - it doesn't move,
-  modify, or select anything else.
-- **Edit its own path** - **Edit → Path Editing → Edit Path** (a brush stroke or
-  a [Path Tool](#path-tool) path; a filled selection, a pasted region or a
-  branching path has no single path to edit). Brings its
-  nodes and handles back onto the canvas as small dots:
-  - **Click a node** to select it (shown larger, in white).
-  - **Drag a node** to move it - its own handles (if any) move with it.
-  - **Click, then drag, one of the selected node's own handles** (shown
-    in cyan, connected to the node by a thin line - only the *selected*
-    node's own handles are ever shown) to reshape the curve on that
-    side. The opposite handle always mirrors it, to keep the curve
-    smooth through the node.
-  - **Edit → Path Editing → Toggle Node Type** switches the selected node between a
-    smooth curve point and a sharp corner. Converting to smooth extends
-    its own two handles out a comfortable distance, rounding out the
-    corner right away - drag either handle further from there to reshape
-    it more.
-  - **Delete key** removes the selected node (refused if it's the only
-    node left).
-  - **Edit → Path Editing → Apply Path Edit** commits everything changed so far as a
-    new, undoable edit to the stroke. **Edit → Path Editing → Cancel Path Edit**
-    discards it instead, leaving the stroke exactly as it was.
+- **Move it** - drag it.
+- **Change it** - open Tool Configuration (or the Text Tool panel for text):
+  it shows the settings the stroke was made with. Change any of them and the
+  stroke is redrawn. (Filled and pasted pieces can be moved and deleted, but
+  have no settings to change.)
+- **Delete it** - the **Delete** key.
+- **Restack it** within its layer - **Edit → Stack Order**: **Bring to
+  Front** (`Ctrl+Shift+Up`), **Send to Back** (`Ctrl+Shift+Down`), **Bring
+  Forward** (`Ctrl+Up`), **Send Backward** (`Ctrl+Down`).
+- **Edit its path** - **Edit → Path Editing → Edit Path** (strokes and
+  paths). Its nodes appear as dots:
+  - click a node to select it, and drag it to move it;
+  - drag one of the selected node's cyan handles to reshape the curve - the
+    opposite handle mirrors it;
+  - **Toggle Node Type** switches the selected node between smooth and
+    corner;
+  - **Delete** removes the selected node (but not the last one);
+  - **Apply Path Edit** keeps the changes as one undoable step; **Cancel
+    Path Edit** throws them away.
 
-**Selecting several objects at once:** drag from an empty part of the
-canvas to draw a dashed rectangle. Every object lying entirely inside it
-(on the active layer) is selected, each one highlighted. Then:
+Moving or changing an object never changes what's on top of or under it: a
+stroke you filled over stays filled over.
 
-- **Delete** removes them all.
-- **Drag any one of them** to move them all together.
-- **Edit → Clipboard → Copy** (Ctrl+C) copies them, and **Paste** (Ctrl+V)
-  adds duplicates at the same positions on the active layer, already
-  selected, so you can drag them where you want. (With a region
-  [Selection](#selection-and-fill) active, Copy copies the selected region
-  instead, as always; Paste pastes whichever you copied last.)
+**Overlapping objects:** click the selected object again to select the one
+underneath; each further click goes one deeper.
 
-- **Merge into Branching Path** (right-click, or **Edit → Picked Path Tools →
-  Merge Picked Paths into Branching Path**) joins every selected path into
-  one branching path (pink), adding the fewest, shortest connections that
-  link them all - each path is joined to its nearest neighbor at their two
-  closest points. Paths drawn with the [Path Tool](#path-tool) (and
-  branching paths) are replaced by the merged one; painted strokes lend
-  their shape but stay where they are, still sounding. Use the result for
-  **Create Resonance Profile...** or **Stroke Path with Current Tool**.
+**Several at once:** drag from an empty part of the canvas to draw a dashed
+rectangle; everything entirely inside it on the selected layer is selected.
+Then drag any of them to move them all, press **Delete**, or **Ctrl+C** /
+**Ctrl+V** to paste copies in the same place (already selected, ready to
+drag).
 
-Each of these is a single undo step, however many objects are involved.
-Clicking anything outside the selection replaces it as usual.
+**Right-click** an object (with any tool) for **Edit Path**, **Bring to
+Front**, **Send to Back** and **Delete**; with several selected, **Copy** and
+**Delete**. A path also offers **Stroke Path with Current Tool** and **Create
+Resonance Profile...** (see [Paths and Resonance
+Profiles](#paths-and-resonance-profiles)). Right-clicking empty canvas offers
+**Paste**, **Fill Selection...**, **Apply Filter to Selection** and
+**Deselect**.
 
-Clicking empty canvas space deselects. If an object is entirely covered
-by another one on top of it, click the already-selected (covering)
-object again to select the one underneath - each further click on the
-same spot cycles to the next one down, wrapping back to the topmost once
-you reach the bottom.
+## Selections
 
-**Right-clicking** an object (in any tool mode, not just Pick) selects
-it and opens a small menu with **Edit Path**, **Bring to Front**,
-**Send to Back**, and **Delete** - the same actions as above, without
-reaching for the Edit menu. With several objects selected, the menu
-offers **Copy** and **Delete** for all of them. A [Path Tool](#path-tool) path (or a
-branching path) also offers:
+Choose **Select** from the **Tool** button and drag on the canvas to select
+a region, shown with a green outline. The selection stays when you switch
+tools; it's only drawn while Select or Pick is active. **Ctrl+D** (or a click
+without dragging) deselects.
 
-- **Stroke Path with Current Tool** - paints along the path (every branch
-  of a branching path) with the brush currently set up in Tool
-  Configuration, as one undoable step. The path itself stays, so you can
-  stroke it again with a different brush.
-- **Create Resonance Profile...** - the same as **Create Resonance from
-  Picked Path...** below; for a branching path, every branch counts.
+**Configure → Selection Configuration** sets:
 
-Right-clicking empty canvas space instead opens **Paste**, **Fill
-Selection...**, **Apply Filter to Selection**, and **Deselect** (see
-[Selection and Fill](#selection-and-fill) below).
+- **Selection Type**:
+  - **Rectangle** (default) - drag a box.
+  - **Lasso** - trace any shape.
+  - **Wand** - click once to select a connected area of similar loudness.
+    **Tolerance** sets how different a neighbour may be and still join (0%
+    exactly the same, 100% everything reachable). **Harmonics-aware** also
+    selects the clicked pitch's overtones, to catch a whole note.
+- **Paste Blend Mode** - how **Paste** combines with what's there:
+  **Overwrite** (default) or the [blend modes](#blending).
 
-Entries that don't apply right now - **Paste** with nothing copied, the
-selection entries with no selection, **Toggle Node Type** with no node
-selected, a whole submenu with nothing in it that applies - are **grayed
-out**, in the right-click menus and the **Edit** menu alike. Their keyboard
-shortcuts still work whenever they do apply.
+**Combining selections:** hold **Shift** while starting a new selection to
+add to the current one, **Alt** to subtract, or **Shift+Alt** to keep only
+the overlap. Any selection types can be combined.
 
-Move/Modify/Delete/a completed path edit and restacking are all undoable
-(Ctrl+Z), the same as painting a new stroke.
+**Rotating:** a plain Rectangle selection has a handle above its top edge -
+drag it to rotate the selection.
 
-Copying a picked object isn't here yet, and path editing doesn't yet
-support inserting/deleting a node by double-clicking, or detaching a
-handle from its own mirrored pair - see
-[What's Not Here Yet](#whats-not-here-yet).
+Everything below follows the selection's exact shape, not just its bounding
+box.
 
-## Selection and Fill
+### Using a selection
 
-Choose **Select** from the **Tool** dropdown to switch the canvas into
-select mode; choose **Pan** (or any other tool) to leave it. While it's
-on, drag (or, for Wand, click) on the canvas to select a
-region - shown as a green outline, dashed for a Wand or combined
-selection (see below). A selection stays active (still scoping Fill/
-Copy/Paste, and usable again the moment you switch back to Select) even
-after switching to a different tool - it isn't tied to Select mode
-itself, only to having drawn one - but its green outline only shows
-while Select or Pick is the active tool, not while Paint or another tool
-is.
+- **Edit → Selection → Fill Selection...** fills it using the
+  [gradient editor](#filter-types); the gradient runs left to right across
+  the selection.
+- **Edit → Selection → Apply Filter to Selection** applies the filter
+  currently set up in Filter Configuration to the selection only, once.
+- **Edit → Clipboard → Copy** (`Ctrl+C`) copies it; **Cut** (`Ctrl+X`)
+  copies it and silences it.
+- **Edit → Clipboard → Paste** (`Ctrl+V`) puts the copy back at the same
+  position, on the selected layer - select another layer first to paste
+  there. It combines using the Paste Blend Mode, then switches to Pick with
+  the pasted piece selected, ready to move.
 
-**Selection Configuration**, in the **Configure** dropdown, opens a
-dockable panel (off by default):
+### Capturing brushes
 
-- **Selection Type** - **Rectangle** (the default) drags out an
-  axis-aligned box, corner to corner. **Lasso** traces a freehand,
-  irregularly-shaped region as you drag - rendered live as a smooth curve
-  while you draw it, the same way a paint stroke's own preview is. A
-  Lasso drag that never gathers enough points to enclose any real area (a
-  short click, or a straight two-point line) clears the selection
-  instead, the same as a Rectangle drag that never really moved.
-- **Wand** selects every connected region of similar loudness starting
-  from a single click - no drag needed (dragging before releasing is
-  ignored; only the click position matters). Two controls appear only
-  while Wand is selected:
-  - **Tolerance** - how different a neighboring pixel's own loudness may
-    be and still join the selection, from `0%` (only pixels at *exactly*
-    the clicked point's own loudness) to `100%` (everything reachable,
-    regardless of loudness).
-  - **Harmonics-aware** - when checked, also selects along the clicked
-    point's own overtone rows (2x, 3x, ... its frequency), the same way a
-    note's harmonics naturally stack above its fundamental - useful for
-    selecting a whole note at once rather than just its loudest partial.
-- **Paste Blend Mode** - how **Edit → Clipboard → Paste** (below) combines its clip
-  with the destination: **Overwrite** (the default) replaces it entirely,
-  same as before this control existed; **Normal**, **Multiply**,
-  **Screen**, **Overlay**, **Difference**, and **Add** blend it in
-  instead - see [Compositing](#compositing) above for what each one does.
-  Read fresh at the moment you paste, so changing it doesn't affect a
-  paste you already made.
+- **Edit → Capture → Capture as Mind Shot** saves the selection as a
+  [Mind Shot](#tool-types) brush. A dialog asks for:
+  - a **Name**;
+  - a **Fundamental Frequency** - set it to have the stamp pitch-shifted to
+    wherever you paint it; leave it at `0` to stamp at the original pitch;
+  - a **Start-Time Offset** - how much lead-in the capture has before its
+    attack, so the attack lands where you paint.
 
-Fill/Copy/Cut/Paste (below) all confine themselves exactly to a Lasso or
-Wand selection's own shape, not just its bounding box - copying an
-irregular region and pasting it elsewhere leaves whatever was already on
-the destination, outside that shape, untouched.
+  The canvas and the clipboard are left untouched.
+- **Edit → Capture → Capture as Mind Grain** asks the same and saves a
+  [Mind Grain](#tool-types): a live reference to this region of this layer,
+  not a picture.
 
-**Combining selections**: hold **Shift** while starting a new selection
-(Rectangle, Lasso, or Wand) to **add** it to the selection you already
-have, **Alt** to **subtract** it, or **Shift+Alt** together to keep only
-where the two **overlap**. Works across shapes - Wand-select a note, then
-Shift-drag a Rectangle around its harmonic to add that too, or Alt-drag
-to carve a piece back out. A combining drag/click that ends up selecting
-nothing leaves your existing selection exactly as it was, rather than
-clearing it.
+Both capture the selection's whole bounding box. Choose **Mind Shot** or
+**Mind Grain** as the Tool Type to paint with them.
 
-**Rotating a Rectangle selection**: a plain, freshly-drawn Rectangle
-selection (not Lasso, Wand, a combined selection, or a pasted one) shows a
-small handle above its own top edge - drag it to rotate the whole
-selection around its own center. Fill/Copy/Cut/Paste all confine
-themselves to the rotated shape exactly like they do for a Lasso
-selection. Rotating back to (approximately) no rotation returns the
-selection to a plain, axis-aligned rectangle.
+## Paths and Resonance Profiles
 
-- **Fill** it - **Edit → Selection → Fill Selection...** opens the same draggable
-  gradient editor Painting's brush and Filter Configuration's
-  Frequency-Axis Gradient use (see [Painting](#painting)/[Filter
-  Layers](#filter-layers) above), seeded with a fully-opaque default;
-  accepting fills the selection, confined exactly to its own boundary. A
-  gradient with more than two stops varies continuously left-to-right
-  across the selection, not just a single flat color.
-- **Apply a filter to** it - **Edit → Selection → Apply Filter to Selection** bakes
-  whatever filter is currently configured in the [Filter
-  Layers](#filter-layers) panel over the selection only, confined exactly
-  to its own boundary the same way Fill is - the rest of the layer is left
-  untouched. This is a one-time bake of the panel's current settings, not
-  a live filter that keeps reacting to further changes; undo it like any
-  other edit if the result isn't what you wanted.
-- **Copy** it - **Edit → Clipboard → Copy** (Ctrl+C) captures the selection's own
-  pixels onto the clipboard, leaving them in place.
-- **Cut** it - **Edit → Clipboard → Cut** (Ctrl+X) does the same as Copy, then
-  silences the selection's own region in place.
-- **Paste** the clipboard - **Edit → Clipboard → Paste** (Ctrl+V) writes it back at
-  the same position it was captured from, onto whichever layer is
-  currently active in the Layers panel - which doesn't have to be the
-  layer it was copied or cut from. Select a different layer's row first
-  to paste onto it instead. Combines with the destination per the
-  Selection Configuration panel's own **Paste Blend Mode** (above).
-  Switches straight to [Pick](#pick) and selects the newly pasted result
-  there - move, modify, delete, or restack it right away, with no
-  separate click needed to find it again.
-- **Capture as Mind Shot** it - **Edit → Capture → Capture as Mind Shot** opens a small
-  dialog before storing the selection's own pixels permanently: a **Name**
-  (defaulting to "Mind Shot 1", "Mind Shot 2", and so on, still editable; a
-  name that's already taken offers Replace/Rename/Cancel after you
-  confirm the dialog), a
-  **Fundamental Frequency**, and a **Start-Time Offset**. Unlike Copy, this
-  doesn't touch the clipboard, and the source pixels are left exactly as
-  they were (no silencing, unlike Cut). Once captured, pick **Mind Shot** as
-  the Tool Type in [Painting](#painting)'s Tool Configuration panel and
-  select it from the drop-down there to paint with it - it stamps back
-  exactly as captured, wherever you paint, on any layer, **pitch-shifted to
-  match wherever you stamp it** if you set a Fundamental Frequency (leave it
-  at `0`, the default, for a verbatim stamp at every pitch, unchanged from
-  before this dialog existed). Start-Time Offset shifts the stamp's own
-  placement earlier by that many seconds, so a capture with a little
-  lead-in before its own real attack still lands its attack exactly where
-  you paint, instead of the capture's own geometric middle landing there.
-  Always captures the selection's own full bounding box, even for a
-  Lasso/Wand/combined selection - not yet confined to its actual shape.
-- **Capture as Mind Grain** it - **Edit → Capture → Capture as Mind Grain** opens the
-  same dialog Capture as Mind Shot does (defaulting to "Mind Grain 1", "Mind
-  Grain 2", and so on, with the same Replace/Rename/Cancel on a name
-  collision) and stores a *reference* to the selection's own layer
-  and region - unlike Capture as Mind Shot, no pixels are captured at all,
-  and neither the clipboard nor the source layer's content is touched. Once
-  captured, pick **Mind Grain** as the Tool Type and select it from the
-  drop-down there to paint with it - see [Painting](#painting)'s own Mind
-  Grain entry for the "only paintable above its own source layer" rule and
-  the guardrails that enforce it, and Capture as Mind Shot's own entry just
-  above for what Fundamental Frequency/Start-Time Offset do (identical
-  either way). Also always references the selection's own full bounding
-  box, same as Mind Shot above.
-- **Create Resonance from Picked Path...** - **Edit → Picked Path Tools →
-  Create Resonance from Picked Path...** prompts for a name (defaulting
-  to "Resonance 1", "Resonance 2", and so on; a name that's already taken
-  offers Replace/Rename/Cancel), then
-  analyzes whichever path/stroke is currently Picked (every branch of a
-  branching path) and stores the result
-  permanently under that name - a confirmation appears in the status bar.
-  Pick **Resonance** as the Tool Type in
-  [Painting](#painting)'s Tool Configuration panel and select it from the
-  drop-down there to paint with it (see "Resonance Profile"/"Decay
-  Rate"/"Frequency Scale"/"Time Span" there).
-- **Branching Curve editor** - build a real tree/graph for a Resonance
-  brush, instead of just one straight stroke. Draw a trunk stroke
-  as an ordinary paint stroke, switch to Pick and click it, then **Edit
-  → Picked Path Tools → Start Branching Curve from Picked Path**. To grow a branch: click a
-  precise point on the trunk (or on any already-added branch) - this
-  arms that point as the next branch's own attachment point. Switch to
-  Paint and draw a new stroke, switch back to Pick and click it, then
-  **Edit → Picked Path Tools → Add Picked Path as Branch**. Repeat as many times as you
-  like, grafting new branches onto the trunk or onto earlier branches.
-  When the tree is complete, **Edit → Picked Path Tools → Create Resonance from
-  Picked Graph...** prompts for a name and stores the whole tree's own
-  spectrum, the same way Create Resonance from Picked Path
-  does for a single curve. **Edit → Picked Path Tools → Cancel Branching Curve** abandons an
-  in-progress tree without saving anything, if you want to start over.
-  Every branch past the trunk needs its own attachment point clicked
-  first - adding a branch with no point armed does nothing.
-- **Deselect** it - **Edit → Selection → Deselect** (Ctrl+D), or drag-clicking without
-  actually dragging (a plain click) on the canvas while in Select mode.
+### The Path tool
 
-Filling and pasting are both undoable (Ctrl+Z), the same as painting a
-stroke; so is Cut's own silencing of the source region.
+Choose **Path** from the **Tool** button and draw as you would paint. The line
+is kept as a smooth, **silent** path - shown in cyan, heard nowhere. Paths are
+guides:
 
-Rectangle, Lasso, and Wand selections all exist today, can be combined
-with each other, and a Rectangle selection can be rotated.
+- [Pick](#pick) a path to move it, delete it, or edit its nodes.
+- Right-click it, or use **Edit → Picked Path Tools → Stroke Picked Path with
+  Current Tool**, to paint along it with the current brush (as one undoable
+  step; the path stays).
+- Use it for **Create Resonance from Picked Path...**, **Use Picked Path as
+  MindWave Shape**, or as a branch of a branching path.
 
-## Path Tool
+A click without dragging draws nothing.
 
-Choose **Path** from the **Tool** dropdown to switch the canvas into Path
-mode; choose **Pan** (or any other tool) to leave it. Draw with it exactly
-like the Paint tool - press, drag, release - and the line you drew is kept
-as a **path**, smoothed into curves as you go. Unlike a brush stroke, a path
-is **silent**: it paints nothing and changes nothing you hear. It's a guide
-you can use afterwards:
+### Branching paths
 
-- It's drawn on the canvas as a **cyan** line on every visible layer. A
-  **branching path** - made by merging several selected paths (see
-  [Pick](#pick)), or kept from the Branching Curve editor - is drawn in
-  **pink**, with a dashed join where each branch connects to another.
-- [Pick](#pick) it to select, move or delete it, or to **edit its nodes**
-  (**Edit → Path Editing → Edit Path**) exactly like a painted stroke's.
-- Use it anywhere a Picked stroke's path is used: **Create Resonance from
-  Picked Path...**, **Use Picked Path as MindWave Shape**, or as a branch in
-  the Branching Curve editor.
+A **branching path** is a tree of curves, shown in pink. Make one in either
+of two ways:
 
-A press without dragging draws nothing. Each finished path is one undoable
-step, and switching tools mid-drag discards the line being drawn.
+- **Merge** - select several paths or strokes with Pick, right-click, and
+  choose **Merge into Branching Path** (also **Edit → Picked Path Tools →
+  Merge Picked Paths into Branching Path**). They're joined by the shortest
+  connections. Paths are replaced by the merged one; strokes lend their
+  shape and stay where they are.
+- **Grow one by hand** - Pick a stroke or path as the trunk and choose **Edit
+  → Picked Path Tools → Start Branching Curve from Picked Path**. Then, for
+  each branch: click the point on the tree where it should attach, draw a
+  new stroke, Pick it, and choose **Add Picked Path as Branch**. **Cancel
+  Branching Curve** abandons the tree.
 
-## Text Tool
+### Resonance profiles
 
-Choose **Text** from the **Tool** dropdown to write words onto the canvas -
-they're written as sound, so you can hear them and see them in the
-spectrum. The **Text Tool** panel opens alongside:
+A **Resonance profile** turns a drawn shape into a spectrum you can paint
+with:
 
-1. **Place a box** - drag on the canvas to draw it (the text is stretched to
-   fill it), or just click to place a box the text's own size, centred where
-   you clicked. A dashed outline shows the box, with a live preview of the
-   text inside it.
-2. **Style it** in the panel - every change shows in the preview right away:
-   - **Text**, **Font**, **Size** (letter height in canvas cells), **Bold**,
+- Pick a stroke or path (a branching path counts with all its branches) and
+  choose **Edit → Picked Path Tools → Create Resonance from Picked Path...**
+  (or **Create Resonance Profile...** in its right-click menu).
+- For a tree grown by hand, choose **Create Resonance from Picked Graph...**.
+
+Name it, and it's saved in the project. Choose **Resonance** as the Tool
+Type to paint with it, or use it in a [Resonance MindWave](#generator-types).
+
+## Text
+
+Choose **Text** from the **Tool** button to write words as sound - you can
+hear them and see them in the spectrogram. The **Text Tool** panel opens:
+
+1. **Place a box** - drag on the canvas (the text stretches to fill it), or
+   click to place a box the text's own size. A dashed outline shows it, with
+   a live preview.
+2. **Style it**:
+   - **Text**, **Font**, **Size** (letter height in canvas rows), **Bold**,
      **Italic**;
-   - **Left intensity** / **Right intensity** - how loud each channel is
-     written where a letter is solid (dB or a 0-1 value - use the unit
-     toggle); letter edges fade out smoothly;
-   - **Opacity** - scales the whole text's loudness;
-   - **Blend mode** - how it combines with what's already on the layer
-     (the same choices as Paste);
-   - **Rotation** - in degrees, counterclockwise.
-3. **Apply** writes it onto the active layer, as one undoable step. Only the
-   letters themselves are written - the space around and between them is
-   left exactly as it was.
+   - **Left intensity** / **Right intensity** - how loud each channel is in
+     the letters;
+   - **Opacity** - scales the whole text;
+   - **Blend mode** - how it combines with what's there;
+   - **Rotation** - degrees, counterclockwise.
+3. **Apply** writes it onto the selected layer. Only the letters are
+   written; the space around them is left alone.
 
-**Reset** discards the box without writing anything; switching to another
-tool does the same.
+**Reset**, or switching tools, discards the box.
 
-**Editing applied text.** Applied text stays editable, like any painted
-object:
-- [Pick](#pick) it, and its settings fill the Text Tool panel (which comes to
-  the front), with a note that you're editing the picked text.
-- Change anything there - the wording, font, size, intensities, opacity,
-  blend mode or rotation - and the text is redrawn in the same place.
-- Changes apply as you make them. While you're typing, the text redraws
-  after a short pause, so typing a word is a single step to undo.
-- Pick can also move, copy or delete it as before, and moved or copied text
-  stays editable.
-- Clearing the text box entirely is ignored rather than erasing the text;
-  delete it with Pick to remove it.
-- Choosing the Text tool again goes back to setting up new text.
+**Changing written text:** Pick it, and its settings appear in the Text Tool
+panel. Any change redraws it in place; while you type, it redraws after a
+short pause, so a typed word is one undo step. Clearing the text is ignored -
+delete it with Pick. Choosing the Text tool again starts new text.
 
-## Axis Labels
+## Grids, Axis Labels and Snapping
 
-**Grid**, in the **Configure** dropdown, opens a dockable panel (off by
-default) with two drop-downs, one per canvas axis:
+**Configure → Grid** holds the canvas's reference aids. None of them change
+the sound.
 
-- **Vertical axis (frequency)** - **Off** (the default), **Hz** (round
-  frequency values), **Notes** (the nearest note name, e.g. `A4`, `C#5`,
-  against the project's own tuning reference), or **Bin index** (the
-  raw row number the layer's own data is actually stored at).
-- **Horizontal axis (time)** - **Off** (the default), **Seconds**,
-  **Milliseconds**, or **Frame index** (the raw column number).
+### Axis labels
 
-Labels appear as small tick marks and text along the canvas's own left
-edge (frequency) and bottom edge (time), thinning themselves out - fewer,
-more widely spaced ticks - so they never crowd together and stay legible
-regardless of a project's own duration or frequency range. Purely a
-display aid, like everything else in this panel eventually will be: axis
-labels never affect encoding, decoding, or any stored pixel data.
+- **Vertical axis (frequency)** - **Off** (default), **Hz**, **Notes**
+  (`A4`, `C#5`...) or **Bin index** (the row number).
+- **Horizontal axis (time)** - **Off** (default), **Seconds**,
+  **Milliseconds** or **Frame index** (the column number).
 
-## Overlay Grids and Snap to Grid
+Labels appear along the left and bottom edges, spaced so they never crowd.
 
-The same **Grid** panel (see [Axis Labels](#axis-labels) above) also has a
-**Frequency Grid** section, a **Timing Grid** section, and a **Snap to
-Grid** checkbox at the bottom.
+### Frequency grid
 
-**Frequency Grid** draws horizontal reference lines across the canvas -
-any combination of these can be on at once:
+Horizontal lines at chosen frequencies. Any combination can be on:
 
-- **Note grid** - one line per semitone, against the project's own tuning
-  reference, narrowed by:
-  - **Temperament** - the tuning system: 12-TET (the default) plus
-    15/17/19/22/24/31/34/41/53/72-TET, Quarter-Comma Meantone, and
-    Pythagorean. Only 12-TET, 24-TET, Meantone, and Pythagorean have a
-    standard 12-notes-per-octave structure for the Key/Scale filter below
-    to mean anything against - picking any other temperament grays Key
-    and Scale out, and the **Notes...** dialog shows plain numbered steps
-    instead of letter names for it.
-  - **Key**/**Scale** - picking a Scale other than Chromatic (Major,
-    Dorian, Phrygian, Lydian, Mixolydian, Minor, Locrian, Harmonic Minor,
-    Melodic Minor, Major/Minor Pentatonic, Blues, Whole Tone, or
-    Octatonic) restricts the grid to that scale's own notes, rooted at
-    whichever Key you pick - e.g. Key C + Scale Major shows only C Major's
-    own seven notes. Changing either one recomputes which notes are
-    included from scratch, discarding any changes you made in the Notes
-    dialog below it.
-  - **Notes...** - opens a checklist of every note the current
-    Temperament has (one row per semitone for 12-TET, more for a finer
-    temperament), with Select All/Deselect All - check or uncheck
-    individual notes directly, on top of (or instead of) a Key/Scale
-    pick. Stays as you left it until Temperament, Key, or Scale next
-    changes.
-  - **Octaves...** - the same kind of checklist, for which octaves
-    appear; unchecking one removes every note in it, regardless of which
-    notes are otherwise included.
-- **Harmonic series** - one line per integer multiple of a **Fundamental**
-  you set (in Hz).
-- **Custom frequencies** - a **Frequencies (Hz)** field you type your own
-  list into (comma- or space-separated, e.g. `220, 440, 880`); anything
-  that isn't a valid positive number is ignored rather than blocking the
-  rest of the list.
+- **Note grid** - a line per note:
+  - **Temperament** - 12-TET (default); 15, 17, 19, 22, 24, 31, 34, 41, 53 or
+    72-TET; Quarter-Comma Meantone; Pythagorean.
+  - **Key** / **Scale** - limit the lines to a scale (Major, the modes,
+    Minor, Harmonic and Melodic Minor, Major and Minor Pentatonic, Blues,
+    Whole Tone, Octatonic) in a key. Available for 12-TET, 24-TET, Meantone
+    and Pythagorean.
+  - **Notes...** - tick individual notes. **Octaves...** - tick which
+    octaves show. Changing Temperament, Key or Scale resets the Notes choice.
+- **Harmonic series** - a line at every multiple of a **Fundamental** (Hz).
+- **Custom frequencies** - type your own list (`220, 440, 880`).
 
-**Timing Grid** draws vertical reference lines, from one **Mode**
-drop-down (only one at a time, unlike Frequency Grid's combinable
-sources):
+### Timing grid
 
-- **Off** (the default) - no lines.
-- **Fixed Interval** - one line every **Interval** (seconds).
-- **Tempo** - one line per **Subdivision** (Whole/Half/Quarter/Eighth/
-  Sixteenth/Thirty-second note) at the project's own default tempo.
+Vertical lines, from **Mode**: **Off** (default), **Fixed Interval** (every so
+many seconds) or **Tempo** (every whole, half, quarter, eighth, sixteenth or
+thirty-second note at the project's tempo).
 
-Each of Frequency Grid and Timing Grid has its own **Line color** swatch,
-**Line width** (pixels), and **Line style** (Solid/Dash/Dot) - set them
-independently so the two grids stay visually distinct when both are on
-at once. Purely a display aid, like Axis Labels: neither grid affects
-encoding, decoding, or any stored pixel data.
+Each grid has its own **Line color**, **Line width** and **Line style**.
 
-**Grid Preset** saves the Frequency Grid, Timing Grid, and Snap to Grid
-state above together as one named, reloadable unit - **Save...** names
-and saves the panel's current settings (if the name you type is already
-taken, you're asked to Replace the existing preset, pick a different
-name, or cancel); picking a saved preset from the drop-down loads it
-back immediately; **Delete** removes whichever preset is currently
-selected. Axis Labels aren't included - just the grid/snap settings.
-Grid Presets also show up in the [Resource Browser](#resource-browser)
-for browsing alongside your other saved resources, though saving,
-loading, and deleting one is this panel's own job, not the Resource
-Browser's.
+### Snap to Grid
 
-**Snap to Grid**, once checked, makes a Path node drag, a whole-object
-Pick move, or a Selection drag land on the nearest active grid line
-instead of exactly where you release the mouse - frequency snaps to the
-nearest active Frequency Grid line, and time snaps to the nearest active
-Timing Grid line, independently of each other. With a grid's own sources
-all off, that axis simply isn't snapped (nothing to snap to).
+With **Snap to Grid** ticked, dragging a path node, moving with Pick, or
+drawing a selection lands on the nearest grid line - frequency on the nearest
+frequency-grid line, time on the nearest timing-grid line. An axis with no
+grid lines isn't snapped.
+
+### Grid presets
+
+**Grid Preset** saves the frequency grid, timing grid and snapping together
+under a name; choose one to load it, **Delete** to remove it. Axis labels
+aren't included. Presets also appear in the [Resource
+Browser](#resource-browser).
+
+## Undo and History
+
+**Undo** (`Ctrl+Z`) and **Redo** (`Ctrl+Y`) cover everything you do to a
+project:
+
+- importing, recording, Loop takes and generated layers;
+- adding, deleting, duplicating, renaming and reordering layers, and every
+  layer setting;
+- painting, filling, pasting, text, phase cleanup, and everything done with
+  Pick;
+- creating, editing and removing MindWaves, captured brushes, Resonance
+  profiles, kernels, presets and MIDI mappings.
+
+Zooming, scrolling, choosing tools, selections and device settings aren't
+undone.
+
+The **History** panel (the **History** toolbar button) lists every step, with
+your current position highlighted. Double-click a step to jump to it.
+
+The history is saved with the project, so Undo still works after reopening
+it. Undoing back past a recording or Loop take may take a moment after
+reopening, while the Studio rebuilds the earlier audio from the project's
+sources.
+
+---
+
+# Part 4 - Listening and recording
 
 ## Playback
 
-The **Playback** panel has **Play**, **Pause**, and **Stop**, and a
-draggable position bar with an elapsed/total time label. It plays the
-project's own real composite - every visible layer mixed together (see
-[Compositing](#compositing) above), spanning the project's own full
-canvas-width duration, silence included past wherever real content ends.
-Pressing Play decodes that composite once, unless **Repeat** (below) is
-checked. The output device and volume it plays through are set from
-[Configure Devices](#configure-devices), not from this panel - open it
-directly with this panel's own **Configure Devices** button.
+Open **Input/Output → Playback**. It has **Play**, **Pause** and **Stop**, a
+position bar with the elapsed and total time, and a **Configure Devices**
+button. Playback plays every visible, unmuted layer combined, over the
+project's whole length.
 
-While playing, a white line sweeps across the canvas in real time,
-tracking the current position - the same playhead line a video export
-would show, live. Drag the position bar (whether playing or paused) to
-seek to a different point; both the bar and the canvas playhead jump to
-match immediately.
+While playing, a white line sweeps across the canvas. Drag the position bar
+(playing or paused) to jump elsewhere.
 
-The first time you press Play in a session, preparing that composite runs
-in the background rather than freezing the app - for a large project, a
-small **✕** button appears in the status bar to cancel it if you change
-your mind; cancelling just means playback doesn't start. New/Open Project
-and closing the Studio are all disabled while playback is being prepared,
-the same as while an import is running.
+Pressing Play prepares the sound in the background; on a large project the
+status bar shows a **✕** to cancel. New Project, Open Project and closing the
+Studio wait while it's being prepared.
 
-### Repeat Playback
+The output device and volume are set in [Configure
+Devices](#configure-devices). If nothing will be heard - the device is missing
+or busy, the output gain is 0%, or the device runs at a different sample rate
+than the project (which makes playback too fast or slow) - the status bar
+says so when you press Play.
 
-The **Scope** drop-down decides how an edit affects playback, and
-**Repeat** decides what happens once that reaches its own end:
+### Repeat and Scope
 
-- **Track** (the default) - only reacts to an edit while **Repeat** is
-  checked *and* something is already playing: it keeps playing without
-  interruption while the edit is prepared in the background, and the
-  fresh sound takes over at the exact moment the loop restarts. (If the
-  edit changes the track's length it reloads in place at the same
-  position instead.)
-- **Delta** - painting (or any other edit) jumps playback to whatever you
-  just edited and plays through just that region - automatically, even if
-  nothing was playing yet and even with **Repeat** unchecked, so you hear
-  a fresh brush stroke without pressing Play yourself. The sound is
-  prepared in the background, so you can keep painting; it starts a
-  moment later (longer for a big project), and if you edit again before
-  then, you hear the newer edit. With
-  **Repeat** checked it then loops that region repeatedly; unchecked, it
-  plays through once and stops right there.
-- **Review** - jumps to the edit like Delta (same automatic, no-Play-
-  needed behavior), but plays through to the end of the track instead of
-  stopping at the edit. With **Repeat** checked it then loops back to the
-  very start of the track (not back to the edit itself); unchecked, it
-  just stops once it reaches the end.
+**Repeat** loops playback. **Scope** decides what playback does when you
+edit:
 
-Unchecking Repeat, or dragging the position bar yourself, always goes
-back to playing (or looping) the whole track.
+- **Track** (default) - while Repeat is on and playback is running, your edit
+  is prepared in the background and heard from the next time round, without
+  interruption.
+- **Delta** - each edit jumps playback to the edited region and plays just
+  that region, even if nothing was playing - so you hear a new stroke
+  without pressing Play. It starts a moment after the edit (longer for a big
+  project); with Repeat on it loops the region, otherwise it plays it once.
+- **Review** - like Delta, but plays on from the edit to the end of the track;
+  with Repeat on it then loops back to the start of the track.
 
-A loop-back (Repeat checked, reaching the active region's own end) is
-seamless - no audible gap or skip at the seam, regardless of region
-length.
+Unticking Repeat, or dragging the position bar, returns to playing the whole
+track. Looping back is seamless.
 
 ## Recording
 
-The **Record** panel has a **Start Recording**/**Stop Recording** toggle,
-its own **Configure Devices** button, and two settings for where the
-recording goes:
+Open **Input/Output → Record**:
 
-- **Record into** - **New recording layer** (the default) adds a brand-new
-  layer, named from the **Name** box (default "Recording"); or pick one of
-  your earlier recorded layers to record over it - its content is
-  replaced by the new recording (Edit → Undo brings the old one back).
-- **Live-encoding view** - shows the recording on the canvas as it comes
-  in. It's drawn on top of everything else rather than at its own place
-  in the layer stack (that would be too slow while recording); once you
-  stop, the recorded layer shows in the stack as usual.
+- **Start Recording** / **Stop Recording**.
+- **Record into** - **New recording layer** (default), named from the
+  **Name** box ("Recording"); or one of your earlier recorded layers, to
+  record over it (Undo brings the old take back).
+- **Live-encoding view** - shows the recording on the canvas as it comes in.
+  It's drawn on top of everything; once you stop, the layer takes its place
+  in the stack.
+- **Configure Devices** - choose the input there.
 
-Recording captures from the input device chosen in [Configure
-Devices](#configure-devices), at whatever sample rate that device runs at,
-and is converted to the project's rate and encoded the same way an
-imported file would be when you stop. That happens in the background - the status bar says
-"Saving the recording..." - and the layer appears when it's done, so a
-long take doesn't freeze the window. New Project, Open Project and
-closing the Studio wait for it, so a take is never lost. While recording, the playback position bar moves
-across the canvas to show how far you've got. That input device (and its
-Gain) can't be changed while recording is in progress.
+While recording, the position line shows how far you've got. When you stop,
+the take is converted to the project's sample rate and encoded in the
+background ("Saving the recording..."), and the layer appears when it's done.
+New Project, Open Project and closing the Studio wait for it, so a take is
+never lost. The input device can't be changed while recording.
 
 ## Loop Mode
 
-The **Loop** panel turns the Studio into a loop station that plays along
-with your whole project:
+Open **Input/Output → Loop** to use the Studio as a loop station that plays
+along with your project:
 
-- **Start Loop** plays the whole project from the start and, at the same
-  time, records your input into the **Loop Input** layer. Loop Mode
-  assumes your audio device runs at the project's sample rate - new
-  projects match it automatically; for an older project at another rate,
-  set the device to the project's rate in your system sound settings. (While the
-  project's sound is being prepared, the status bar says "Preparing
-  loop..." for a moment.)
-- When playback reaches the end, the take you just recorded replaces the
-  previous one, and playback carries on from the start - you hear the new
-  take straight away, together with the rest of the project, while the
-  next pass records.
-- Check **Freeze Loop** to stop recording and keep the current take: the
-  project and that take keep playing, pass after pass, uninterrupted.
-  Uncheck it to start recording again at the beginning of the next pass.
-- The Loop Input layer's own **Gain** and **Balance** (and hiding or
-  muting it) apply to the take as you play. Edits to the rest of the
-  project are heard from the next pass on.
-- The playback position bar sweeps across the canvas as the loop plays,
-  and the Loop Input layer shows each take once its pass is complete.
-- Check **Live-encoding view** to watch the take being recorded appear on
-  the canvas as it comes in, drawn on top of everything else (not at the
-  Loop Input layer's own place in the stack, which would be too slow
-  while looping).
+- **Start Loop** plays the whole project from the start and records your
+  input into the **Loop Input** layer at the same time ("Preparing loop..."
+  shows for a moment first).
+- At the end of each pass, the take you just played replaces the previous
+  one, and playback carries on from the start - you hear the new take at
+  once, while the next one records.
+- **Freeze Loop** stops recording and keeps the current take playing, pass
+  after pass. Untick it to record again from the next pass.
+- The Loop Input layer's **Gain**, **Balance**, hiding and muting apply to the
+  take as you play. Edits to the rest of the project are heard from the next
+  pass.
+- **Live-encoding view** shows the take being recorded, drawn on top.
 
-While a loop is running, filters and blend modes on layers *above* Loop
-Input don't apply to the live take yet - once you stop, ordinary
-playback includes them as usual.
+Loop Mode uses the input and output from [Configure
+Devices](#configure-devices); a change applies the next time you start the
+loop, and both are locked while it runs. Loop Mode expects the audio device
+to run at the project's sample rate. New projects match it automatically;
+for an older project at another rate, set the device to the project's rate
+in your system's sound settings.
 
-Input and output devices are chosen from [Configure
-Devices](#configure-devices) - open it directly with this panel's own
-**Configure Devices** button; a device change takes effect the next time
-you start the loop, not immediately. Both devices are locked (can't be
-changed) while a loop is running.
-
-## Macros
-
-A **Macro** records a performance: the project playing, and everything you
-do to it while it plays. It's kept with the project.
-
-- **Macro → Record Macro** starts recording a new Macro ("Macro 1",
-  "Macro 2", ...). Then start Playback or Loop and work: paint, change
-  layer settings, filters and MindWaves, import, record. Undo and Redo
-  count too.
-- **Its clock only runs while Playback or Loop runs.** Pause, set up your
-  next move, and resume: the changes you made while paused are recorded,
-  in order, at the moment you paused, so the pause doesn't appear in the
-  performance. Seeking, Repeat jumping back, and each new Loop pass are
-  recorded as jumps of the playhead.
-- **Record Macro** again stops recording; the status bar reports its
-  length and how many events it holds.
-- **Macro → Manage Macros...** lists the recorded Macros with their
-  length and event count, to **Rename...** or **Delete** them.
-
-- **Macro → Export Macro Video...** renders a Macro (you pick which, if
-  there are several) to a video, set up with the same dialog as
-  [Export Video](#exporting): the canvas, changing at each moment
-  you changed something - complete at once, however long it took live -
-  with the playhead line where yours was and the audio it played. It's
-  rendered from a copy, so you can keep working; the status bar shows it
-  running, with a Cancel button.
-
-- **Macro → Play Macro** plays a Macro back in the Studio (you pick which,
-  if there are several). It's prepared in the background and starts after
-  a moment, then plays without a break - a change that took a while live
-  is instant - while preparation keeps ahead of it. The canvas shows the
-  performance as it unfolds; your project isn't changed, and the canvas
-  shows it again when the Macro ends. Meanwhile the action reads **Stop
-  Macro**, the transport's **Pause**, **Play** and **Stop** work on it, and
-  the canvas doesn't respond to clicks.
-
-A dragged control (gain, a filter or MindWave setting) is recorded as the
-value you let go at, not the movement.
+While a loop runs, filters and blend modes on layers above Loop Input don't
+apply to the live take; ordinary playback includes them as usual.
 
 ## Configure Devices
 
-Open **Configure Devices** from the **Configure Devices** button inside
-the Playback, Record, or Loop panel (it's the same shared panel either
-way, off by default) - it's the *only* place input and output devices are
-chosen; Playback, Recording, and Loop Mode all use whatever's set here
-rather than having pickers of their own. The same controls are also
-available on the [start screen](#starting-out)'s own **Device
-Configuration** section, before any project exists - the two stay in
-sync with each other automatically, so it doesn't matter which one you
-actually use.
+**Configure Devices** (the button in the Playback, Record and Loop panels,
+or on the start screen) is the one place audio devices are chosen.
 
-- **Refresh Devices** re-scans for newly connected devices.
-- **Input**: pick the active input device - applies to both Recording and
-  Loop Mode at once. A **Gain** slider (0-200%, 100% is unchanged) boosts
-  or cuts the signal before it's captured. Click **Test** to see a live
-  level meter respond as you speak or play into the device, without
-  starting a real recording.
-- **Output**: pick the active output device - applies to both Playback
-  and Loop Mode at once. A **Gain** slider works the same way. Click
-  **Test** to play a brief tone through the device, confirming you hear
-  it from the right place.
-- **Output processing**:
-  - **Master limiter** (on by default) keeps the output at or under its
-    ceiling (default -1 dBFS). Where the mix would go over, it is turned down
-    smoothly for a moment instead of distorting. It applies to Playback, to
-    what you hear in Loop Mode (your takes are still recorded at their full
-    level) and to every audio or video export. The number next to it is the
-    ceiling (-24 to 0 dBFS).
-  - **Normalize loudness** (off by default) plays every mix at the same
-    loudness: when playback starts, the Studio measures the mix's integrated
-    loudness and turns the output up or down toward the target (default
-    -14 LUFS, the level many streaming services use). The correction is at
-    most 24 dB down or 12 dB up, and it holds steady across pause and resume.
-    It affects playback only, so exports keep the mix's own level; use the
-    [Analysis](#analysis) panel to see that level.
+- **Refresh Devices** looks for newly connected devices.
+- **Input** - the device for Recording and Loop Mode. **Gain** (0-200%,
+  100% unchanged) boosts or cuts it. **Test** shows a live level meter.
+- **Output** - the device for Playback and Loop Mode, with its own **Gain**.
+  **Test** plays a short tone.
+- **Master limiter** (on by default) keeps the output at or below its ceiling
+  (default -1 dBFS, settable from -24 to 0), turning loud moments down
+  smoothly instead of distorting. It applies to Playback, to what you hear
+  in Loop Mode (takes are recorded at full level), and to audio and video
+  exports.
+- **Normalize loudness** (off by default) plays every mix at the same
+  loudness: when playback starts, the mix is measured and turned up or down
+  towards the target (default -14 LUFS, the level many streaming services
+  use), by at most 24 dB down or 12 dB up. It affects playback only, never
+  exports.
 
-  Both settings are remembered between sessions.
+If a device can't be opened, **Test** unticks itself and a message says why.
+Settings are remembered between sessions. The input is locked while
+recording or looping; the output only while looping.
 
-If a device can't be opened, **Test** un-checks itself and a warning says
-why - a Test that quietly does nothing never happens. Pressing **Play** also
-re-tries your chosen output device automatically, and the status bar tells
-you if nothing will be heard (device missing or in use by another program,
-output gain at 0%) or if the device runs at a different sample rate than the
-project (which makes playback sound faster/slower and shifted in pitch - set
-the device to the project's rate in your system sound settings).
+## Macros
 
-The Input combo (and its Gain) locks while Recording or Loop Mode is
-running; the Output combo (and its Gain) locks only while Loop Mode is
-running, since Recording never touches output.
+A **Macro** records a performance - the project playing and everything you do
+to it meanwhile - and keeps it with the project.
 
-## Exporting
+- **Macro → Record Macro** starts recording a Macro ("Macro 1"...). Then
+  start Playback or Loop and work: paint, change layers, filters and
+  MindWaves, import, record, undo and redo. Choose **Record Macro** again to
+  stop; the status bar shows its length and how many changes it holds.
+- **The Macro's clock runs only while Playback or Loop does.** Pause, prepare
+  your next change and resume: changes made while paused are recorded, in
+  order, at the moment you paused. Seeking, Repeat's jumps and each Loop pass
+  are recorded as jumps of the playhead.
+- A dragged control is recorded at the value you let go at.
+- **Macro → Play Macro** plays a Macro back on the canvas (you choose which).
+  It's prepared in the background and starts after a moment; changes that
+  took a while live happen at once. Your project isn't changed, and the
+  canvas ignores clicks meanwhile. The action reads **Stop Macro**, and
+  Playback's Pause, Play and Stop control it.
+- **Macro → Export Macro Video...** renders a Macro to a video, with the same
+  dialog as [Export Video](#exporting): the canvas changing as you changed
+  it, the playhead where yours was, and the sound it played. It renders in the
+  background from a copy.
+- **Macro → Manage Macros...** lists your Macros, to **Rename...** or
+  **Delete** them.
 
-**File → Export Audio...** saves the whole mix - every visible, unmuted
-layer, with filters applied, exactly what Playback plays - as FLAC, Ogg
-Vorbis, or MP3 (pick the format via the save dialog's file type).
+---
 
-**File → Export Video...** saves it as a video: the composite spectrogram,
-animated with the mixed audio played alongside it. A dialog sets it up,
-and remembers your choices for next time:
-
-- **Output file** - with **Browse...**; the extension follows the format.
-- **Format** - **H.264 (MP4)**, recommended: small files that play
-  everywhere. **HEVC (MP4)**: smaller still, listed only where Windows
-  provides an HEVC encoder. **ProRes (MOV)**: very large files, for further
-  editing. **MPEG-4 (MP4)**: works everywhere, larger files. Only formats
-  that work on your computer are listed.
-- **Resolution** - 1080p, 4K, 1440p, 720p, vertical 1080×1920 or 720×1280
-  (TikTok, Reels, Shorts), square 1080×1080, the canvas's own size, or a
-  custom width and height. The canvas keeps its proportions, with black
-  bars where the shapes differ.
-- **Frame rate** - 24, 30 (the default) or 60 frames a second.
-- **Quality** - Low, Medium (the default) or High: bigger files at higher
-  quality.
-- **Animation** - **Whole canvas**: the whole canvas is shown throughout,
-  with the playhead sweeping across it. **Scrolling**: a window a chosen
-  number of seconds wide pans from the start of the canvas to its end,
-  with the playhead crossing it. **Show playhead** turns the line (bright
-  yellow, with a dark outline) on or off.
-- In [Sound Flower (polar) view](#sound-flower-polar-view) the video is
-  the flower, and the dialog says so. With Whole canvas a ray turns
-  clockwise from twelve o'clock; with Scrolling the flower itself turns,
-  bringing the moment being played under a fixed ray at twelve o'clock.
-  A scrolling polar video takes longer to make than the others.
-- **Open the video when the export finishes** - opens it in your video
-  player.
-
-The status bar shows how far the export has got, as a percentage.
-
-**File → Export Image...** saves a copy of the canvas as an image:
-
-- **File** - with **Browse...**; the extension and the **Format** follow
-  each other: **PNG**, **JPEG**, **BMP**, **TGA** or **WebP** (the same
-  formats image import reads).
-- **Full resolution** (the default) - one pixel per canvas column and
-  frequency bin, shown as width x height. Or **Custom size**: a width and
-  height in pixels; with **Keep proportions** ticked, changing one changes
-  the other to keep the canvas's shape.
-- **As Sound Flower** - saves the [polar view](#sound-flower-polar-view) as
-  a square image; ticked when the canvas is showing it. Its full
-  resolution is a square twice the canvas's height.
-
-Every visible layer is included, filters applied, as the canvas shows it
-(a muted layer is still seen, so it's in the image too).
-
-Audio and video exports run the audio through the master limiter first if it's on in
-[Configure Devices](#configure-devices), so a mix that goes over full scale
-is turned down at its peaks instead of clipping. Loudness normalization is
-never applied to exports.
-
-Every kind of export runs in the background - you can keep working while
-one encodes, and a small **✕** button appears in the status bar to cancel
-it if you change your mind; cancelling removes whatever it had written so
-far rather than leaving a broken file behind. Only one export runs at a time - starting another while one is already in progress
-just shows a reminder to wait or cancel first.
-
-## Saving and Project Files
-
-**Ctrl+S** (or **File → Save Project**) saves in place; **File → Save
-Project As...** saves a copy elsewhere. A project is a `.smproj` file plus
-a same-named folder next to it - keep the file and its folder together;
-moving or copying one without the other breaks the project. The folder
-holds:
-
-- `media/` - every layer's encoded content;
-- `sources/` - a copy of every file you imported (audio, images, MIDI),
-  every recording and Loop take (as lossless FLAC files), and every layer
-  brought in from another project. The project never depends on the
-  originals elsewhere on your computer. This folder can grow large: every
-  Loop take is kept. **Save As** copies it along.
-
-Closing the window, opening a different project, or starting a new one
-while you have unsaved changes prompts you to save first.
-
-### Remastering
-
-**File → Remaster...** rebuilds the open project as a **new** project by
-replaying everything you did to it, from its own sources. The open project
-isn't changed. In the dialog:
-
-- **Sample Rate, Timestep, Bin Count, Min/Max Frequency** start at the
-  project's own settings. Change them to rebuild at a higher (or just
-  different) resolution. The duration stays the same. Strokes, fills,
-  pastes and text land at the same times and frequencies; text is redrawn
-  at the new resolution, and pasted pieces are resampled.
-- **Sources** lists every file, recording and Loop take the project was
-  made from. **Replace...** swaps one for another file: everything that
-  used it is rebuilt from the new one, and the edits placed in time stay
-  where they were.
-- **Save as** - where to save the new project.
-
-Pressing **Remaster** without changing anything rebuilds the project as it
-is, which is how to recover layer content whose files went missing (the
-Studio says so when you open such a project). When it's done, the Studio
-offers to open the new project.
-
-Remastering needs the project's complete history, so it isn't available
-for projects made with a version before 0.1.43.1. A Mind Shot is resampled
-in proportion when the frequency range or bin count changes, which only
-approximates its original pitch.
-
-A project can also be opened from outside the Studio: start
-`sound-mind-studio.exe` with the `.smproj` file's path (for example by
-dropping the file onto the program, or onto a shortcut to it). The
-Microsoft Store version, once it's published, also makes double-clicking a
-`.smproj` file open it. If the project can't be opened, a message says why
-and the start screen stays up.
-
-## Resource Browser
-
-**Resource Browser** (its own entry in the menu bar, between **View** and
-**Help**) opens a panel for browsing, exporting,
-and importing the "library" resources a project accumulates - MindWaves,
-Tool Presets (Procedural, Instrument, Resonance, and every other brush
-type with saved settings), Mind Shots, Resonance Profiles, Filter Presets
-(a whole saved Filter layer configuration), Convolution Kernels (a saved
-kernel for the Convolve filter type specifically), Grid Presets (see
-[Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid) - saved/
-loaded/deleted from the Grid panel itself, browsable here like everything
-else), Mind Grains, and Layers. Pick a category from the drop-down at the
-top to see every one of that kind your current project has; selecting an
-entry shows its parameters in the inspector, plus a rendered preview
-where one makes sense:
-
-- **MindWave** - a small grayscale preview of the field it actually
-  generates, the same preview the MindWaves panel's own rows show, plus a
-  **Play** button: hear a default instrument modulated by this MindWave
-  (its vibrato), painted as the same representative stroke Tool Preset
-  uses below.
-- **Tool Preset** - a preview stroke: a straight 3-second line from 3 kHz
-  to 5 kHz, painted with the preset's own configuration, so you can see
-  what it actually looks like before picking it, plus a **Play** button
-  to hear it (an Instrument bound to a MindWave plays its vibrato/tremolo
-  too). The preview image is cropped to frequencies at or above 1 kHz, so
-  the stroke itself (always well above that) fills the small preview
-  rather than being squeezed down alongside the rest of the frequency
-  range.
-- **Mind Shot** - its own rendered spectrogram, plus a **Play** button to
-  hear it.
-- **Resonance Profile** - a plot of its spectrum, and, alongside it, the
-  source path or branching curve it was computed from (if captured since
-  this rendering was added - an older entry just shows the spectrum
-  alone), plus a **Play** button: hear a default Resonance brush using
-  this profile's own spectrum, the same representative stroke as above
-  (no Play button for an entry with an empty spectrum - nothing to
-  preview).
-
-- **Export...** saves the selected entry to its own standalone file (a
-  MindWave as `.smwave`, a Tool Preset as `.sminst`, a Mind Shot as
-  `.smshot`, a Resonance Profile as `.smresonance`, a Filter Preset as
-  `.smfilter`, a Convolution Kernel as `.smkernel`), which you can hand to
-  someone else or import into a different project later. Grid Presets,
-  Mind Grains, and Layers have no standalone file of their own yet - a
-  Mind Grain only makes sense tied to its own layer, and a Layer is
-  portable by browsing its own project directly (see below).
-- **Import from File...** reads one of those same file types back in,
-  adding it to your current project's own library under its saved name -
-  unless that name is already taken, in which case you're asked whether
-  to use the imported version (**Overwrite**), keep what you already
-  have (**Keep Existing**), or keep both (**Keep Both**, which
-  auto-numbers the import as "Name (2)", "Name (3)", and so on).
-- **Browse Other Project...** opens a second `.smproj` file read-only,
-  without closing or changing the one you're working on, and shows its own
-  libraries in the same panel. Select anything in it - including a whole
-  Layer, with its painted content - and click **Import** to copy it into
-  your current project (the same Overwrite/Keep Existing/Keep Both prompt
-  as **Import from File...** above, if the name collides). **Return to
-  This Project** switches the panel back to your own project's own
-  libraries.
-- **Toolkit draft**: build up a bundle of several resources to share as one
-  file. Select an entry (any category with its own file format) and click
-  **Add to Toolkit** - it appears in the draft list below, and you can keep
-  adding more from other categories, or even from a browsed other project,
-  before exporting. If the entry you add depends on something else - a
-  Tool Preset or Filter Preset with a parameter bound to a MindWave, say -
-  that MindWave is added automatically too, and a message tells you which
-  extra resources were pulled in, so the bundle still works correctly once
-  imported somewhere else. **Remove** takes a selected draft entry back
-  out. **Export Toolkit...** asks for a name, then a destination
-  `.smtoolkit` file, and clears the draft once written. **Import
-  Toolkit...** reads one back in and adds every bundled resource to your
-  current project in one step - either everything in the file is added,
-  or (if something in it is malformed) nothing is, never a partial
-  import; the same Overwrite/Keep Existing/Keep Both prompt appears for
-  any bundled entry whose name collides with one you already have.
+# Part 5 - Measuring the sound
 
 ## Analysis
 
-**View → Analysis** opens the Analysis panel - meters that read the project
-without ever changing it.
+**View → Analysis** opens meters that measure the project without changing
+it.
 
-At the top, above the three tabs (so they're there whichever tab you're
-on):
+At the top:
 
-- **Analyze** measures the project - loudness, stereo and pitch all at
-  once. It runs in the background, so you can keep working.
-- **Auto-update** analyzes again by itself whenever you change anything you
-  can hear - painting, layers, filters, MindWaves, recordings, undo and
-  redo.
-  If an analysis is already running when you make a change, it's stopped
-  and a fresh one starts about a third of a second after your last change.
-  A quick series of edits therefore costs one analysis. Turning it on
-  analyzes straight away if the results are missing or out of date, and it
-  also analyzes each project you open. It's off by default and remembered
-  between sessions. On a long project with many layers, analysis can keep
-  your computer busy while you edit, so leave it off if editing feels slow.
-- The status line says whether the results are up to date. Without
-  Auto-update, they say **Out of date** once you change the project, until
-  you analyze again.
+- **Analyze** measures loudness, stereo and pitch at once, in the background.
+- **Auto-update** analyzes again whenever you change anything you can hear,
+  about a third of a second after your last change. It also analyzes each
+  project you open. It's off by default and remembered. On a long project
+  with many layers, analysis can slow editing down - leave it off if so.
+- The status line says whether the results are up to date ("Out of date"
+  after a change, until you analyze again).
 
 ### Loudness
 
-**Analyze** measures the whole mix, exactly as you hear it, and every
-audible layer on its own (each with its own volume, balance and timing).
+The whole mix, as you hear it, and every audible layer on its own:
 
-- **Integrated** - the loudness of the whole mix in LUFS, measured the way
-  streaming services and broadcasters do (EBU R128). Many streaming
-  services play music at around -14 LUFS.
-- **Loudest 3 s / Loudest 400 ms** - the loudest short-term and momentary
-  readings anywhere in the mix.
-- **True peak** - the highest peak, including the peaks that fall between
-  samples. Above 0 dBTP it turns **red**: those peaks will distort.
+- **Integrated** - the mix's loudness in LUFS, measured the way streaming
+  services and broadcasters do (EBU R128). Many streaming services play
+  music at about -14 LUFS.
+- **Loudest 3 s** / **Loudest 400 ms** - the loudest short-term and
+  momentary readings.
+- **True peak** - the highest peak, including peaks between samples; red
+  above 0 dBTP, where it will distort.
 - **Sample peak** - the highest sample.
-- **Clipped samples** - how many samples go beyond full scale, which
-  distort (hard-clip) when played or exported. Any at all shows in **red**.
-- **At playhead** - the momentary (400 ms) and short-term (3 s) loudness at
-  the playback position, following playback.
-- **The graph** shows momentary (thin, blue) and short-term (thick, gold)
-  loudness over the whole project, from 0 down to -60 LUFS, with the
-  playback position marked.
-- **The band view** below it shows each frequency band's level over time -
-  sub, bass, low-mid, mid, high-mid and air, lowest at the bottom, brighter
-  meaning louder.
-- **The layer table** lists each layer heard on its own: integrated
-  loudness, loudest 3 s, true peak and clipped samples (red when
-  clipping).
-- **Show loudness on canvas** draws the mix's loudness right over the
-  canvas, lined up with the time axis:
-  - short-term loudness is a solid yellow line, and momentary loudness a
-    thinner, fainter one;
-  - the scale runs from -60 LUFS at the bottom of the canvas to 0 LUFS at
-    the top, which is not the canvas's frequency axis;
-  - the line breaks where the mix is silent.
+- **Clipped samples** - how many go beyond full scale; any at all are red.
+- **At playhead** - momentary and short-term loudness at the playback
+  position.
+- **The graph** - momentary (thin, blue) and short-term (thick, gold) loudness
+  over the project, from 0 to -60 LUFS.
+- **The band view** - each frequency band's level over time (sub, bass,
+  low-mid, mid, high-mid, air; brighter is louder).
+- **The layer table** - each layer's integrated loudness, loudest 3 s, true
+  peak and clipped samples.
+- **Show loudness on canvas** - draws short-term (solid yellow) and
+  momentary (thin) loudness over the canvas, from -60 LUFS at the bottom to
+  0 at the top. The line breaks where the mix is silent.
 
 ### Stereo
 
-The **Stereo** tab (filled in by the same **Analyze**) shows the mix's
-stereo image:
-
-- **Correlation** - how alike the two channels are: **+1** is mono, **0**
-  means unrelated channels, and **below 0** (shown in **red**) means parts
-  of the left and right cancel each other out when the mix is played in
-  mono - on a phone speaker, say.
-- **Width** - **0** is mono, around **0.5** is a wide stereo image, **1**
-  is fully out of phase.
-- **At playhead** - both, at the playback position.
-- **The graph** shows correlation (blue, -1 at the bottom to +1 at the top,
-  with a dashed line at 0) and width (gold, 0 to 1) over time.
-- **The goniometer** plots the samples around the playback position (or
-  across the whole mix when stopped): mono shows as a vertical line, wide
-  stereo as a cloud, and out-of-phase sound leans toward horizontal.
-- **The width bars** show each frequency band's width - bass is usually
-  kept narrow, highs wider.
-- **Show correlation and width on canvas** draws both over the canvas, lined
-  up with the time axis, each on its own scale over the canvas's full
-  height:
-  - correlation is blue, from -1 at the bottom to +1 at the top, with a
-    dashed line at 0;
-  - width is orange, from 0 at the bottom to 1 at the top.
-
-  A small legend in the top-left corner of the canvas names each line on
-  the canvas and its scale.
+- **Correlation** - how alike the channels are: **+1** mono, **0**
+  unrelated, **below 0** (red) means parts cancel out when played in mono, on
+  a phone speaker say.
+- **Width** - **0** mono, about **0.5** wide, **1** fully out of phase.
+- **At playhead** - both at the playback position.
+- **The graph** - correlation (blue, -1 to +1) and width (gold, 0 to 1) over
+  time.
+- **The goniometer** - the samples around the playback position (or the whole
+  mix when stopped): mono is a vertical line, wide stereo a cloud,
+  out-of-phase sound leans sideways.
+- **The width bars** - each frequency band's width. Bass is usually kept
+  narrow.
+- **Show correlation and width on canvas** - draws both over the canvas, with
+  a legend in the top-left corner.
 
 ### Pitch
 
-The **Pitch** tab (also filled in by **Analyze**) follows the pitch of the
-mix from 50 Hz to 2 kHz. By default it follows the main pitch, the
-fundamental of whatever is loudest. It can also follow several voices at
-once, such as a melody and a bassline:
+Follows the pitch of the mix from 50 Hz to 2 kHz - by default the pitch of
+whatever is loudest.
 
-- **At playhead** - the note at the playback position, how far off it is
-  in cents (+20 cents is a little sharp), and its frequency, e.g.
-  "A4  +3 cents  (440.8 Hz)". It shows "—" where there's no clear pitch
-  (silence, noise). With several voices, each sounding voice gets its own
-  line, numbered: "1: A4 ...", "2: A2 ...".
-- **At mouse** - the same, for the moment under the mouse: hover over the
-  canvas, or over the pitch graph below, and it shows the pitch (or
-  pitches) at that horizontal position.
-- **Voices** - how many simultaneous pitches to follow, from 1 to 6 (for
-  example, 2 for a melody over a bassline). Each voice gets its own track
-  and color. The voices are layers from top to bottom: voice 1 is always
-  the highest pitch heard at that moment, the next voice the next one
-  down, and so on, so the lines never cross. Each voice also has a home
-  register that follows its own pitch, so a voice that pauses picks up
-  again where it was. Until a voice has been heard, its register is spread
-  across the range: with 2 voices, about 450 Hz and 140 Hz. A guitar or
-  bass playing alone therefore sits on the low voice, and a singer coming
-  in over it takes the high one. Changing the setting analyzes again by
-  itself if there are results showing, and it's remembered between
-  sessions.
-  - With more than one voice, a row of checkboxes appears, one per voice
-    in that voice's color, such as "Voice 1 (highest)" or "Voice 2
-    (lowest)". Untick a voice to hide it from the graph, the readouts and
-    the canvas. The choice holds until you close the Studio.
-  - Limits: a voice an exact octave above or below a louder one is
-    usually swallowed by it. Two notes whose frequencies are very close
-    (within about 25 Hz, including one voice's overtones) can make the
-    quieter one drop out now and then.
-- **Ignore spikes shorter than** removes brief pitch jumps, such as
-  momentary octave errors or the click of a note's attack. A jump lasting
-  less than this many milliseconds is removed:
-  - if the pitch on both sides of the jump agrees, the gap is smoothed over
-    with a glide between them;
-  - otherwise (a blip in silence, or right at a change of note) it's
-    erased, shown as no pitch.
+- **At playhead** - the note, how far off in cents, and the frequency, e.g.
+  "A4 +3 cents (440.8 Hz)"; "—" where there's no clear pitch.
+- **At mouse** - the same, at the point under the mouse on the canvas or the
+  pitch graph.
+- **Voices** - how many pitches to follow at once, 1 to 6 (2 for a melody
+  over a bassline, say). Voice 1 is always the highest, so the lines never
+  cross; each voice keeps its own register, so one that pauses picks up where
+  it was. With more than one voice, a checkbox per voice hides or shows it.
+  A voice an octave from a louder one is usually lost, and two very close
+  notes (within about 25 Hz) can make the quieter one drop out.
+- **Ignore spikes shorter than** - removes brief jumps such as momentary
+  octave errors: a jump shorter than this many milliseconds is smoothed over
+  if the pitch either side agrees, and erased otherwise. Glides and vibrato
+  are kept. `0` (default) shows everything; try 30-60 ms.
+- **The graph** - pitch over time on a musical scale, a line per voice.
+- **Show pitch on canvas** - draws the pitch lines over the canvas, so you can
+  see which painted line is heard as the melody.
 
-  Gentle glides and vibrato are never touched. `0` (the default) shows
-  every detected pitch. A good starting point is 30-60 ms. The setting
-  applies straight away to the readout, the graph and the canvas line,
-  without analyzing again, and it's remembered between sessions.
-- **The graph** draws the pitch over time on a musical scale, with a line at
-  every C - one line per voice, each in its own color.
-- **Show pitch on canvas** draws the same pitch lines right over the canvas
-  (the first voice in bright green, the others in their own colors), so you
-  can see which painted line is being heard as the melody.
+Voices and the spike setting are remembered between sessions.
+
+---
+
+# Part 6 - Files
+
+## Saving and Project Files
+
+**Ctrl+S** (**File → Save Project**) saves; **File → Save Project As...**
+saves a copy elsewhere. Closing, opening another project or starting a new one
+with unsaved changes asks you to save first.
+
+A project is a `.smproj` file plus a folder of the same name beside it. Keep
+them together - moving one without the other breaks the project. The folder
+holds:
+
+- `media/` - every layer's content;
+- `sources/` - a copy of everything you imported, every recording and Loop
+  take (as FLAC), and every layer brought in from another project, so the
+  project never depends on files elsewhere. It can grow large, since every
+  Loop take is kept.
+
+### Opening projects
+
+Besides **File → Open Project...**, the start screen and drag and drop, you
+can open a project by starting `sound-mind-studio.exe` with the `.smproj`
+file - for example by dropping the file onto the program or a shortcut to
+it. The Microsoft Store version, once published, also opens a project when
+you double-click it. If a project can't be opened, a message says why.
+
+## Exporting
+
+All exports run in the background - keep working, or click **✕** in the
+status bar to cancel (nothing is left behind). One export runs at a time.
+
+### Export Audio
+
+**File → Export Audio...** saves the mix - every visible, unmuted layer, with
+filters, exactly as Playback plays it - as FLAC, Ogg Vorbis or MP3 (choose the
+file type in the save dialog).
+
+### Export Video
+
+**File → Export Video...** saves the spectrogram as a video with the mix as
+its sound. The dialog remembers your choices:
+
+- **Output file** - with **Browse...**; the extension follows the format.
+- **Format** - **H.264 (MP4)** (recommended: small, plays everywhere), **HEVC
+  (MP4)** (smaller; only where Windows provides it), **ProRes (MOV)** (very
+  large, for further editing) or **MPEG-4 (MP4)** (plays everywhere, larger).
+  Only formats that work on your computer are listed.
+- **Resolution** - 1080p, 4K, 1440p, 720p, vertical 1080×1920 or 720×1280
+  (TikTok, Reels, Shorts), square 1080×1080, the canvas's own size, or a
+  custom size. The canvas keeps its proportions, with black bars where the
+  shapes differ.
+- **Frame rate** - 24, 30 (default) or 60.
+- **Quality** - Low, Medium (default) or High.
+- **Animation** - **Whole canvas** (the whole canvas, with the playhead
+  sweeping across it) or **Scrolling** (a window of a chosen number of
+  seconds pans across the canvas). **Show playhead** turns the line on or
+  off.
+- In [Sound Flower](#sound-flower-polar-view) view the video is the flower:
+  with Whole canvas a ray turns from twelve o'clock; with Scrolling the
+  flower turns under a fixed ray. A scrolling flower takes longer to make.
+- **Open the video when the export finishes.**
+
+The status bar shows the progress as a percentage.
+
+### Export Image
+
+**File → Export Image...** saves a copy of the canvas as a picture:
+
+- **File** - with **Browse...**; the extension and the **Format** follow each
+  other: **PNG**, **JPEG**, **BMP**, **TGA** or **WebP**.
+- **Full resolution** (default) - one pixel per canvas column and row, shown
+  as width × height. Or **Custom size** in pixels; with **Keep proportions**
+  ticked, changing one side changes the other.
+- **As Sound Flower** - saves the polar view as a square image (ticked when
+  the canvas shows it). Its full resolution is a square twice the canvas's
+  height.
+
+The image shows every visible layer, filters applied, as the canvas does -
+muted layers included, since they're still seen.
+
+### Limiting and loudness
+
+Audio and video exports go through the [master limiter](#configure-devices)
+if it's on, so peaks over full scale are turned down instead of clipping.
+Loudness normalization is never applied to exports.
+
+## Remastering
+
+**File → Remaster...** rebuilds the open project as a **new** project, by
+replaying everything you did from its sources. The open project isn't
+changed. In the dialog:
+
+- **Sample Rate, Timestep, Bin Count, Min/Max Frequency** start at the
+  project's own; change them to rebuild at a different (or higher)
+  resolution. The duration stays the same, and strokes, fills, pastes and
+  text land at the same times and frequencies.
+- **Sources** lists every file, recording and Loop take the project was made
+  from. **Replace...** swaps one for another file; everything made from it is
+  rebuilt from the new one.
+- **Save as** - where to save the new project.
+
+**Remaster** without changes rebuilds the project as it is - the way to
+recover layer content whose files went missing (the Studio tells you when
+that's needed). When it's done, the Studio offers to open the new project.
+
+A Mind Shot is rescaled when the frequency range or row count changes, which
+only approximates its original pitch.
+
+## Resource Browser
+
+**Resource Browser** (in the menu bar) collects the reusable things a project
+builds up: MindWaves, Tool Presets, Mind Shots, Mind Grains, Resonance
+Profiles, Filter Presets, Convolution Kernels, Grid Presets and Layers. Choose
+a category at the top to list them; selecting one shows its settings, and a
+preview where that makes sense:
+
+- **MindWave** - its shape, and **Play** to hear an instrument with it as
+  vibrato.
+- **Tool Preset** - a sample stroke painted with it, and **Play** to hear it.
+- **Mind Shot** - its picture, and **Play**.
+- **Resonance Profile** - its spectrum and the curve it came from, and
+  **Play**.
+
+**Sharing:**
+
+- **Export...** saves the selected item as a file you can give to someone or
+  use in another project: `.smwave` (MindWave), `.sminst` (Tool Preset),
+  `.smshot` (Mind Shot), `.smresonance` (Resonance Profile), `.smfilter`
+  (Filter Preset) or `.smkernel` (Convolution Kernel).
+- **Import from File...** adds such a file to this project. If the name is
+  taken, choose **Overwrite**, **Keep Existing** or **Keep Both** (the import
+  is renamed "Name (2)").
+- **Browse Other Project...** shows another project's items, read-only,
+  without closing yours. Select anything - including a whole Layer - and click
+  **Import** to copy it in. **Return to This Project** switches back.
+
+**Toolkits** bundle several items into one `.smtoolkit` file. Select an item
+and click **Add to Toolkit**; anything it needs (a MindWave a preset is bound
+to, say) is added too, and a message says so. **Remove** takes an item out;
+**Export Toolkit...** names and saves the bundle. **Import Toolkit...** adds
+everything in a toolkit at once - all of it, or nothing if the file is
+damaged - with the same Overwrite / Keep Existing / Keep Both choice for
+taken names.
+
+Grid Presets are saved and loaded in the [Grid panel](#grid-presets), and
+Mind Grains and Layers have no file of their own; the browser lists them for
+reference and for **Browse Other Project...**.
+
+---
+
+# Part 7 - Reference
 
 ## Performance
 
-Most editing stays responsive on an ordinary machine, but a few things
-genuinely cost more than others. None of this is a setting you need to
-tune up front - it's here for when something feels slower than
-expected, so you know what's actually driving it.
+Most editing stays responsive on an ordinary computer. This chapter explains
+what costs more, for when something feels slow.
 
-- **MindWave edits redo only what uses them**: changing a MindWave
-  re-renders just the layers bound to it (through opacity, a filter
-  setting or a stroke). A MindWave nothing uses can be tweaked freely
-  without disturbing playback.
-- **The canvas never waits for an edit.** After an edit, the new picture
-  is made in the background while the window stays responsive: you see
-  the previous picture (and the stroke you just drew) until the new one
-  is ready, usually a split second - longer under a heavy filter layer
-  or with many layers. If you keep editing meanwhile, the newest version
-  is always the one that ends up shown.
-- **Hardware Acceleration** (the checkbox in the **View** menu, also
-  mentioned under [The Main Window](#the-main-window)) lets several of
-  the heavier operations below run on the GPU instead of the CPU when
-  one's available. It's on by default and safe to leave there. GPU
-  acceleration tends to help more the bigger the operation is - a large
-  canvas, a strong blur, many layers - and can occasionally be a wash
-  (or even slightly slower) for something small and cheap, since
-  dispatching work to the GPU at all has its own fixed cost. Turn it
-  off if you want to compare speed or results against the CPU path
-  directly, or if you suspect it's causing a visual problem; it stays
-  as you left it across restarts. (Before version 0.1.41.6, installed
-  copies couldn't find their GPU programs and quietly used the CPU for
-  everything; that's fixed.)
-- **Using every CPU core**: turning the canvas into sound (preparing
-  playback, Repeat and Loop refreshes, filter previews, exports) and
-  turning sound into a canvas (importing, recording) share the work
-  across all of your computer's cores. So does **Analyze**, which measures
-  the mix and each layer at the same time. On a typical multi-core laptop
-  these run several times faster than with a single core. The result is
-  exactly the same whatever the number of cores.
-- **Noise**: a noise MindWave is computed on the GPU when Hardware
-  Acceleration is on (about 6x faster than on the CPU). A noise Generate
-  Layer uses every CPU core. Either way the noise is the same - the GPU's
-  values differ from the CPU's only in the sixth decimal place.
-- **Filters**: **Uniform Blur** and **Edge-Preserving Blur** (see
-  [Filter Layers](#filter-layers) above) both use the GPU when
-  Hardware Acceleration is on. For Uniform Blur, a larger **Sigma**
-  costs more either way, but GPU acceleration scales with it well - the
-  bigger the blur, the more it helps. **Edge-Preserving Blur** doesn't
-  scale quite as cleanly: a larger **Size** costs more on the CPU *and*
-  the GPU, and the GPU's own advantage shrinks the bigger Size gets - so
-  if Edge-Preserving Blur feels slow, reaching for a smaller Size helps
-  more than toggling Hardware Acceleration does.
-- **Layers and blend modes**: every layer that's visible and has
-  content contributes to the composite the canvas and Playback show
-  (see [Compositing](#compositing) above), and every blend mode -
-  Normal included - uses the GPU when it's available. Editing one
-  layer in a project with many others is fast regardless of how many
-  layers there are - only that layer (and anything stacked above it)
-  actually needs recompositing; everything below it is reused from the
-  previous composite. Adding, removing, or reordering a layer, muting/
-  unmuting, or editing a MindWave used anywhere in the project still
-  recomposites the whole stack, so those will cost more on a project
-  with a very large number of layers, regardless of acceleration.
-- **Painting**: adding a new stroke to a layer with a long painting
-  history is fast regardless of how many earlier strokes that layer
-  already has - only the new stroke itself is actually (re)painted, on
-  top of what was already there. Undo and redo are the exception -
-  both re-paint a layer's whole history to guarantee correctness, so
-  they'll cost more the more that layer has been painted on. A Mind
-  Grain stroke re-samples its source layer whenever that source's own
-  content actually changes, not on every unrelated edit to the layer
-  it's painted on - still correct for the common case (the source
-  changing), just not refreshed by something unrelated happening to
-  the grain-painted layer itself.
-- **MindWaves**: a plain **Fractal**-type MindWave (see
-  [MindWaves](#mindwaves) above) evaluates on the GPU when Hardware
-  Acceleration is on, and scales well to large canvases as a result. If
-  you combine a Fractal MindWave with **Warp**, or turn on **Reversed**
-  or **Inverted**, it falls back to evaluating on the CPU instead - still
-  correct, just not GPU-accelerated in that combination yet.
-- **Painting**: the **Heal** and **Soften** brushes blend each stroke
-  toward a local average of the surrounding content - both stay fast
-  regardless of how large you set the brush's own **Size**.
+- **The canvas never waits for an edit.** The new picture is made in the
+  background; until it's ready (usually a split second, longer under heavy
+  filters or with many layers) you see the previous one plus your new stroke.
+- **Editing one layer is fast however many layers there are** - only that
+  layer and those above it are recombined. Adding, removing, reordering or
+  muting layers recombines everything, so those cost more with very many
+  layers.
+- **Painting** a new stroke costs the same however many strokes a layer
+  already has. Undo and Redo repaint the layer's whole history, so they cost
+  more on heavily painted layers.
+- **Changing a MindWave** redraws only what uses it.
+- **Hardware Acceleration** (**View** menu, on by default) runs the heavy
+  work on the graphics card: blending layers, Uniform and Edge-Preserving
+  Blur, Fractal and Noise MindWaves. It helps most with big work (a large
+  canvas, a strong blur, many layers). Turn it off to compare with the
+  processor, or if you suspect it of a display problem; it's remembered.
+- **Every processor core** is used when turning the canvas into sound
+  (playback, Repeat and Loop updates, filter previews, exports), turning
+  sound into a canvas (importing, recording), analyzing, and making noise
+  layers. The results are the same however many cores you have.
+- **Blurs:** a larger Uniform Blur **Sigma** costs more, but the graphics
+  card copes well. A larger Edge-Preserving Blur **Size** costs more on both,
+  so if it feels slow, a smaller Size helps more than acceleration.
+- **Fractal MindWaves** with Warp, Reversed or Inverted are worked out on the
+  processor instead of the graphics card.
+- **Heal** and **Soften** stay fast at any brush size.
+- **Mind Grain** strokes are refreshed when their source layer changes.
 
-## Licence and Credits
+## Keyboard Shortcuts
 
-Sound Mind Studio is copyright © 2026 Andreas Lundberg. You may use it free
-of charge for anything, including commercial work; everything you create
-with it is yours. You may not redistribute or modify it. The full terms are
-in `LICENSE.md`, next to the program.
+| Action | Shortcut |
+|---|---|
+| New Project / Open / Save | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` |
+| Undo / Redo | `Ctrl+Z` / `Ctrl+Y` |
+| Cut / Copy / Paste | `Ctrl+X` / `Ctrl+C` / `Ctrl+V` |
+| Delete (picked object, path node) | `Delete` |
+| Deselect | `Ctrl+D` |
+| Bring to Front / Send to Back | `Ctrl+Shift+Up` / `Ctrl+Shift+Down` |
+| Bring Forward / Send Backward | `Ctrl+Up` / `Ctrl+Down` |
+| Select layer above / below | `Page Up` / `Page Down` |
+| Move layer up / down | `Shift+Page Up` / `Shift+Page Down` |
+| Raise / lower layer gain by 5% | `Ctrl+Page Up` / `Ctrl+Page Down` |
+| Zoom in / out | `]` / `[` |
+| Zoom frequency only | `Alt+]` / `Alt+[` |
+| Zoom time only | `Shift+]` / `Shift+[` |
+| Zoom coarse | `Ctrl+]` / `Ctrl+[` |
+| Fit to Window / Actual Size | `Ctrl+0` / `Ctrl+1` |
+| Sound Flower | `Ctrl+Alt+F` |
 
-It includes open-source software by others - Qt, FFmpeg, LAME, JUCE (with
-FLAC and Ogg Vorbis), PocketFFT, Eigen and more - each under its
-own licence. `THIRD_PARTY_NOTICES.md` and the `licenses` folder next to the
-program list them all with their licence texts. Qt and FFmpeg are separate
-DLLs you're free to replace with your own builds; their source code is
-published on the project's GitHub releases page.
-
-**Help → About Sound Mind Studio** shows the version and copyright, and
-its **Licence...** and **Open-source notices...** buttons open both
-documents.
-
-Sound Mind Studio collects nothing and contacts no server - it works
-entirely offline.
+The mouse wheel zooms with the same modifiers as `]` and `[`.
 
 ## What's Not Here Yet
 
-The [design document](docs/sound-mind-design.md) describes the Studio's
-full intended scope; `docs/sound-mind-roadmap.md` tracks what's being
-built, in order. This section lists what isn't in the Studio today.
+The [design document](docs/sound-mind-design.md) describes everything the
+Studio is meant to become, and `docs/sound-mind-roadmap.md` the order it's
+built in. This chapter lists what isn't there today.
 
 ### Planned
 
-These are scheduled after the Beta readiness check:
+After the Beta readiness check:
 
 - **A light mode** - the Studio is dark only for now.
-- **A color mapping choice** - which of the two channels' amplitude and
-  phase show as red, green and blue is fixed today.
-- **Composer Mode editing** - Composer Mode (**View** menu) shows each
-  visible layer as a track with every stroke and fill as a box, but it's
-  read-only: you can't yet drag a box to retime it, move it to another
-  track, or change an object's or track's own gain or EQ from there.
-- **The rest of Sound Mind Instruments** - an Instrument has a harmonic
-  series, inharmonicity and MindWave-driven vibrato/tremolo, but no noise
-  component, body resonance or ADSR envelope yet. Also planned: a
-  **Harmonic** stamp mode (stamps spaced by the instrument's own
-  harmonics), MindWave binding for every instrument setting, and Loop
-  Mode retriggering per note.
-- **More analysis** - the [Analysis](#analysis) panel has loudness, stereo
-  and pitch. Vibrato characterization, formant content, key/scale
-  detection, and analysing just a selection are planned; so are the
-  design document's spectral-health and criticality/pattern meters.
+- **A colour mapping choice** - which of amplitude and phase show as red,
+  green and blue is fixed today.
+- **Composer Mode editing** - **View → Composer Mode** shows each visible
+  layer as a track with every stroke and fill as a box, but it's read-only:
+  you can't yet drag a box to retime it, move it to another track, or change
+  gain or EQ there.
+- **The rest of Sound Mind Instruments** - an Instrument has harmonics,
+  inharmonicity and vibrato/tremolo, but no noise component, body resonance
+  or ADSR envelope yet. Also planned: a **Harmonic** stamp mode, MindWave
+  binding for every instrument setting, and Loop Mode retriggering per note.
+- **More analysis** - vibrato, formants, key and scale detection, analyzing
+  only a selection, and the design document's spectral-health and
+  criticality meters.
 - **Editing refinements:**
-  - inserting or deleting a path node by double-clicking, and detaching a
-    handle from its mirrored pair with Alt+drag (today you can move nodes
-    and handles, toggle a node's type, and delete the selected node);
-  - the Alt/Shift/Ctrl axis restriction (see
-    [Canvas Navigation](#canvas-navigation)) applies only to Zoom so far,
-    not to dragging a Pick, a selection's handles, or a layer's
-    translation and rescale;
-  - pitch quantising while painting - Snap to Grid snaps placed nodes,
-    moves and selections, but a freehand stroke's pitch doesn't snap to
-    the Frequency Grid as you draw;
-  - pasting where you click - **Paste** lands where the clip was copied
-    from (or on another layer at the same place); Pick then moves it.
-- **Performance Hints** - speed badges on filters, blend modes, brushes
-  and MindWave generators, from your own machine's benchmark results.
-- **Live MIDI input** - playing a sequence from a connected MIDI
-  controller. Today sequences come from MIDI file import.
+  - adding or deleting a path node by double-clicking, and breaking a
+    node's handles apart with Alt+drag;
+  - the Alt/Shift axis restriction applies only to zooming so far, not to
+    dragging with Pick, a selection's handles, or layer timing;
+  - a freehand stroke's pitch snapping to the Frequency Grid as you draw
+    (Snap to Grid covers nodes, moves and selections);
+  - pasting where you click (Paste lands where the copy came from; Pick then
+    moves it).
+- **Performance hints** - speed badges on filters, blend modes, brushes and
+  MindWave types, from your own computer's benchmarks.
+- **Live MIDI input** - playing a connected MIDI controller. Today notes come
+  from MIDI file import.
 
 ### Not planned
 
-- **Clone** and the **Tool Configuration Wizard** are deferred until
-  further notice; the Tool Configuration panel and its presets cover
-  configuring a tool.
-- **Superposition** (combining several MindWaves into one with a blend
-  mode) was removed in v0.1.32.1. It may come back in a different form.
-- **Pooling a layer** was removed in v0.1.46.1, along with the Pool codec
-  behind it: it couldn't make a layer sound better than it already did.
-  A project saved by an older version still opens; its `pool/` folder is
-  ignored.
-- **Warp Selection** was removed: it didn't survive undo, redo or
-  reopening a project, and was confusing to use.
-- **Video export** doesn't offer WebM/VP9 (it would need an extra encoder
-  library), and lists HEVC only where Windows provides an HEVC encoder.
-- **The Sound Mind VST plugins** and hosting other plugins come after
+- **Clone** and the **Tool Configuration Wizard** are deferred; the Tool
+  Configuration panel and its presets cover configuring a brush.
+- **Combining several MindWaves into one** (Superposition) was removed in
+  version 0.1.32.1, and may come back in another form.
+- **Pooling a layer** was removed in version 0.1.46.1, with the Pool codec:
+  it couldn't make a layer sound better. Older projects still open; their
+  `pool/` folder is ignored.
+- **Warp Selection** was removed: it didn't survive undo, redo or reopening a
+  project, and was confusing.
+- **The Chord Generator and Chord tool** were removed in version 0.1.50.1.
+  Chords already stamped stay in your projects, and MIDI import brings in
+  notes.
+- **WebM/VP9 video** would need another encoder library; HEVC is offered only
+  where Windows provides it.
+- **The Sound Mind VST plugins**, and hosting other plugins, come after
   version 1.0.
 
 ### Limits of what's here
 
-- **Macros** (see [Macros](#macros)): there's no timeline view to inspect
-  or edit what a Macro recorded, strokes appear whole rather than being
-  drawn in, and the video doesn't follow your zoom or scrolling (it shows
-  the whole canvas, or the export dialog's Scrolling window).
-- **Sound Flower**: Overlay Grids, Axis Labels,
-  bounding boxes and path geometry, the analysis overlays, and a
-  Rectangle-shaped Pick or Selection highlight are hidden while the polar
-  view is on, rather than drawn incorrectly.
-- **Loop Mode**: while a loop runs, filters and blend modes on layers
-  above Loop Input don't apply to the live take.
-- **Brushes:** **Smudge** smears each stamp on its own rather than
-  carrying paint along the whole stroke, and **Order/Chaos** reorders
-  content rather than measuring entropy. **Resonance** has a single decay
-  rate and no vibrato/tremolo or inharmonicity of its own.
-- **Mind Shots and Mind Grains:** capturing from a Lasso, Wand or
-  combined selection takes its whole bounding box. There's no way to move
-  a Mind Grain's referenced region after capturing it, and a Mind Grain
-  samples its source layer on its own, not the composite as it looks at
-  that point in the stack.
-- **Selections:** a Wand or combined selection shows as a dashed bounding
-  box rather than its exact outline; Fill, Copy, Cut and Paste still
-  follow its exact shape.
-- **Filter layers:** Convolve's Kernel Size, Granular Noise's Grain Size,
-  and Spectral Reverb's Pre-Delay, Decay, Room Size, Diffusion and
-  Absorption can't bind to a MindWave - each shapes a whole neighbourhood
-  of cells, not one cell's own value. Saved Convolve kernels can't be
-  renamed or deleted from within the Studio.
-- **MindWaves:** a layer's Blend Mode can't bind to a MindWave.
-  Vibrato/Tremolo always follow the stroke's own progress (they have no
-  Canvas Space choice). Reduce has no panel of its own - Vibrato/Tremolo
-  are its only use. Step Grid values are a plain list of boxes, and
-  Continuous's formula is a provisional first attempt.
-- **Custom Frequencies** is free entry only, with no curated preset sets.
+- **Macros** have no timeline to inspect or edit what was recorded; strokes
+  appear whole rather than being drawn in; and the video doesn't follow your
+  zoom or scrolling.
+- **Sound Flower** hides grids, axis labels, bounding boxes and path
+  geometry, the analysis overlays, and rectangular outlines.
+- **Loop Mode** doesn't apply filters and blend modes above Loop Input to the
+  live take, and expects the device to run at the project's sample rate.
+- **Brushes:** Smudge smears each stamp on its own rather than carrying paint
+  along the stroke; Order/Chaos rearranges content rather than measuring
+  entropy; Resonance has one decay rate and no vibrato, tremolo or
+  inharmonicity.
+- **Mind Shots and Mind Grains** capture a Lasso, Wand or combined
+  selection's whole bounding box. A Mind Grain's region can't be moved after
+  capture, and it reads its source layer alone, not the mix at that point.
+- **Selections:** a Wand or combined selection is outlined as a dashed box,
+  though Fill, Copy, Cut and Paste follow its exact shape.
+- **Filters:** saved Convolve kernels can't be renamed or deleted in the
+  Studio.
+- **MindWaves:** a layer's Blend Mode can't follow a MindWave; Vibrato and
+  Tremolo always follow the stroke (no Canvas Space choice); Step Grid values
+  are a plain list; Continuous's formula is a first attempt.
+- **Custom Frequencies** in the Grid panel are typed only, with no ready-made
+  sets.
+- **Projects made before version 0.1.43.1** can't be remastered, and Undo
+  stops at steps it can't rebuild in them.
+
+## Licence and Credits
+
+Sound Mind Studio is copyright © 2026 Andreas Lundberg. You may use it free of
+charge for anything, including commercial work; everything you make with it
+is yours. You may not redistribute or modify it. The full terms are in
+`LICENSE.md`, next to the program.
+
+It includes open-source software by others - Qt, FFmpeg, LAME, JUCE (with
+FLAC and Ogg Vorbis), PocketFFT, Eigen and more - each under its own licence.
+`THIRD_PARTY_NOTICES.md` and the `licenses` folder next to the program list
+them with their licence texts. Qt and FFmpeg are separate DLLs you may replace
+with your own builds; their source code is published on the project's GitHub
+releases page.
+
+**Help → About Sound Mind Studio** shows the version and copyright, and its
+**Licence...** and **Open-source notices...** buttons open both documents.
+
+Sound Mind Studio collects nothing and contacts no server - it works entirely
+offline.
