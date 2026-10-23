@@ -41,6 +41,7 @@
 #include "test_playback_preparer.h"
 #include "test_analysis_controller.h"
 #include "test_recording_controller.h"
+#include "test_loop_controller.h"
 #include "test_background_job.h"
 #include "test_branch_curve_session.h"
 #include "test_canvas_widget.h"
@@ -159,6 +160,7 @@ const std::array kTestClasses{
     SM_TEST_CLASS_ENTRY(PlaybackPreparerTest),
     SM_TEST_CLASS_ENTRY(AnalysisControllerTest),
     SM_TEST_CLASS_ENTRY(RecordingControllerTest),
+    SM_TEST_CLASS_ENTRY(LoopControllerTest),
     SM_TEST_CLASS_ENTRY(ImageScalePickerDialogTest),
     SM_TEST_CLASS_ENTRY(PolarOriginDialogTest),
     SM_TEST_CLASS_ENTRY(ImportHelpersTest),

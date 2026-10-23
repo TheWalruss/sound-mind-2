@@ -36,6 +36,7 @@ add_library(sound-mind-studio-lib
     src/playback_preparer.cpp
     src/analysis_controller.cpp
     src/recording_controller.cpp
+    src/loop_controller.cpp
     src/base_recipes.cpp
     src/branch_curve_session.cpp
     src/canvas_widget.cpp
@@ -116,6 +117,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/playback_preparer.h
     include/sound_mind/studio/analysis_controller.h
     include/sound_mind/studio/recording_controller.h
+    include/sound_mind/studio/loop_controller.h
     include/sound_mind/studio/project_change.h
     include/sound_mind/studio/branch_curve_session.h
     include/sound_mind/studio/canvas_widget.h

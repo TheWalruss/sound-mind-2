@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.48.7] - 2026-10-23
+
+Roadmap slot `v0.Y.82.5` (modularity), installment G.
+
+### Changed
+
+- Internal: Loop Mode (starting and stopping, preparing the project audio it plays along with, turning each take into the Loop Input layer) moved out of the main window into its own component, tested on its own - including a whole take, without an audio device. Nothing changes in how Loop Mode behaves.
+
 ## [0.1.48.6] - 2026-10-22
 
 Roadmap slot `v0.Y.82.5` (modularity), installment F.

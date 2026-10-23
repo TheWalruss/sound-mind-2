@@ -3171,6 +3171,33 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - toggle refuses while not allowed or with no project.
 
       The 14 `MainWindowTest` Record cases pass unchanged.
+282. **Modularity pass, installment G: `LoopController`.** Settled in `v0.1.48.7`.
+    - **`studio::LoopController` (new, `QObject`)** owns:
+      - the project's `LoopEngine`. `MainWindow::setProject()` still builds and configures one per project (devices, gain, limiter), then hands it over with `setEngine()`, which abandons any session first;
+      - starting and stopping (`toggle()`, `abandon()`, `isRunning()`), including reusing or adding the "Loop Input" layer;
+      - the backing-audio `BackgroundJob` with its coalesced follow-up. `projectEdited()` replaces `MainWindow::scheduleLoopBacking()` and `finishLoopBacking()`;
+      - the 33 ms update timer (previously `updateLoopLayer()`): takes into the layer, the layer's gain/balance/visibility/mute, the live view and the position bar;
+      - Keep Looping (`setKeepLooping()`, `keepLooping()`);
+      - the Loop panel's Start/Stop, Keep Looping and Live-encoding view wiring.
+    - **No dependency on `MainWindow`.** Its `Context`: project, may start (not while Record runs), about to start (stops Playback), running changed (locks the device choices), the canvas's live overlay and playhead, History, `applyChange`, and take applied (redraws the layer and its Layers panel row).
+    - **A take's source** is now written by the controller itself (`storeSourceAudio()` plus `Project::addSource()`), the same as `MainWindow::storeAudioSource()` does.
+    - **`MainWindow`:**
+      - `toggleLoopMode()`, `setKeepLooping()`, `keepLooping()` and `isLoopModeRunning()` forward.
+      - A private `loopEngine()` gives the device, limiter and Macro playhead code the current engine, or null while constructing.
+      - Removed: `loopEngine_`, `loopUpdateTimer_`, `loopLayerId_`, `loopBackingDirty_`, `loopStartPending_`, `loopLiveView_`, `loopTakesShown_`, `loopBackingJob_`, `scheduleLoopBacking()`, `finishLoopBacking()` and `updateLoopLayer()`.
+    - **Behavior changes:**
+      - none in normal use;
+      - replacing the project now also cancels a backing-audio preparation and clears a pending start. New/Open/Close already refuse while Loop Mode runs, so only a direct `setProject()` could reach this.
+    - **Tests:** Studio `LoopControllerTest`, 7 cases, under 1 s, with a device-less engine:
+      - starting adds the layer and the engine starts once the backing is ready;
+      - stopping, and a restart reusing the layer;
+      - refusing with no engine or while not allowed;
+      - a whole take driven through `processBlock()` and `processPendingAudio()` becomes the layer's content with a History entry;
+      - an edit while running prepares the backing again without stopping;
+      - Keep Looping freezes the engine and syncs the panel;
+      - a new engine abandons the session.
+
+      The `MainWindowTest` Loop Mode cases pass unchanged.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

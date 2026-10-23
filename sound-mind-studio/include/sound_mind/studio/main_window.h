@@ -34,6 +34,7 @@
 #include "sound_mind/studio/playback_preparer.h"
 #include "sound_mind/studio/analysis_controller.h"
 #include "sound_mind/studio/recording_controller.h"
+#include "sound_mind/studio/loop_controller.h"
 #include "sound_mind/studio/branch_curve_session.h"
 #include "sound_mind/studio/project_change.h"
 #include "sound_mind/studio/analysis_panel.h"
@@ -119,7 +120,7 @@ class ResourceBrowserPanel;
  * capture - see toggleLoopMode()'s/toggleRecording()'s own docs for why
  * "refuse rather than surprise-stop" is this codebase's established
  * answer to exactly that tension. setProject() itself unconditionally
- * stops both engines and clears loopLayerId_ regardless, as a defensive
+ * stops both engines and LoopController's layer regardless, as a defensive
  * invariant - normally unreachable through the guarded entry points
  * above, but keeping the *audit point* itself correct is what the
  * Project Lifecycle milestone actually asked for.
@@ -150,7 +151,7 @@ class ResourceBrowserPanel;
  *
  * **As of `v0.Y.12.1` (Loop Mode, renamed from Live Mode):** the original
  * `LiveEngine` is renamed/reimplemented as `sound_mind::core::LoopEngine` -
- * see its own docs for the fixed-length loop-pedal redesign. `loopEngine_`
+ * see its own docs for the fixed-length loop-pedal redesign. LoopController's engine
  * is no longer a fixed member constructed once with a default config: it's
  * a `std::unique_ptr`, `nullptr` until the first setProject() call, then
  * (re)constructed there from the *new* project's own
@@ -162,8 +163,8 @@ class ResourceBrowserPanel;
  * forwards to `LoopEngine::setKeepLooping()` - the new "Freeze Loop"
  * (labeled "Keep Looping" until a later UI-wording pass renamed it, without
  * touching this method or the rest of its API) toolbar checkbox's actual
- * work. updateLoopLayer() (renamed from
- * updateLiveLayer()) additionally reports `LoopEngine::loopsBehind()` in
+ * work. The Loop layer's refresh (renamed from updateLiveLayer(); in
+ * LoopController since `v0.1.48.7`) additionally reports `LoopEngine::loopsBehind()` in
  * the status bar - the confirmed scope's "visible loop-delay indicator".
  *
  * **As of `v0.Y.16.1` (Transport Panels):** Play/Pause/Stop/Loop/Record
@@ -244,7 +245,7 @@ public:
     ///        convention; may be `nullptr`.
     /// @param audioDeviceMode Threaded through to every real-device-capable
     ///        member constructed here or later in setProject()
-    ///        (`playbackController_`, `recordEngine_`, `loopEngine_`) -
+    ///        (`playbackController_`, `recordEngine_`, LoopController's engine) -
     ///        `Real` (the default) attaches each to the system's actual
     ///        audio hardware, same as leaving this argument off entirely.
     ///        `None` exists specifically for tests: previously every
@@ -625,7 +626,7 @@ public slots:
      * directly (a test, in particular) never leaves the panel showing a
      * stale state. Forwards to `LoopEngine::setKeepLooping()` - see its
      * own docs. Does nothing further if no project is open yet
-     * (loopEngine_ doesn't exist until setProject() has been called at
+     * (LoopController's engine doesn't exist until setProject() has been called at
      * least once) - harmless, since there's no running Loop Mode session
      * for the checkbox to affect in that case either.
      *
@@ -678,7 +679,7 @@ public slots:
     void refreshConfiguredDevices();
 
     /**
-     * @brief Sets the input device `recordEngine_`'s and `loopEngine_`'s
+     * @brief Sets the input device `recordEngine_`'s and LoopController's engine's
      *        (if a project is open) *next* start() should each open - the
      *        actual work behind the Configure Devices panel's own input
      *        device picker (`v0.0.42.1`) - now the only input device
@@ -698,7 +699,7 @@ public slots:
     void setConfiguredInputDevice(const QString& deviceName);
 
     /// @brief Sets the output device `playbackController_`'s and
-    /// `loopEngine_`'s (if a project is open) should each switch to - the
+    /// LoopController's engine's (if a project is open) should each switch to - the
     /// actual work behind the Configure Devices panel's own output device
     /// picker (`v0.0.42.1`) - now the only output device picker in the app
     /// (real-world testing pass, 2026-09-20, finding #7). See
@@ -709,7 +710,7 @@ public slots:
     ///        default.
     void setConfiguredOutputDevice(const QString& deviceName);
 
-    /// @brief Sets `recordEngine_`'s and `loopEngine_`'s (if a project is
+    /// @brief Sets `recordEngine_`'s and LoopController's engine's (if a project is
     /// open) own input gain - the actual work behind the Configure Devices
     /// panel's own input gain slider (`v0.0.42.1`). As of `v0.Y.62.1`
     /// Installment H, also syncs the Landing Page's own
@@ -1067,7 +1068,7 @@ public slots:
      *        actual work behind `LayersPanel`'s "+ Add Layer" button.
      *
      * The only way to get a paintable layer that isn't an import: a
-     * silent, project-dimensioned placeholder (`loopEngine_->emptyImage()`
+     * silent, project-dimensioned placeholder (LoopController's engine's `emptyImage()`
      * - the same one a fresh Loop Input layer gets), added to the top of
      * the stack, selected immediately via `LayersPanel::selectLayer()` so
      * it can be painted into without an extra click. A no-op if no
@@ -2395,7 +2396,7 @@ public:
     /// @brief The current "Freeze Loop" state - see setKeepLooping()'s
     /// docs.
     /// @return The underlying LoopEngine's keepLooping(), or `false` if no
-    ///         project has ever been opened yet (loopEngine_ doesn't exist).
+    ///         project has ever been opened yet (LoopController's engine doesn't exist).
     [[nodiscard]] bool keepLooping() const noexcept;
 
     /// @brief Whether Recording is currently capturing.
@@ -3206,10 +3207,10 @@ private:
      *        `LoopPanel`'s own now-removed device pickers used to provide
      *        locally (real-world testing pass, 2026-09-20, finding #7).
      *
-     * Input is locked while either `recordEngine_` or `loopEngine_` is
+     * Input is locked while either `recordEngine_` or LoopController's engine is
      * active - both share the panel's own one input device/gain (see
      * `ConfigureDevicesPanel`'s own class docs). Output is locked only
-     * while `loopEngine_` is running - ordinary Playback was never a
+     * while LoopController's engine is running - ordinary Playback was never a
      * reason to lock the output picker even before this milestone (see
      * `setOutputDeviceSelectionEnabled()`'s own docs on preserving that
      * exact distinction).
@@ -3301,41 +3302,16 @@ private:
     /// saveProjectAs()).
     void updateWindowTitle();
 
-    /// @brief loopUpdateTimer_'s slot: refreshes the Loop layer's content
-    /// and repaints the canvas, and shows loopEngine_->loopsBehind() in the
-    /// status bar, while Loop Mode is running - see toggleLoopMode()'s
-    /// docs. As of `v0.0.41.1` (Loop Mode Live Preview), prefers
-    /// loopEngine_->currentPreviewImage() (the in-progress loop's own
-    /// growing preview) whenever it has content, falling back to
-    /// loopEngine_->currentImage() (the last *completed* loop) right after
-    /// a loop boundary - see currentPreviewImage()'s own docs.
-    void updateLoopLayer();
-
-    /**
-     * @brief Prepares Loop Mode's own project audio in the background: the
-     *        whole project composited exactly as Playback would, but with
-     *        the Loop layer itself left out (the engine mixes the live take
-     *        in on its own - see `LoopEngine`), decoded and fitted to one
-     *        loop. Called when Loop Mode starts and after every edit while
-     *        it runs; a request while one is already in flight is coalesced
-     *        into one follow-up. See finishLoopBacking().
-     */
-    void scheduleLoopBacking();
-
-    /// @brief Finishes a scheduleLoopBacking() job: re-runs it if another
-    ///        edit arrived meanwhile; otherwise starts Loop Mode if this was
-    ///        its start-up preparation, or hands the fresh audio to the
-    ///        running engine (applied at the next pass start).
-    /// @param result The mix, or nothing if the run failed.
-    /// @param cancelled Whether the run was cancelled (Loop Mode stopped).
-    void finishLoopBacking(std::optional<sound_mind::codec::AudioBuffer> result, bool cancelled);
-
     /// @brief testInputLevelTimer_'s slot: drains deviceTestRecordEngine_'s
     /// own ring buffer (so it never overflows, same reasoning as
     /// Record's drain - see RecordingController) and pushes its currentInputLevel() into
     /// configureDevicesPanel_'s own level meter, while testing an input
     /// device. `v0.0.42.1`.
     void pollTestInputLevel();
+
+    /// @brief The current project's Loop engine - LoopController's.
+    /// @return `nullptr` before the first project, or while constructing.
+    [[nodiscard]] sound_mind::core::LoopEngine* loopEngine() const noexcept;
 
 
     /**
@@ -3507,7 +3483,7 @@ private:
 
     /// @brief The `AudioDeviceMode` this window was constructed with - see
     /// the constructor's own docs. Stored so setProject() can construct
-    /// each project's `loopEngine_` with the same mode `playbackController_`/
+    /// each project's LoopController's engine with the same mode `playbackController_`/
     /// `recordEngine_` already used, rather than that one construction site
     /// silently reverting to the `Real` default.
     sound_mind::core::AudioDeviceMode audioDeviceMode_ = sound_mind::core::AudioDeviceMode::Real;
@@ -3822,35 +3798,6 @@ private:
     /// (`v0.Y.31.1` Installment C2).
     MindWaveController* mindWaveController_ = nullptr;
 
-    /// @brief `nullptr` until the first setProject() call - LoopEngine
-    /// needs a real loop length (the project's own duration in samples)
-    /// and codec config at construction time, so it's (re)constructed
-    /// fresh in setProject() for whatever project is current, rather than
-    /// being a fixed member built once before any project exists - see the
-    /// class docs' `v0.Y.12.1` note for why this replaced the original
-    /// `LiveEngine` member's simpler, always-default-constructed shape.
-    std::unique_ptr<sound_mind::core::LoopEngine> loopEngine_;
-    QTimer* loopUpdateTimer_ = nullptr;
-
-    /// @brief The layer currently being captured into, while Loop Mode is
-    /// running - std::nullopt otherwise. An id, not a Layer*, since
-    /// Project::layers() is a std::vector<Layer> that addLayer() (or
-    /// future layer-list operations) can reallocate, invalidating a raw
-    /// pointer held across such a call - see layerById().
-    std::optional<sound_mind::core::LayerId> loopLayerId_;
-    /// @brief An edit arrived while loopBackingJob_ was running.
-    bool loopBackingDirty_ = false;
-    /// @brief Loop Mode was started and is waiting for its first project
-    ///        audio before the engine actually starts.
-    bool loopStartPending_ = false;
-    /// @brief The Loop panel's "Live-encoding view" choice - see
-    ///        CanvasWidget::setLiveOverlay(). (Record's is
-    ///        RecordingController's.)
-    bool loopLiveView_ = false;
-    /// @brief The last LoopEngine::takesCompleted() copied into the Loop
-    ///        layer - see updateLoopLayer().
-    std::uint64_t loopTakesShown_ = 0;
-
     /// @brief Constructed in the member-initializer list (not a fixed
     /// in-class default) since it needs `audioDeviceMode_`'s value, which
     /// is only known once the constructor's own parameter is available.
@@ -3883,7 +3830,7 @@ private:
     /// setConfiguredInputDevice()/setConfiguredOutputDevice(). Empty means
     /// the system default, the same convention every device name in this
     /// class already follows. **Also** what setProject() re-applies to each
-    /// freshly (re)constructed `loopEngine_` - see its own docs on why that
+    /// freshly (re)constructed LoopController's engine - see its own docs on why that
     /// matters (real-world testing pass, 2026-09-20, finding #10).
     QString configuredInputDeviceName_;
     QString configuredOutputDeviceName_;
@@ -3892,7 +3839,7 @@ private:
     /// gain, tracked here for the same reason as
     /// configuredInputDeviceName_/configuredOutputDeviceName_ just above -
     /// `recordEngine_`/`deviceTestRecordEngine_` are persistent members that
-    /// never lose a `setInputGain()` call, but `loopEngine_` is rebuilt
+    /// never lose a `setInputGain()` call, but LoopController's engine is rebuilt
     /// fresh by setProject() on every new/opened project, so this is what
     /// setProject() re-applies to it. `1.0f` (unity) is the same default
     /// `LoopEngine`/`RecordEngine` themselves start at.
@@ -3933,7 +3880,7 @@ private:
     std::unique_ptr<RecordingController> recordingController_;  ///< Record's take and its save (`v0.1.48.6`).
     std::unique_ptr<BackgroundJob> filterPreviewJob_;  ///< Filter preview renders.
     std::unique_ptr<AnalysisController> analysisController_;  ///< The Analysis panel's runs (`v0.1.48.5`).
-    std::unique_ptr<BackgroundJob> loopBackingJob_;    ///< Loop Mode's backing audio.
+    std::unique_ptr<LoopController> loopController_;  ///< Loop Mode: its engine, backing audio and takes (`v0.1.48.7`).
     /// @}
 };
 

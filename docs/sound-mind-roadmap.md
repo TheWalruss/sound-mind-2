@@ -1198,7 +1198,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.82.2` | Video export overhaul, modelled on the legacy Studio (inserted 2026-10-22) | `0.1.45.1` | #270 |
 | `v0.Y.82.3` | Remove the Pool codec (inserted 2026-10-22) | `0.1.46.1` | #271 |
 | `v0.Y.82.4` | Responsiveness and modularity pass (inserted 2026-10-22) | `0.1.47.1`-`0.1.47.4` | #272-#275 |
-| `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1`-`0.1.48.6` | #276-#281 |
+| `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1`-`0.1.48.7` | #276-#282 |
 | - | Beta readiness check | *(after `v0.Y.82.5`)* | |
 | `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
 | `v0.Y.84.1` | Light and dark mode | - | |
@@ -1493,7 +1493,8 @@ Steps 4 and 5 of the 2026-10-22 code scan, so changes from beta feedback stay ch
 - ✅ **Installment D - `PlaybackPreparer`.** Settled in `v0.1.48.4`, Decision #279.
 - ✅ **Installment E - `AnalysisController`.** Settled in `v0.1.48.5`, Decision #280.
 - ✅ **Installment F - `RecordingController`.** Settled in `v0.1.48.6`, Decision #281.
-- **Next installments - the rest of `MainWindow` split into controllers, piece by piece**, each keeping `MainWindow`'s public API as thin forwards so its tests keep passing: Loop Mode, Macros, menu building.
+- ✅ **Installment G - `LoopController`.** Settled in `v0.1.48.7`, Decision #282.
+- **Next installments - the rest of `MainWindow` split into controllers, piece by piece**, each keeping `MainWindow`'s public API as thin forwards so its tests keep passing: Macros, menu building.
 - **Then - data-driven filter and tool parameters** (step 5): one parameter table generating JSON, panel widgets and MindWave bindings.
 
 #### Then: Beta readiness check
