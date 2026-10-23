@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.48.8] - 2026-10-23
+
+Roadmap slot `v0.Y.82.5` (modularity), installment H.
+
+### Changed
+
+- Internal: recording Macros, rebuilding a recorded Macro for playback or video, and starting its playback moved out of the main window into their own component, tested on its own. Nothing changes in how Macros behave.
+
 ## [0.1.48.7] - 2026-10-23
 
 Roadmap slot `v0.Y.82.5` (modularity), installment G.

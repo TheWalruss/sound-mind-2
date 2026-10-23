@@ -35,6 +35,7 @@
 #include "sound_mind/studio/analysis_controller.h"
 #include "sound_mind/studio/recording_controller.h"
 #include "sound_mind/studio/loop_controller.h"
+#include "sound_mind/studio/macro_controller.h"
 #include "sound_mind/studio/branch_curve_session.h"
 #include "sound_mind/studio/project_change.h"
 #include "sound_mind/studio/analysis_panel.h"
@@ -1967,9 +1968,9 @@ public slots:
     /// @return Position (seconds) and whether playing.
     [[nodiscard]] std::pair<double, bool> macroPlayhead() const;
 
-    /// @brief Reports the playhead to macroRecorder_ while recording - on
-    ///        every position update, transport change and macroPlayheadTimer_
-    ///        tick.
+    /// @brief Reports the playhead to the Macro being recorded - on every
+    ///        position update and transport change; see
+    ///        MacroController::notePlayhead().
     void noteMacroPlayhead();
 
     /**
@@ -3519,15 +3520,6 @@ private:
     ///        thing to do that it isn't specifically tested for either.
     BranchCurveSession branchCurveSession_;
 
-    /// @brief Records Macros (`v0.1.44.1`) - see `MacroRecorder`. Follows
-    ///        history_'s entries, so it's declared after it.
-    MacroRecorder macroRecorder_{&history_};
-
-    /// @brief Reports the playhead to macroRecorder_ every ~33 ms while
-    ///        recording - catches transport starts and stops, the natural
-    ///        end of playback, Loop passes and seeks.
-    QTimer* macroPlayheadTimer_ = nullptr;
-
     /// @brief Plays recorded Macros back - see `MacroPlayer`, playMacro().
     MacroPlayer* macroPlayer_ = nullptr;
 
@@ -3685,7 +3677,7 @@ private:
 
     /// @brief The transport toolbar's "Record Macro" checkable toggle -
     /// `v0.Y.49.1` (Macro Mode) Installment A. Checked while
-    /// macroRecorder_.isRecording() - kept as a member so
+    /// a Macro is being recorded (MacroController) - kept as a member so
     /// setMacroRecordingEnabled() and setProject() can both keep it in
     /// sync (a project switch mid-recording stops the recording outright,
     /// the same "unrelated event, start clean" reasoning setProject()'s
@@ -3850,7 +3842,7 @@ private:
     /// getter, only the positionChanged() signal) so
     /// PlaybackPreparer knows where to resume from for `PlaybackScope::Track`
     /// (which never jumps on an edit). Also read by
-    /// macroRecorder_'s own recordEvent() calls (`v0.Y.49.1`, Macro Mode)
+    /// MacroController, through macroPlayhead(), (`v0.Y.49.1`, Macro Mode)
     /// as the timestamp to record against.
     double currentPlaybackPositionSeconds_ = 0.0;
 
@@ -3880,6 +3872,7 @@ private:
     std::unique_ptr<RecordingController> recordingController_;  ///< Record's take and its save (`v0.1.48.6`).
     std::unique_ptr<BackgroundJob> filterPreviewJob_;  ///< Filter preview renders.
     std::unique_ptr<AnalysisController> analysisController_;  ///< The Analysis panel's runs (`v0.1.48.5`).
+    std::unique_ptr<MacroController> macroController_;  ///< Recording and playing Macros (`v0.1.48.8`).
     std::unique_ptr<LoopController> loopController_;  ///< Loop Mode: its engine, backing audio and takes (`v0.1.48.7`).
     /// @}
 };

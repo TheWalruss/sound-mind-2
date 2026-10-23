@@ -67,6 +67,7 @@
 #include "sound_mind/studio/analysis_controller.h"
 #include "sound_mind/studio/recording_controller.h"
 #include "sound_mind/studio/loop_controller.h"
+#include "sound_mind/studio/macro_controller.h"
 #include "sound_mind/studio/base_recipes.h"
 #include "sound_mind/studio/video_export_dialog.h"
 #include "sound_mind/studio/macro_manager_dialog.h"
@@ -1716,9 +1717,18 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         }
     });
 
-    macroPlayheadTimer_ = new QTimer(this);
-    macroPlayheadTimer_->setInterval(33);
-    connect(macroPlayheadTimer_, &QTimer::timeout, this, &MainWindow::noteMacroPlayhead);
+    // Recording Macros, their renderers and starting playback live in their
+    // own controller since v0.1.48.8 - see MacroController.
+    macroController_ = std::make_unique<MacroController>(
+        MacroController::Context{
+            [this]() -> sound_mind::core::Project* { return project_ ? &*project_ : nullptr; },
+            [this]() { return macroPlayhead(); },
+            [this]() {
+                return limiterEnabled_ ? std::optional<float>(static_cast<float>(limiterCeilingDb_)) : std::nullopt;
+            },
+            [this]() { stopPlayback(); },
+            [this](const ProjectChange& change) { applyProjectChange(change); }},
+        &history_, macroPlayer_, statusBar());
 
     // Record's take, draining and save live in their own controller since
     // v0.1.48.6 - see RecordingController.
@@ -2161,8 +2171,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // macroRecordAction_'s own docs. A no-op (does nothing, triggers no
     // toggled()) when nothing was recording.
     macroRecordAction_->setChecked(false);  // stops (and keeps) a recording in progress.
-    macroRecorder_.discard();
-    macroPlayer_->stop();
+    macroController_->projectChanged();
     canvas_->setToolMode(CanvasWidget::ToolMode::None);
     canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     canvas_->setPickSelectionBounds(std::nullopt);
@@ -2681,27 +2690,7 @@ void MainWindow::exportMacroVideo() {
 
 std::unique_ptr<sound_mind::core::MacroRenderer> MainWindow::macroRendererFor(sound_mind::core::MacroId id,
                                                                                QString* errorMessage) {
-    const sound_mind::core::Macro* macro = project_ ? project_->macroById(id) : nullptr;
-    if (macro == nullptr) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("That macro no longer exists.");
-        }
-        return nullptr;
-    }
-    auto start = sound_mind::core::macroStartEntries(*project_, *macro);
-    if (!start.has_value()) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("This macro was recorded in a project whose history doesn't go back to its creation "
-                               "(made with a version before 0.1.43.1), so it can't be rebuilt.");
-        }
-        return nullptr;
-    }
-    sound_mind::core::MacroRenderOptions options;
-    options.runRecipe = sound_mind::studio::replayRecipeRunner(sound_mind::studio::sourceLookupFor(*project_));
-    options.limiterCeilingDb =
-        limiterEnabled_ ? std::optional<float>(static_cast<float>(limiterCeilingDb_)) : std::nullopt;
-    return std::make_unique<sound_mind::core::MacroRenderer>(macro->settings, std::move(*start), *macro,
-                                                             std::move(options));
+    return macroController_->rendererFor(id, errorMessage);
 }
 
 bool MainWindow::exportCompositeAudioNow(const std::filesystem::path& path, QString* errorMessage) {
@@ -3710,36 +3699,7 @@ void MainWindow::setDecimalSeparator(sound_mind::core::DecimalSeparator separato
     applyProjectChange(ProjectChange::settingsOnly());
 }
 
-void MainWindow::setMacroRecordingEnabled(bool enabled) {
-    if (!project_) {
-        return;
-    }
-    if (enabled) {
-        if (macroRecorder_.isRecording()) {
-            return;
-        }
-        const QString name = tr("Macro %1").arg(project_->macros().size() + 1);
-        const auto [position, playing] = macroPlayhead();
-        macroRecorder_.start(*project_, name, position, playing);
-        macroPlayheadTimer_->start();
-        applyProjectChange(ProjectChange::settingsOnly());
-        statusBar()->showMessage(tr("Recording \"%1\" - start Playback or Loop; its clock runs while they do.")
-                                     .arg(name));
-    } else if (macroRecorder_.isRecording()) {
-        noteMacroPlayhead();
-        const auto id = *macroRecorder_.recordingMacro();
-        macroRecorder_.stop();
-        macroPlayheadTimer_->stop();
-        applyProjectChange(ProjectChange::settingsOnly());
-        if (const sound_mind::core::Macro* macro = project_->macroById(id)) {
-            statusBar()->showMessage(tr("Recorded \"%1\": %2 s, %3 event(s).")
-                                         .arg(QString::fromStdString(macro->name))
-                                         .arg(macro->durationSeconds, 0, 'f', 1)
-                                         .arg(macro->events.size()),
-                                     8000);
-        }
-    }
-}
+void MainWindow::setMacroRecordingEnabled(bool enabled) { macroController_->setRecordingEnabled(enabled); }
 
 std::pair<double, bool> MainWindow::macroPlayhead() const {
     if (isLoopModeRunning() && project_) {
@@ -3751,9 +3711,8 @@ std::pair<double, bool> MainWindow::macroPlayhead() const {
 }
 
 void MainWindow::noteMacroPlayhead() {
-    if (macroRecorder_.isRecording()) {
-        const auto [position, playing] = macroPlayhead();
-        macroRecorder_.notePlayhead(position, playing);
+    if (macroController_) {  // still constructing: nothing is being recorded.
+        macroController_->notePlayhead();
     }
 }
 
@@ -3808,14 +3767,9 @@ void MainWindow::playMacro() {
         return;
     }
     QString error;
-    auto renderer = macroRendererFor(*id, &error);
-    if (!renderer) {
+    if (!macroController_->play(*id, &error)) {
         QMessageBox::critical(this, tr("Play Macro Failed"), error);
-        return;
     }
-    stopPlayback();
-    macroPlayer_->start(std::move(renderer));
-    statusBar()->showMessage(tr("Preparing the macro - it starts playing in a moment..."), 4000);
 }
 
 void MainWindow::usePickedPathAsMindWaveShape() {

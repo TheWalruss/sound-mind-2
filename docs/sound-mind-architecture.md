@@ -3198,6 +3198,28 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - a new engine abandons the session.
 
       The `MainWindowTest` Loop Mode cases pass unchanged.
+283. **Modularity pass, installment H: `MacroController`.** Settled in `v0.1.48.8`.
+    - **`studio::MacroController` (new, `QObject`)** owns:
+      - the `MacroRecorder`, previously a `MainWindow` member;
+      - the ~33 ms playhead timer;
+      - `setRecordingEnabled()`, `notePlayhead()` and `isRecording()`;
+      - `rendererFor()`, previously `MainWindow::macroRendererFor()`: the start state from history, recipes replayed from sources, and the current limiter;
+      - `play()`, which stops Playback (`Context::aboutToPlay`) and starts the window's `MacroPlayer`;
+      - `projectChanged()`, which forgets a recording in progress and stops a playing Macro.
+    - **Stays with `MainWindow`:**
+      - the `MacroPlayer`, because it draws on the canvas and drives Playback;
+      - the Macro menu, `chooseMacro()` and the Manage Macros dialog, because they are UI;
+      - `macroPlayhead()`, because the playhead is Loop Mode's or Playback's. It is passed in as `Context::playhead`.
+    - **`MainWindow` forwards** `setMacroRecordingEnabled()`, `noteMacroPlayhead()` and `macroRendererFor()`. `noteMacroPlayhead()` is null-safe while the window is being constructed. `playMacro()` keeps the chooser and the error dialog.
+    - **Tests:** Studio `MacroControllerTest`, 6 cases, about 1 s, with no player:
+      - recording adds a named Macro and keeps it with its duration;
+      - recording needs a project and ignores repeats;
+      - the playhead is polled only while recording;
+      - a recorded Macro has a renderer;
+      - a missing Macro has none and doesn't stop Playback;
+      - another project forgets a recording in progress.
+
+      Previously, no Studio test exercised the window's Macro glue directly.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**
