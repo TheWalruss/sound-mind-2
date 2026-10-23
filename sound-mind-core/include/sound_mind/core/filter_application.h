@@ -69,6 +69,12 @@ struct FilterParameterMindWaves {
     const MindWave* reverbMix = nullptr;
     /// @brief Resolved `FilterConfiguration::downsampleBlockSizeMindWave()`.
     const MindWave* downsampleBlockSize = nullptr;
+
+    /// @brief The resolved MindWave driving `parameter` (`v0.1.48.10`).
+    /// @param parameter Which parameter.
+    /// @return The field above that matches it; `nullptr` if unbound, or if
+    ///         no MindWave can drive it.
+    [[nodiscard]] const MindWave* of(FilterParameter parameter) const noexcept;
 };
 
 /**

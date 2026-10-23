@@ -2031,31 +2031,58 @@ namespace {
 
 }  // namespace
 
+namespace {
+
+/// @brief Which FilterParameterMindWaves field holds each FilterParameter's
+///        resolved MindWave, in enum order; null for one no MindWave can
+///        drive.
+constexpr std::array<const MindWave* FilterParameterMindWaves::*, kFilterParameterCount> kResolvedMindWaveFields{
+    &FilterParameterMindWaves::blurSigma,
+    &FilterParameterMindWaves::medianSize,
+    &FilterParameterMindWaves::directionalBlurLength,
+    &FilterParameterMindWaves::directionalBlurAngle,
+    &FilterParameterMindWaves::sharpenAmount,
+    &FilterParameterMindWaves::speckleDensity,
+    &FilterParameterMindWaves::speckleIntensity,
+    &FilterParameterMindWaves::speckleThreshold,
+    &FilterParameterMindWaves::noiseFloor,
+    &FilterParameterMindWaves::reduction,
+    &FilterParameterMindWaves::crushAmount,
+    nullptr,  // GrainSize.
+    &FilterParameterMindWaves::grainAmount,
+    &FilterParameterMindWaves::feedbackAmount,
+    &FilterParameterMindWaves::foldGain,
+    &FilterParameterMindWaves::channelBalance,
+    nullptr,  // ConvolveKernelSize.
+    &FilterParameterMindWaves::convolveAmount,
+    &FilterParameterMindWaves::displaceDistance,
+    &FilterParameterMindWaves::displaceAngle,
+    &FilterParameterMindWaves::channelCycleAngle,
+    nullptr,  // ReverbPreDelay.
+    nullptr,  // ReverbDecay.
+    nullptr,  // ReverbRoomSize.
+    nullptr,  // ReverbDiffusion.
+    nullptr,  // ReverbAbsorption.
+    &FilterParameterMindWaves::reverbMix,
+    &FilterParameterMindWaves::downsampleBlockSize,
+};
+
+}  // namespace
+
+const MindWave* FilterParameterMindWaves::of(FilterParameter parameter) const noexcept {
+    const auto field = kResolvedMindWaveFields[static_cast<std::size_t>(parameter)];
+    return field != nullptr ? this->*field : nullptr;
+}
+
 FilterParameterMindWaves resolveFilterParameterMindWaves(const FilterConfiguration& config,
                                                             const MindWaveResolver& resolveMindWave) {
-    return FilterParameterMindWaves{
-        resolveMindWaveIdVia(config.blurSigmaMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.medianSizeMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.directionalBlurLengthMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.directionalBlurAngleMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.sharpenAmountMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.speckleDensityMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.speckleIntensityMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.speckleThresholdMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.noiseFloorMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.reductionMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.crushAmountMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.grainAmountMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.feedbackAmountMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.foldGainMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.channelBalanceMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.convolveAmountMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.displaceDistanceMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.displaceAngleMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.channelCycleAngleMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.reverbMixMindWave(), resolveMindWave),
-        resolveMindWaveIdVia(config.downsampleBlockSizeMindWave(), resolveMindWave),
-    };
+    FilterParameterMindWaves resolved;
+    for (const FilterParameterSpec& spec : filterParameterSpecs()) {
+        if (const auto field = kResolvedMindWaveFields[static_cast<std::size_t>(spec.parameter)]) {
+            resolved.*field = resolveMindWaveIdVia(config.parameterMindWave(spec.parameter), resolveMindWave);
+        }
+    }
+    return resolved;
 }
 
 void applyFilterOperation(const FilterOperation& operation, StreamImage& content, const ProjectSettings& settings,

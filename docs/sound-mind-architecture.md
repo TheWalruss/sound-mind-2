@@ -3236,6 +3236,30 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Moved out of `MainWindow` into tested controllers: export, import, playback preparation, analysis, recording, Loop Mode and Macros.
       - Moved into their own file: the menus and toolbars.
       - Still in `MainWindow`: project lifecycle, device configuration and the panels' cross-wiring.
+285. **Modularity pass, installment J: the core filter parameter table.** Settled in `v0.1.48.10`.
+    - **`core::FilterParameter` and `core::filterParameterSpecs()` (new, `filter_parameters.h`).** One row per numeric filter parameter: 28 rows, 21 of them MindWave-bindable. Each row gives:
+      - its JSON value key;
+      - its JSON MindWave key, or none. Every MindWave key ends in `MindWaveId`, which `mindWaveDependents()` relies on;
+      - its valid range (the panel's own);
+      - whether it's an integer.
+
+      The structured parameters (tone curve, gradient, kernel) and the choices (type, Downsample mode, Convolve normalize) keep their own handling.
+    - **`FilterConfiguration` gains generic accessors:** `parameter()`, `setParameter()` (integers rounded, no clamping, like the named setters), `parameterMindWave()` and `setParameterMindWave()` (ignored for unbindable parameters). A private `slot()` maps each parameter to its storage. The named accessors stay, for the DSP and existing callers.
+    - **JSON is written and read by walking the table.**
+      - The keys and value types are identical, so project files are unchanged.
+      - Reading is now uniform: a missing numeric value keeps its default. Previously the first five were required and the rest lenient. This only simplifies the code; it isn't compatibility work.
+    - **MindWave resolution.** `resolveFilterParameterMindWaves()` walks the table through a member-pointer map onto `FilterParameterMindWaves`' named fields, which the DSP still reads. The new `FilterParameterMindWaves::of(FilterParameter)` reads the same fields generically.
+    - **Adding a numeric filter parameter** now means: its storage and named accessors, one table row, one `slot()` case, and its DSP. Its JSON and MindWave resolution follow automatically. The panel follows once installment K builds its fields from the table.
+    - **Tests:** Core `[filter_parameters]`, 7 cases:
+      - the table is well-formed and in enum order;
+      - the generic accessors match the named ones;
+      - every parameter round-trips through them;
+      - only bindable parameters keep a binding;
+      - the JSON keys are unchanged, and every value and binding round-trips;
+      - a missing value keeps its default;
+      - resolution follows the table.
+
+      The 50 existing `[filter_configuration]` cases pass unchanged.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

@@ -25,6 +25,7 @@ add_library(sound-mind-core
     src/wand_selection.cpp
     src/tool_configuration.cpp
     src/filter_configuration.cpp
+    src/filter_parameters.cpp
     src/tone_curve.cpp
     src/mind_wave.cpp
     src/mind_wave_dependencies.cpp

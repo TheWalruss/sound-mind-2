@@ -8,6 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/filter_parameters.h"
 #include "sound_mind/core/gradient.h"
 
 namespace sound_mind::core {
@@ -1130,10 +1131,53 @@ public:
         downsampleBlockSizeMindWave_ = mindWaveId;
     }
 
+    /// @name Any numeric parameter, by FilterParameter (`v0.1.48.10`)
+    /// The same values the named accessors above read and write, for code
+    /// that walks filterParameterSpecs() instead of naming each parameter -
+    /// the JSON, MindWave resolution and the Filter Configuration panel.
+    /// @{
+
+    /// @brief A numeric parameter's value.
+    /// @param parameter Which one.
+    /// @return Its value; an integer parameter's, converted.
+    [[nodiscard]] double parameter(FilterParameter parameter) const noexcept;
+
+    /// @brief Sets a numeric parameter. Not clamped, like the named setters.
+    /// @param parameter Which one.
+    /// @param value The new value; rounded to the nearest whole number for
+    ///        an integer parameter (FilterParameterSpec::integer).
+    void setParameter(FilterParameter parameter, double value) noexcept;
+
+    /// @brief Which MindWave drives a parameter.
+    /// @param parameter Which one.
+    /// @return The bound MindWave's id; `std::nullopt` if unbound, or if no
+    ///         MindWave can drive it (isMindWaveBindable()).
+    [[nodiscard]] std::optional<MindWaveId> parameterMindWave(FilterParameter parameter) const noexcept;
+
+    /// @brief Sets (or clears) which MindWave drives a parameter. Ignored
+    ///        for one no MindWave can drive (isMindWaveBindable()).
+    /// @param parameter Which one.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setParameterMindWave(FilterParameter parameter, std::optional<MindWaveId> mindWaveId) noexcept;
+    /// @}
+
     friend void to_json(nlohmann::json& json, const FilterConfiguration& config);
     friend void from_json(const nlohmann::json& json, FilterConfiguration& config);
 
 private:
+    /// @brief Where one FilterParameter is stored: exactly one of `real` and
+    ///        `whole` is set; `mindWave` is null if it isn't bindable.
+    struct ParameterSlot {
+        float* real = nullptr;                      ///< A real-valued parameter's storage.
+        int* whole = nullptr;                       ///< An integer parameter's storage.
+        std::optional<MindWaveId>* mindWave = nullptr;  ///< Its binding's storage.
+    };
+
+    /// @brief Where `parameter` is stored.
+    /// @param parameter Which one.
+    /// @return Its slot - see ParameterSlot.
+    [[nodiscard]] ParameterSlot slot(FilterParameter parameter) noexcept;
+
     FilterType type_ = FilterType::FrequencyAxisGradient;
     float blurSigma_ = 2.0f;
     std::optional<MindWaveId> blurSigmaMindWave_;

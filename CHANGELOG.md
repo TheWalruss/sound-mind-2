@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.48.10] - 2026-10-23
+
+Roadmap slot `v0.Y.82.5` (modularity), installment J - the first of step 5 (parameter tables).
+
+### Changed
+
+- Internal: every numeric filter parameter is now described once, in a single table (its saved name, whether a MindWave can drive it, its valid range). Saving and loading filters and resolving their MindWaves now read that table instead of listing each parameter. Project files are unchanged.
+
 ## [0.1.48.9] - 2026-10-23
 
 Roadmap slot `v0.Y.82.5` (modularity), installment I.
