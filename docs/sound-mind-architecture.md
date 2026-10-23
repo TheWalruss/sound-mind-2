@@ -3300,6 +3300,17 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **Tests:**
       - Core `[project_settings]`: a new project's rate follows the device, else 48 kHz, including rounding and out-of-range rates.
       - Studio `CreateProjectWizardTest`: the rate follows the device, and falls back to 48 kHz when the device is unknown or out of range. `settingsMatchProjectSettingsDefaultsInitially` no longer compares the sample rate.
+288. **A cancelled background job's completion never applies its result.** Settled in `v0.1.49.2`.
+    - **The bug.** `ImportController`'s completion ignored `BackgroundJob`'s `cancelled` flag; it was introduced in `v0.1.48.3` (Decision #278). If Cancel came after the encode had finished, but before the completion ran, the layers were added anyway. That contradicts `importAudioSnippetsAsync()`'s documented "Cancel adds nothing".
+      - `MainWindowTest::importAudioSnippetsAsyncDoesNothingWhileAlreadyRunning` caught it once, under load: four test suites were running at once, which widened the window.
+      - Recording `cancelled` even after the work finishes is exactly why `BackgroundJob` was designed that way (Decision #273). This completion just didn't use it.
+    - **The fix.** A cancelled import's completion now reports Cancelled and adds nothing.
+    - **Same review of every completion:**
+      - `PlaybackPreparer`'s Repeat refresh now drops a cancelled result explicitly. Before, it was only dropped incidentally, because playback had stopped.
+      - The filter preview's completion is already gated on the preview still being on.
+      - Export's completion still reports a file a late Cancel couldn't stop. That's truthful: the file exists.
+      - Recording's save, Loop's backing, analysis and the edit-playback job already honor `cancelled`.
+    - **Test:** Studio `ImportControllerTest::aCancelAfterTheWorkFinishedStillAddsNothing`. It starts a short import, keeps the UI thread busy until the encode is done, then cancels. It failed before the fix (a layer was added) and passes now.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

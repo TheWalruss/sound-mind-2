@@ -6,6 +6,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.49.2] - 2026-10-23
+
+### Fixed
+
+- **Cancelling an audio import now always adds nothing.** If you pressed Cancel just after the import had finished its work, but before its layers appeared, they were added anyway (since 0.1.48.3).
+
 ## [0.1.49.1] - 2026-10-23
 
 Roadmap slot `v0.Y.83.1` (new projects match the output device's sample rate).

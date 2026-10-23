@@ -8,6 +8,7 @@ class ImportControllerTest : public QObject {
 private slots:
     void aBackgroundAudioImportAddsLayersWithTheirSourceAndOneEntry();
     void cancellingABackgroundImportAddsNothing();
+    void aCancelAfterTheWorkFinishedStillAddsNothing();
     void anImageImportAddsALayerAndNotifies();
     void withNoProjectNothingIsImported();
 };

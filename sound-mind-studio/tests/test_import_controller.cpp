@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <thread>
 #include <vector>
 
 #include <QImage>
@@ -111,6 +112,26 @@ void ImportControllerTest::cancellingABackgroundImportAddsNothing() {
 
     fixture.controller.importAudioSnippetsAsync(wav, {0});
     fixture.statusBar.findChild<QPushButton*>(QStringLiteral("importCancelButton"))->click();
+    QTRY_VERIFY_WITH_TIMEOUT(!fixture.controller.isRunning(), 60000);
+    QCOMPARE(project.layers().size(), layersBefore);
+    QVERIFY(fixture.commits.isEmpty());
+    QVERIFY(fixture.changes.empty());
+    std::filesystem::remove(wav);
+}
+
+// v0.1.49.2 - Cancel pressed after the encode had already finished (but
+// before its result was applied) used to add the layers anyway.
+void ImportControllerTest::aCancelAfterTheWorkFinishedStillAddsNothing() {
+    Project project = savedProject("sound-mind-test-import-late-cancel.smproj");
+    const auto layersBefore = project.layers().size();
+    Fixture fixture(&project);
+    const auto wav = std::filesystem::temp_directory_path() / "sound-mind-test-import-late-cancel.wav";
+    writeWav(wav, 4410);  // short: done long before the UI thread looks again.
+
+    fixture.controller.importAudioSnippetsAsync(wav, {0});
+    std::this_thread::sleep_for(std::chrono::seconds(3));  // the UI thread is busy; the encode finishes.
+    QVERIFY(fixture.controller.isRunning());               // its result isn't applied yet.
+    fixture.controller.cancel();
     QTRY_VERIFY_WITH_TIMEOUT(!fixture.controller.isRunning(), 60000);
     QCOMPARE(project.layers().size(), layersBefore);
     QVERIFY(fixture.commits.isEmpty());

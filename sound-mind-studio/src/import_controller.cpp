@@ -121,7 +121,14 @@ void ImportController::importAudioSnippetsAsync(const std::filesystem::path& pat
             result->outcome = Outcome::Failed;
             result->error = QString::fromStdString(e.what());
         }
-        return [this, path, result](bool) { finish(path, std::move(*result)); };
+        return [this, path, result](bool cancelled) {
+            if (cancelled) {
+                // Cancel can land after the encode already finished - it still
+                // means "add nothing" (v0.1.49.2).
+                result->outcome = Outcome::Cancelled;
+            }
+            finish(path, std::move(*result));
+        };
     });
     if (statusBar_ != nullptr) {
         statusBar_->showMessage(tr("Importing audio..."));

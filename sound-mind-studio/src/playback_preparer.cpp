@@ -151,7 +151,10 @@ void PlaybackPreparer::scheduleRepeatRefresh() {
     refreshJob_.start([this, snapshot = project->renderSnapshot()](
                           sound_mind::core::CancellationToken& token) -> BackgroundJob::Completion {
         auto prepared = std::make_shared<Prepared>(prepare(snapshot, token, /*measureLoudness=*/true));
-        return [this, prepared](bool) { finishRefresh(std::move(prepared->audio), prepared->loudnessLufs); };
+        return [this, prepared](bool cancelled) {
+            // A cancelled refresh (another project) never reaches playback (v0.1.49.2).
+            finishRefresh(cancelled ? std::nullopt : std::move(prepared->audio), prepared->loudnessLufs);
+        };
     });
 }
 
