@@ -47,8 +47,6 @@
 #include "test_branch_curve_session.h"
 #include "test_canvas_widget.h"
 #include "test_checklist_dialog.h"
-#include "test_chord_generator_controller.h"
-#include "test_chord_generator_panel.h"
 #include "test_configure_devices_panel.h"
 #include "test_create_project_wizard.h"
 #include "test_device_combo_helpers.h"
@@ -122,8 +120,6 @@ struct TestClassEntry {
 const std::array kTestClasses{
     SM_TEST_CLASS_ENTRY(CanvasWidgetTest),
     SM_TEST_CLASS_ENTRY(CheckListDialogTest),
-    SM_TEST_CLASS_ENTRY(ChordGeneratorControllerTest),
-    SM_TEST_CLASS_ENTRY(ChordGeneratorPanelTest),
     SM_TEST_CLASS_ENTRY(ConfigureDevicesPanelTest),
     SM_TEST_CLASS_ENTRY(LandingPageTest),
     SM_TEST_CLASS_ENTRY(LayerControllerTest),

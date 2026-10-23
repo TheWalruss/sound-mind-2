@@ -2234,7 +2234,7 @@ TEST_CASE("A re-voiced SequenceOperation (a fresh instance with different notes,
     const int revoicedBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(900.0f, config))));
     const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
 
-    // The "original" sequence, as if just stamped by the Chord Generator.
+    // The "original" sequence, as if just imported from MIDI.
     const std::vector<NoteEvent> originalNotes{NoteEvent{0.3, 0.0, 300.0}};
     const SequenceOperation original(1, LayerId{1}, originalNotes, makeOpaqueSequenceTool(0.02, -10.0f));
     {

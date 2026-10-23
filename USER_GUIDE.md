@@ -21,21 +21,20 @@ in-app behavior is correct and this guide is due an update.
 10. [Selection and Fill](#selection-and-fill)
 11. [Path Tool](#path-tool)
 12. [Text Tool](#text-tool)
-13. [Chord Generator](#chord-generator)
-14. [Axis Labels](#axis-labels)
-15. [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid)
-16. [Playback](#playback)
-17. [Recording](#recording)
-18. [Loop Mode](#loop-mode)
-19. [Macros](#macros)
-20. [Configure Devices](#configure-devices)
-21. [Exporting](#exporting)
-22. [Saving and Project Files](#saving-and-project-files)
-23. [Resource Browser](#resource-browser)
-24. [Analysis](#analysis)
-25. [Performance](#performance)
-26. [Licence and Credits](#licence-and-credits)
-27. [What's Not Here Yet](#whats-not-here-yet)
+13. [Axis Labels](#axis-labels)
+14. [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid)
+15. [Playback](#playback)
+16. [Recording](#recording)
+17. [Loop Mode](#loop-mode)
+18. [Macros](#macros)
+19. [Configure Devices](#configure-devices)
+20. [Exporting](#exporting)
+21. [Saving and Project Files](#saving-and-project-files)
+22. [Resource Browser](#resource-browser)
+23. [Analysis](#analysis)
+24. [Performance](#performance)
+25. [Licence and Credits](#licence-and-credits)
+26. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -119,7 +118,7 @@ Once a project is open, the title bar shows the project's name next to
 - **Tool dropdown** - a single toolbar button choosing the canvas's
   current tool: **Pan** (the default - navigate the canvas without
   painting, picking, or placing anything), **Paint**, **Pick**,
-  **Select**, **Path**, or **Chord**. Its own label always names whichever
+  **Select**, **Path**, or **Text**. Its own label always names whichever
   one is active; turning a tool off (rather than choosing a different one)
   falls back to Pan automatically. See each tool's own section below.
 - **Layers panel** (right, by default) - lists every layer in the
@@ -132,8 +131,8 @@ Once a project is open, the title bar shows the project's name next to
   start hidden; whichever one you have open (or none) stays that way
   across New/Open Project, within the same run of the Studio.
 - **Configure dropdown** - choose **Tool Configuration**, **MIDI
-  Configuration**, **Chord Generator**, **Selection Configuration**,
-  **Grid**, **Filter Configuration**, or **MindWaves** to show that
+  Configuration**, **Selection Configuration**, **Grid**, **Filter
+  Configuration**, or **MindWaves** to show that
   panel; each is covered in its own section below. Unlike Input/Output,
   any number of these can stay open together.
 - **Macro dropdown** (top-right of the menu bar, next to Input/Output) -
@@ -261,7 +260,7 @@ at, and working with, the exact same data - toggling it never modifies
 your project, and it isn't saved with it (a project always opens back in
 flat view).
 
-Every paint tool, Pick, Selection, Path, and Chord Stamp still work while
+Every paint tool, Pick, Selection, Path, and Text still work while
 Sound Flower is active - clicks and drags are automatically translated
 between the disk and the same underlying canvas coordinates flat view
 uses, so a stroke painted on the flower lands in exactly the same place a
@@ -271,7 +270,7 @@ A MindWave preview (see [MindWaves](#mindwaves)) warps onto the disk the
 same way the canvas itself does, so it's still visible while you work.
 
 A few things are hidden while Sound Flower is active, rather than drawn
-incorrectly: Overlay Grids, the Chord Overlay, Axis Labels, Show bounding
+incorrectly: Overlay Grids, Axis Labels, Show bounding
 boxes/path geometry, and a Rectangle-shaped Pick or Selection's own
 highlight box (a Lasso selection's own curve still shows correctly).
 Snap to Grid is also suspended while it's active. All of this returns
@@ -1326,7 +1325,7 @@ everything you do to a project, in the order you did it:
 - adding, deleting, duplicating, renaming and reordering layers, and every
   layer setting (visibility, gain, balance, MindWave binding, position,
   rescale, blend mode, filter settings);
-- painting, filling, pasting, text, chords, Pick's edits and restacking;
+- painting, filling, pasting, text, Pick's edits and restacking;
 - phase cleanup;
 - creating, editing and removing MindWaves, Mind Shots, Mind Grains,
   Resonances, kernels, presets and MIDI mappings.
@@ -1688,81 +1687,6 @@ object:
 - Clearing the text box entirely is ignored rather than erasing the text;
   delete it with Pick to remove it.
 - Choosing the Text tool again goes back to setting up new text.
-
-## Chord Generator
-
-**Chord Generator**, in the **Configure** dropdown, opens a dockable
-panel (off by default) that builds a chord, arpeggio, or a
-hand-written sequence, and stamps it onto the canvas as a series of notes.
-An **Input Mode** switch at the top chooses between two independent ways
-to build what gets stamped:
-
-### Chord Builder
-
-- **Root/Octave** - which pitch class and octave the chord is built on
-  (e.g. root `A`, octave `4`, is A4).
-- **Category/Chord** - one of five chord families (Triads, 6th, 7th, 9th,
-  Extended/Added), and a specific chord within it (e.g. Minor, Dominant
-  7th). A live text label shows the resolved note names as you adjust
-  these.
-- **Mode** - **Block Chord** plays every note together, for a chosen
-  Duration; **Arpeggio** spreads the same notes out over time instead,
-  with its own Order (Ascending, Descending, Up-Down, Down-Up,
-  Alternating, Outside-In, Inside-Out, Random, or a hand-typed Custom
-  sequence of indices), BPM, rhythmic Subdivision, Note Duration
-  (percentage of each step actually held), and Repeats (how many times
-  the whole sequence cycles).
-### Custom Notation
-
-Instead of picking a chord, type a sequence directly using Sound Mind's
-own compact notation - a space-separated list of tokens:
-
-- A **note**: `pitch:duration` - e.g. `A4:0.5` (a note name) or `440:0.5`
-  (a raw Hz value). Duration is in seconds by default, or beats with a
-  `b` suffix (e.g. `1b` is one beat at the BPM below).
-- A **rest**: `z` followed by a duration - e.g. `z0.25` - advances the
-  timeline without playing anything.
-- A **chord**: two or more notes joined with `+` - e.g.
-  `A4:0.5+C#5:0.5+E5:0.5` - every note in the group starts together.
-
-Notes play one after another: each token starts right when the previous
-one's own longest note (or a rest) ends - use `z` to leave a gap. For
-example, `A4:0.5 z0.25 C5:0.5+E5:0.5` plays A4 for half a second, waits a
-quarter second, then plays C5 and E5 together for half a second. Typos are
-flagged immediately below the text box as you type, with **BPM** and
-**Reference** (tuning, in Hz) number fields controlling how beats-suffixed
-durations and note names are resolved.
-
-While you're building a chord or arpeggio, its notes are drawn live as
-dashed amber lines on the canvas's own frequency axis, so you can see
-where they'll land before committing anything. This overlay only shows
-while the Chord Generator panel is open, or the Chord tool is the
-active one - it disappears once neither is true, rather than staying
-visible unconditionally.
-
-### Instrument and Placing It
-
-Either way, a stamped sequence always plays through whatever the
-[Painting](#painting) tool is currently configured as (Procedural,
-Instrument, Mind Shot, or Mind Grain) - there's no separate instrument
-picker in the Chord Generator itself; switch the Painting tool's own
-settings to change what it sounds like.
-
-To actually place it, choose **Chord** from the **Tool** dropdown to arm
-it, then click anywhere on the canvas - the click only sets *when*
-the sequence starts (its own time position); every note's own pitch
-always comes from the panel above, regardless of where vertically you
-click. While the panel is configured, its notes preview live on the
-canvas as horizontal lines on the frequency axis - independent of, and in
-addition to, the ordinary Frequency Grid (see
-[Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid) below) -
-so you can see what you're about to stamp before you click.
-
-A stamped chord is a real, editable paint object afterward - select it
-with [Pick](#pick) and drag it: left/right re-times it, up/down uniformly
-re-voices every note in it, both without repainting anything. Reopening a
-stamped chord's own instrument for editing isn't here yet; see
-[What's Not Here Yet](#whats-not-here-yet).
 
 ## Axis Labels
 
@@ -2538,8 +2462,7 @@ These are scheduled after the Beta readiness check:
 - **Performance Hints** - speed badges on filters, blend modes, brushes
   and MindWave generators, from your own machine's benchmark results.
 - **Live MIDI input** - playing a sequence from a connected MIDI
-  controller. Today sequences come from the Chord Generator's Chord
-  Builder and Custom Notation, or from MIDI file import.
+  controller. Today sequences come from MIDI file import.
 
 ### Not planned
 
@@ -2565,7 +2488,7 @@ These are scheduled after the Beta readiness check:
   or edit what a Macro recorded, strokes appear whole rather than being
   drawn in, and the video doesn't follow your zoom or scrolling (it shows
   the whole canvas, or the export dialog's Scrolling window).
-- **Sound Flower**: Overlay Grids, the Chord Overlay, Axis Labels,
+- **Sound Flower**: Overlay Grids, Axis Labels,
   bounding boxes and path geometry, the analysis overlays, and a
   Rectangle-shaped Pick or Selection highlight are hidden while the polar
   view is on, rather than drawn incorrectly.
@@ -2593,6 +2516,4 @@ These are scheduled after the Beta readiness check:
   Canvas Space choice). Reduce has no panel of its own - Vibrato/Tremolo
   are its only use. Step Grid values are a plain list of boxes, and
   Continuous's formula is a provisional first attempt.
-- **Chords:** a stamped chord or arpeggio can be re-timed and re-voiced
-  with Pick, but not pointed at a different instrument.
 - **Custom Frequencies** is free entry only, with no curated preset sets.

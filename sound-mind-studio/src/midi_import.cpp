@@ -37,7 +37,7 @@ QString tr(const char* text) { return QCoreApplication::translate("MidiImport", 
 /// panel explicitly reseeds full opacity on construction before a user
 /// ever paints a first stroke. Every other real paint path in this
 /// codebase either goes through that already-reseeded panel config
-/// (`ChordGeneratorController::stampAt()`, in particular) or hand-builds
+/// or hand-builds
 /// an explicitly opaque gradient in its own tests - this MIDI import code
 /// was the first real path to construct and paint through a bare,
 /// never-reseeded `ProceduralConfiguration` directly, so every imported

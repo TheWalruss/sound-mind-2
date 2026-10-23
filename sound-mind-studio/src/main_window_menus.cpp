@@ -744,7 +744,8 @@ void MainWindow::buildToolBars(const ZoomActions& zoomActions) {
 
     // Tool dropdown (v0.Y.58.1, "Reduce top-level buttons" UI polish): a
     // single QToolButton/QMenu collapsing what used to be five separate
-    // checkable toolbar actions (Paint/Pick/Select/Path/Chord) plus a new
+    // checkable toolbar actions (Paint/Pick/Select/Path, and a Chord tool since
+    // removed in v0.1.50.1) plus a new
     // Pan entry, per the roadmap's own "Choosing between Paint/Pick/Path/
     // Chord should be a single Tool drop-down option" spec (Select folds
     // in as a sixth entry - it's a full peer tool mode in CanvasWidget::
@@ -788,15 +789,6 @@ void MainWindow::buildToolBars(const ZoomActions& zoomActions) {
     pathAction_->setCheckable(true);
     connect(pathAction_, &QAction::toggled, this, &MainWindow::setPathModeEnabled);
 
-    // Chords/Arpeggiator/Sequencer, Installment B (v0.0.40.2): the same
-    // kind of plain checkable toggle as Paint/Pick/Select/Path above, for
-    // CanvasWidget::ToolMode::ChordStamp - arms the Chord Generator's own
-    // "click to place" gesture (see ChordGeneratorPanel's own docs on why
-    // there's no separate "Stamp" button).
-    chordAction_ = new QAction(tr("Chord"), this);
-    chordAction_->setCheckable(true);
-    connect(chordAction_, &QAction::toggled, this, &MainWindow::setChordModeEnabled);
-
     // The Text tool (v0.Y.78.1) - see setTextModeEnabled().
     textAction_ = new QAction(tr("Text"), this);
     textAction_->setCheckable(true);
@@ -809,7 +801,6 @@ void MainWindow::buildToolBars(const ZoomActions& zoomActions) {
     toolMenu->addAction(pickAction_);
     toolMenu->addAction(selectAction_);
     toolMenu->addAction(pathAction_);
-    toolMenu->addAction(chordAction_);
     toolMenu->addAction(textAction_);
 
     toolButton_ = new QToolButton(this);
@@ -852,7 +843,7 @@ void MainWindow::buildToolBars(const ZoomActions& zoomActions) {
     // concept here either, just a dock's own visibility). Unlike
     // Input/Output, there's no mutual exclusivity - any number of these
     // can stay open together, this is purely decluttering the toolbar.
-    // MIDI Configuration and Chord Generator join the four panels the
+    // MIDI Configuration joins the four panels the
     // roadmap's own spec named explicitly (Selection/Filter/MindWaves/
     // Tool Configuration/Grid) - confirmed with the user (see
     // docs/sound-mind-architecture.md's Decision #179 on where this and
@@ -860,7 +851,6 @@ void MainWindow::buildToolBars(const ZoomActions& zoomActions) {
     auto* configureMenu = new QMenu(this);
     configureMenu->addAction(toolConfigurationPanel_->toggleViewAction());
     configureMenu->addAction(midiConfigurationPanel_->toggleViewAction());
-    configureMenu->addAction(chordGeneratorPanel_->toggleViewAction());
     configureMenu->addAction(selectionConfigurationPanel_->toggleViewAction());
     configureMenu->addAction(gridPanel_->toggleViewAction());
     configureMenu->addAction(filterConfigurationPanel_->toggleViewAction());
@@ -871,8 +861,7 @@ void MainWindow::buildToolBars(const ZoomActions& zoomActions) {
     configureButton->setText(tr("Configure"));
     configureButton->setPopupMode(QToolButton::InstantPopup);
     configureButton->setMenu(configureMenu);
-    configureButton->setToolTip(tr("Open Tool/MIDI/Selection/Filter Configuration, Grid, MindWaves, or the Chord "
-                                   "Generator"));
+    configureButton->setToolTip(tr("Open Tool/MIDI/Selection/Filter Configuration, Grid, or MindWaves"));
     transportToolBar->addWidget(configureButton);
 
     // Off by default, same reasoning - see historyPanel_'s own docs.

@@ -347,7 +347,7 @@ A **Sound Mind Instrument** is a small parametric sound model that can be painte
 - a simple **body resonance**, a formant-like emphasis that colors the harmonic content the way an instrument's resonant chamber would;
 - an **ADSR envelope** shaping the attack, sustain, and release of each note over time.
 
-Together these give a single instrument definition a wide range of plausible characters, tunable continuously rather than chosen from a fixed list — and, like any other brush parameter, every one of these can be bound to a [MindWave](#low-frequency-oscillations-mindwaves) for organic variation from note to note. Sound Mind Instruments are what [MIDI import](#import) and the [Chords/Arpeggiator/Sequencer](#chordsarpeggiatorsequencer) render through — a note event, wherever it comes from, is a pitch and a timing that any Sound Mind Instrument (or indeed any other paintable tip: a plain procedural brush, a Mind Shot, a Mind Grain) can be asked to paint.
+Together these give a single instrument definition a wide range of plausible characters, tunable continuously rather than chosen from a fixed list — and, like any other brush parameter, every one of these can be bound to a [MindWave](#low-frequency-oscillations-mindwaves) for organic variation from note to note. Sound Mind Instruments are what [MIDI import](#import) and [Sequences](#sequences) render through — a note event, wherever it comes from, is a pitch and a timing that any Sound Mind Instrument (or indeed any other paintable tip: a plain procedural brush, a Mind Shot, a Mind Grain) can be asked to paint.
 
 ### Mind Shots
 
@@ -450,10 +450,6 @@ The same grid can also drive **pitch quantising** while painting — snapping a 
 
 Vertical reference lines, each marking one specific moment in time — spanning across the frequency axis — either at a fixed interval or as a beat/bar grid derived from a project tempo, with subdivisions down to the finest rhythmic value in use.
 
-### Chord Overlay
-
-When a chord or arpeggio is selected in the Chord Generator (see [Chords/Arpeggiator/Sequencer](#chordsarpeggiatorsequencer)), its notes are drawn live on the frequency axis — independent of, and in addition to, the general frequency grid — so the notes are visible on the canvas before or while they're stamped.
-
 ### Snap to Grid
 
 An optional mode where any position a tool would otherwise place freely — a pasted region, a selection, a text box, a Path node, a layer transform handle — snaps instead to the nearest line of whichever active grid is finest at that point. With no grid active, snapping has nothing to snap to and behaves as if it were off.
@@ -509,17 +505,11 @@ Because the two views share the same data, switching between them changes only h
 
 A source image that already looks like a flower — a spectrogram exported in polar form from elsewhere, or any image whose content radiates from a centre point — can be imported directly: given the image's centre, sampling radius, and arc, it is unwrapped back into an ordinary rectangular layer, the same as any other image import.
 
-## Chords/Arpeggiator/Sequencer
+## Sequences
 
-A **sequence** is a written description of a series of notes or frequencies over time — pitch and timing, in a compact notation rather than placed by hand — that generates paint events instead of a fixed instrument's audio. Anything paintable can be the instrument a sequence plays through: a plain procedural brush, a [Sound Mind Instrument](#sound-mind-instruments), a Mind Shot, or a Mind Grain.
+A **sequence** is a series of notes or frequencies over time — pitch and timing — that generates paint events instead of a fixed instrument's audio. Anything paintable can be the instrument a sequence plays through: a plain procedural brush, a [Sound Mind Instrument](#sound-mind-instruments), a Mind Shot, or a Mind Grain. Because the result is paint events rather than baked pixels, a sequence stays editable afterward: re-time it or re-voice it without repainting it from scratch.
 
-The Chord Generator is the common, structured case built on top of this: choose a root note, a chord category (triads, sixths, sevenths, ninths, extended/added tones), and a specific voicing, and either sound every note together (**block chord**) or sequence them one at a time (**arpeggio**) in a chosen order and rhythm. Its notes preview live on the frequency grid (see [Chord Overlay](#overlay-grids)) before anything is committed to the canvas.
-
-Beyond chords, the same underlying notation lets a sequence be written directly — any series of notes or frequencies with their own timing — so a melodic line, a rhythmic pattern, or an arpeggio that doesn't fit a named chord shape can all be generated the same way a chord is. Because the result is paint events rather than baked pixels, a generated sequence stays editable afterward: re-voice it, re-time it, or point it at a different instrument, without repainting it from scratch.
-
-The intent is to reuse an existing, established text notation for this rather than invent a new one. ABC notation is a reasonable starting candidate — compact, plain-text, and already expressive enough for pitch, duration, and key — but it needs validating against Sound Mind's actual needs (arbitrary frequencies, not just named pitches; the codec's own timing resolution) before being committed to.
-
-A sequence can also be driven live from a connected MIDI controller, in addition to being written or painted (planned after the Beta readiness check: roadmap `v0.Y.91.1`).
+Sequences come from [MIDI import](#import) today, and can also be driven live from a connected MIDI controller (planned after the Beta readiness check: roadmap `v0.Y.91.1`). A built-in chord, arpeggio and sequence generator was tried and removed (2026-10-23) as not useful enough.
 
 ## Composer Mode
 

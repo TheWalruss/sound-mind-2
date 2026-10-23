@@ -57,7 +57,6 @@
 #include "sound_mind/studio/text_tool_panel.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/composer_panel.h"
-#include "sound_mind/studio/chord_generator_panel.h"
 #include "sound_mind/studio/configure_devices_panel.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/grid_panel.h"
@@ -85,7 +84,6 @@ using sound_mind::core::PaintOperation;
 using sound_mind::core::PasteOperation;
 using sound_mind::core::PathNodeType;
 using sound_mind::studio::CanvasWidget;
-using sound_mind::studio::ChordGeneratorPanel;
 using sound_mind::studio::ComposerPanel;
 using sound_mind::studio::ConfigureDevicesPanel;
 using sound_mind::studio::ImageScalePickerDialog;
@@ -2369,14 +2367,12 @@ void MainWindowTest::configureMenuContainsEveryConfigurationPanelsOwnToggle() {
 
     auto* toolConfigurationPanel = window.findChild<ToolConfigurationPanel*>();
     auto* midiConfigurationPanel = window.findChild<MidiConfigurationPanel*>();
-    auto* chordGeneratorPanel = window.findChild<ChordGeneratorPanel*>();
     auto* selectionConfigurationPanel = window.findChild<SelectionConfigurationPanel*>();
     auto* gridPanel = window.findChild<GridPanel*>();
     auto* filterConfigurationPanel = window.findChild<FilterConfigurationPanel*>();
     auto* mindWavesPanel = window.findChild<MindWavesPanel*>();
     QVERIFY(toolConfigurationPanel != nullptr);
     QVERIFY(midiConfigurationPanel != nullptr);
-    QVERIFY(chordGeneratorPanel != nullptr);
     QVERIFY(selectionConfigurationPanel != nullptr);
     QVERIFY(gridPanel != nullptr);
     QVERIFY(filterConfigurationPanel != nullptr);
@@ -2384,7 +2380,6 @@ void MainWindowTest::configureMenuContainsEveryConfigurationPanelsOwnToggle() {
 
     QVERIFY(configureMenu->actions().contains(toolConfigurationPanel->toggleViewAction()));
     QVERIFY(configureMenu->actions().contains(midiConfigurationPanel->toggleViewAction()));
-    QVERIFY(configureMenu->actions().contains(chordGeneratorPanel->toggleViewAction()));
     QVERIFY(configureMenu->actions().contains(selectionConfigurationPanel->toggleViewAction()));
     QVERIFY(configureMenu->actions().contains(gridPanel->toggleViewAction()));
     QVERIFY(configureMenu->actions().contains(filterConfigurationPanel->toggleViewAction()));
@@ -4625,8 +4620,8 @@ void MainWindowTest::setPanModeEnabledSelectsTheNeutralToolModeAndCanBeReachedDi
     auto* toolButton = window.findChild<QToolButton*>(QStringLiteral("toolButton"));
     QVERIFY(toolButton != nullptr);
 
-    window.setChordModeEnabled(true);
-    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::ChordStamp);
+    window.setTextModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Text);
 
     window.setPanModeEnabled(true);
     QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
@@ -5932,7 +5927,6 @@ void MainWindowTest::rightDockAreaPanelsAreTabifiedTogetherByDefault() {
         window.findChild<PlaybackPanel*>(),
         window.findChild<ToolConfigurationPanel*>(),
         window.findChild<MidiConfigurationPanel*>(),
-        window.findChild<ChordGeneratorPanel*>(),
         window.findChild<ConfigureDevicesPanel*>(),
         window.findChild<SelectionConfigurationPanel*>(),
         window.findChild<GridPanel*>(),

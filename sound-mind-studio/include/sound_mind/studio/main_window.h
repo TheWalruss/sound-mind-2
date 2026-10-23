@@ -41,7 +41,6 @@
 #include "sound_mind/studio/analysis_panel.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/text_tool_panel.h"
-#include "sound_mind/studio/chord_generator_panel.h"
 #include "sound_mind/studio/configure_devices_panel.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/grid_panel.h"
@@ -1315,7 +1314,7 @@ public slots:
      * setSelectModeEnabled()/setPathModeEnabled() below, there is no
      * in-progress gesture to cancel - Pan has no gesture of its own at all.
      * See setPaintModeEnabled()'s own docs for the shared exclusivity with
-     * Paint/Pick/Select/Path/Chord.
+     * Paint/Pick/Select/Path/Text.
      *
      * @param enabled `true` to select Pan; `false` has no effect of its own
      *        (falling back to Pan happens automatically, via
@@ -1331,7 +1330,7 @@ public slots:
      * `PaintController::cancelStroke()`'s own docs) rather than leaving
      * it dangling; turning it on has no effect if no project is open.
      *
-     * Pan/Paint/Pick/Select/Path/Chord share one canvas tool mode
+     * Pan/Paint/Pick/Select/Path/Text share one canvas tool mode
      * (`CanvasWidget::ToolMode`) and so can never have more than one active
      * - enforced by setExclusiveToolMode() (see its own docs for why that's
      * hand-managed rather than a `QActionGroup`), not repeated here or in
@@ -1352,7 +1351,7 @@ public slots:
      * clearSelection()`'s own docs) rather than leaving it dangling;
      * turning it on has no effect if no project is open. See
      * setPaintModeEnabled()'s own docs for the shared exclusivity with
-     * Pan/Paint/Select/Path/Chord.
+     * Pan/Paint/Select/Path/Text.
      *
      * @param enabled `true` to accept Pick input on the canvas; `false`
      *        to return to plain, non-interactive display (Pan).
@@ -1370,7 +1369,7 @@ public slots:
      * Fill/Cut/Copy/Paste independent of which tool is currently active
      * (`docs/sound-mind-design.md`'s own "Selection" framing); turning it
      * on has no effect if no project is open. See setPaintModeEnabled()'s
-     * own docs for the shared exclusivity with Pan/Paint/Pick/Path/Chord.
+     * own docs for the shared exclusivity with Pan/Paint/Pick/Path/Text.
      *
      * @param enabled `true` to accept Select input on the canvas; `false`
      *        to return to plain, non-interactive display (Pan).
@@ -1386,30 +1385,12 @@ public slots:
      * `PathController::cancelPath()`'s own docs) - discarded, not
      * committed; turning it on has no effect if no project is open. See
      * setPaintModeEnabled()'s own docs for the shared exclusivity with
-     * Pan/Paint/Pick/Select/Chord.
+     * Pan/Paint/Pick/Select/Text.
      *
      * @param enabled `true` to accept Path input on the canvas; `false` to
      *        return to plain, non-interactive display (Pan).
      */
     void setPathModeEnabled(bool enabled);
-
-    /**
-     * @brief Toggles between Chord Stamp and plain (`ToolMode::None`)
-     *        canvas interaction - the actual work behind the Tool
-     *        dropdown's Chord entry.
-     *
-     * Unlike setPaintModeEnabled()/setPickModeEnabled()/
-     * setSelectModeEnabled()/setPathModeEnabled() above, turning it off
-     * cancels nothing - `ChordStamp` mode's own single-press gesture has no
-     * in-progress state to begin with (see
-     * `CanvasWidget::ToolMode::ChordStamp`'s own docs); turning it on has
-     * no effect if no project is open. See setPaintModeEnabled()'s own
-     * docs for the shared exclusivity with Pan/Paint/Pick/Select/Path.
-     *
-     * @param enabled `true` to accept Chord Stamp input on the canvas;
-     *        `false` to return to plain, non-interactive display (Pan).
-     */
-    void setChordModeEnabled(bool enabled);
 
     /**
      * @brief Turns the Text tool on or off - the Tool dropdown's "Text"
@@ -3101,13 +3082,13 @@ private:
     /**
      * @brief Sets canvas_'s own tool mode to `mode` (or `None` if
      *        `enabled` is `false`), syncs panAction_/paintAction_/
-     *        pickAction_/selectAction_/pathAction_/chordAction_'s own
+     *        pickAction_/selectAction_/pathAction_/textAction_'s own
      *        checked state so exactly one of the six ends up checked, and
      *        updates toolButton_'s own label to name whichever one that
      *        is - the shared exclusivity behind setPanModeEnabled()/
      *        setPaintModeEnabled()/setPickModeEnabled()/
      *        setSelectModeEnabled()/setPathModeEnabled()/
-     *        setChordModeEnabled(), since `CanvasWidget::ToolMode` only
+     *        setTextModeEnabled(), since `CanvasWidget::ToolMode` only
      *        ever has one active value at a time.
      *
      * When `enabled` is `false` (a tool turning itself off rather than a
@@ -3131,7 +3112,7 @@ private:
      *
      * @param activated Which action to leave checked when `enabled` is
      *        `true` - `panAction_`, `paintAction_`, `pickAction_`,
-     *        `selectAction_`, `pathAction_`, or `chordAction_`.
+     *        `selectAction_`, `pathAction_`, or `textAction_`.
      * @param enabled Whether `activated`'s own tool mode should become
      *        active.
      * @param mode The tool mode `activated` corresponds to.
@@ -3141,7 +3122,7 @@ private:
     /**
      * @brief Sets toolButton_'s own label to name whichever of
      *        panAction_/paintAction_/pickAction_/selectAction_/pathAction_/
-     *        chordAction_ is currently checked - called only from
+     *        textAction_ is currently checked - called only from
      *        setExclusiveToolMode(), the sole place that ever changes which
      *        one of the six is checked.
      */
@@ -3574,7 +3555,7 @@ private:
     /// `QToolButton` in `QToolButton::InstantPopup` mode rather than a
     /// `QComboBox`, added in `v0.Y.58.1`'s "Reduce top-level buttons" UI
     /// polish pass to collapse what used to be five separate toolbar
-    /// toggles (Paint/Pick/Select/Path/Chord) plus the new Pan entry into
+    /// toggles (Paint/Pick/Select/Path/Text) plus the new Pan entry into
     /// one control. Chosen over `QComboBox` so each entry keeps its own
     /// `QAction` - preserving per-entry enable/disable + tooltip (see
     /// updateMindGrainGuardrails()'s own docs) without `QStandardItemModel`
@@ -3604,7 +3585,7 @@ private:
     /// @brief The Tool dropdown's Pick entry - checked while the canvas
     /// accepts Pick input (`CanvasWidget::ToolMode::Pick`). Kept mutually
     /// exclusive with panAction_/paintAction_/selectAction_/pathAction_/
-    /// chordAction_ by setExclusiveToolMode() (see its own docs), not a
+    /// textAction_ by setExclusiveToolMode() (see its own docs), not a
     /// `QActionGroup`; kept as a member for the same setProject()-resets-it
     /// reason as paintAction_.
     QAction* pickAction_ = nullptr;
@@ -3612,23 +3593,17 @@ private:
     /// @brief The Tool dropdown's Select entry - checked while the canvas
     /// accepts Select input (`CanvasWidget::ToolMode::Select`). Kept
     /// mutually exclusive with panAction_/paintAction_/pickAction_/
-    /// pathAction_/chordAction_ by setExclusiveToolMode(); kept as a
+    /// pathAction_/textAction_ by setExclusiveToolMode(); kept as a
     /// member for the same setProject()-resets-it reason as paintAction_.
     QAction* selectAction_ = nullptr;
 
     /// @brief The Tool dropdown's Path entry - checked while the canvas
     /// accepts Path input (`CanvasWidget::ToolMode::Path`). Kept mutually
     /// exclusive with panAction_/paintAction_/pickAction_/selectAction_/
-    /// chordAction_ by setExclusiveToolMode(); kept as a member for the
+    /// textAction_ by setExclusiveToolMode(); kept as a member for the
     /// same setProject()-resets-it reason as paintAction_.
     QAction* pathAction_ = nullptr;
 
-    /// @brief The Tool dropdown's Chord Stamp entry - checked while the
-    /// canvas accepts Chord Stamp input (`CanvasWidget::ToolMode::ChordStamp`).
-    /// Kept mutually exclusive with panAction_/paintAction_/pickAction_/
-    /// selectAction_/pathAction_ by setExclusiveToolMode(); kept as a
-    /// member for the same setProject()-resets-it reason as paintAction_.
-    QAction* chordAction_ = nullptr;
     /// @brief The Tool dropdown's "Text" - see setTextModeEnabled().
     QAction* textAction_ = nullptr;
 
@@ -3743,12 +3718,6 @@ private:
     /// class docs. Hidden by default, the same convention
     /// toolConfigurationPanel_ above already establishes.
     MidiConfigurationPanel* midiConfigurationPanel_ = nullptr;
-
-    /// @brief The dockable panel exposing the Chord Generator's own
-    /// parameters - see its own class docs. Hidden by default, the same
-    /// "off until shown" convention toolConfigurationPanel_ already
-    /// follows. `v0.0.40.2` (Chords/Arpeggiator/Sequencer, Installment B).
-    ChordGeneratorPanel* chordGeneratorPanel_ = nullptr;
 
     /// @brief The dockable panel consolidating input/output device
     /// selection, gain, and testing into one place - see its own class

@@ -30,9 +30,8 @@ struct StampIntervalToken {
  * required): each token is a positive number immediately followed by
  * exactly one unit suffix - `"ms"` for a fixed millisecond interval, or
  * `"b"` for one relative to the project's own tempo (resolved via
- * `resolveStampIntervalPattern()`, the same `(60 / bpm) * value` beats
- * convention `parseSequenceNotation()`'s own `<duration>` grammar uses).
- * Unlike that grammar, there is no bare-number/no-suffix form here - a
+ * `resolveStampIntervalPattern()`, as `(60 / bpm) * value` seconds).
+ * There is no bare-number/no-suffix form - a
  * fixed millisecond-scale interval left unitless would be too easy to
  * mistake for seconds, given how differently-sized a mistake that would
  * be for something this fine-grained.
@@ -63,9 +62,8 @@ struct StampIntervalToken {
 
 /**
  * @brief Resolves `tokens` into concrete seconds, given the project's own
- *        tempo - the same "parse once, resolve against `bpm` at the point
- *        of use" split `parseSequenceNotation()`'s own `bpm` parameter
- *        already establishes, so a project's tempo can change without
+ *        tempo - "parse once, resolve against `bpm` at the point of use",
+ *        so a project's tempo can change without
  *        needing to re-parse anything stored.
  * @param tokens The tokens to resolve, in order.
  * @param bpm The tempo beats-suffixed tokens are resolved against -

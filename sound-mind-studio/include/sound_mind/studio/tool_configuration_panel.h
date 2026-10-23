@@ -440,9 +440,7 @@ private:
     ///        attempts `sound_mind::core::parseStampIntervalPattern()`
     ///        purely to surface a validation error in
     ///        `stampIntervalPatternErrorLabel_` - the same "always store the
-    ///        raw text, validate only to inform the user" pattern
-    ///        `ChordGeneratorPanel::emitNotationChanged()` already
-    ///        establishes for `parseSequenceNotation()`. A pattern that
+    ///        raw text, validate only to inform the user" approach. A pattern that
     ///        fails to parse is never rejected here: painting itself already
     ///        falls back to the plain `stampInterval()` scalar for an
     ///        unparseable pattern (see `stampIntervalPatternText()`'s own

@@ -1200,7 +1200,8 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.82.4` | Responsiveness and modularity pass (inserted 2026-10-22) | `0.1.47.1`-`0.1.47.4` | #272-#275 |
 | `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1`-`0.1.48.11` | #276-#286 |
 | `v0.Y.83.1` | New projects match the output device's sample rate (inserted 2026-10-23) | `0.1.49.1`-`0.1.49.3` | #287-#289 |
-| - | Beta readiness check | *(after `v0.Y.83.1`)* | |
+| `v0.Y.83.2` | Remove the Chord Generator and Chord tool (inserted 2026-10-23) | `0.1.50.1` | #290 |
+| - | Beta readiness check | *(after `v0.Y.83.2`)* | |
 | `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
 | `v0.Y.84.1` | Light and dark mode | - | |
 | `v0.Y.85.1` | Color mapping choice | - | |
@@ -1516,6 +1517,12 @@ Steps 4 and 5 of the 2026-10-22 code scan, so changes from beta feedback stay ch
   - The codec converts any audio at another rate to the project's: in `encode()`, and on reading an import.
 - **Still open:** Loop Mode assumes the device runs at the project's rate. Converting there would have to happen in real time, in the audio callback. New projects match the device, so this only affects older projects at another rate. See Decision #289.
 
+#### `v0.Y.83.2` - Remove the Chord Generator and Chord tool (S) - inserted 2026-10-23
+
+- ✅ Settled in `v0.1.50.1`, Decision #290 (user, 2026-10-23: "Remove the 'Chords' configuration and tool. It's not very useful").
+  - Removed: the Chord Generator panel (Chord Builder, Custom Notation, Chord Overlay), the Chord tool, their code, tests and documentation.
+  - Kept: sequences themselves, which MIDI import creates and Pick edits.
+
 #### Then: Beta readiness check
 
 - Full regression on Arm64 and x64.
@@ -1604,7 +1611,7 @@ Calibrating the thresholds needs real report data first.
 #### `v0.Y.91.1` - Live MIDI input (M)
 
 - A MIDI input device in Configure Devices.
-- Playing a connected controller drives the Chord Generator's sequences, and records notes as sequence paint events through the chosen instrument while Playback or Loop runs.
+- Playing a connected controller records notes as sequence paint events through the chosen instrument while Playback or Loop runs.
 
 **Moved to after Beta (2026-10-15):**
 - the remaining `v0.Y.52.1` analysis categories (spectral health, criticality/pattern);

@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.50.1] - 2026-10-23
+
+Roadmap slot `v0.Y.83.2`.
+
+### Removed
+
+- **The Chord Generator and the Chord tool.** The Chord Generator panel (Configure → Chord Generator: Chord Builder, Custom Notation and the live Chord Overlay on the canvas) and the **Chord** entry in the Tool dropdown are gone. They weren't useful enough to keep. Chords and arpeggios already stamped in a project stay as they were: they're ordinary note sequences you can still move and re-voice with Pick. Notes still come in through **File → Import MIDI...**.
+
 ## [0.1.49.3] - 2026-10-23
 
 ### Fixed

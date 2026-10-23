@@ -39,8 +39,6 @@ add_executable(sound-mind-core-tests
     test_sequence_operation.cpp
     test_sequence_application.cpp
     test_music_theory.cpp
-    test_chord_generator.cpp
-    test_sequence_notation.cpp
     test_history.cpp
     test_history_replay.cpp
     test_macro.cpp

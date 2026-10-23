@@ -83,10 +83,6 @@ private slots:
     void setEqualizerPreviewWithNulloptClearsIt();
     void settingANewProjectClearsTheEqualizerPreview();
     void polarModeStillDrawsTheEqualizerPreview();
-    void chordPreviewIsHiddenByDefaultEvenWithDataSet();
-    void chordPreviewShowsWhenTheChordGeneratorPanelIsVisible();
-    void chordPreviewShowsWhenTheChordStampToolIsActive();
-    void chordPreviewHidesAgainOnceNeitherConditionHolds();
     void selectionHighlightHidesWhenNeitherPickNorSelectIsActive();
     void selectionHighlightShowsWithPickToolActive();
     void selectionHighlightHidesAgainOnceSwitchingAwayFromSelectOrPick();

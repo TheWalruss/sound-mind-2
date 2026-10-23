@@ -19,8 +19,6 @@ add_executable(sound-mind-studio-tests
     test_branch_curve_session.cpp
     test_canvas_widget.cpp
     test_checklist_dialog.cpp
-    test_chord_generator_controller.cpp
-    test_chord_generator_panel.cpp
     test_configure_devices_panel.cpp
     test_create_project_wizard.cpp
     test_device_combo_helpers.cpp

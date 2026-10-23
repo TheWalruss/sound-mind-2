@@ -133,8 +133,8 @@ void ResourceBrowserPanelTest::setImportFromFileEnabledTogglesTheButton() {
 void ResourceBrowserPanelTest::clickingEachButtonEmitsItsOwnSignal() {
     ResourceBrowserPanel panel;
     // QTest::mouseClick() needs real, laid-out geometry to hit-test
-    // against - show() first, the same precedent test_chord_generator_
-    // panel.cpp/test_main_window.cpp already establish for interaction-
+    // against - show() first, the same precedent test_main_window.cpp
+    // already establishes for interaction-
     // heavy tests (a plain data-driven setInspector()/isHidden() check,
     // unlike an actual simulated click, doesn't need this).
     panel.show();

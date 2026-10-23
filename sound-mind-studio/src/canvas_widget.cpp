@@ -434,16 +434,6 @@ void CanvasWidget::setEqualizerPreview(std::optional<sound_mind::core::Gradient>
     update();
 }
 
-void CanvasWidget::setChordPreview(std::vector<double> frequenciesHz) {
-    chordPreviewFrequenciesHz_ = std::move(frequenciesHz);
-    update();
-}
-
-void CanvasWidget::setChordGeneratorPanelVisible(bool visible) {
-    chordGeneratorPanelVisible_ = visible;
-    update();
-}
-
 void CanvasWidget::setVerticalAxisLabelMode(VerticalAxisLabelMode mode) {
     verticalAxisLabelMode_ = mode;
     update();
@@ -734,13 +724,7 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
             // framing implies.
             drawGrid(painter);
 
-            // Chord Overlay (see setChordPreview()'s own docs) - same
-            // reference-aid ordering as Overlay Grids above, drawn right
-            // after them so both sets of reference lines sit together,
-            // under every interactive overlay.
             if (!frameOverride_) {
-                drawChordPreview(painter);
-
                 // Silent guide paths - drawn above the reference lines, under
                 // the live preview and highlights, like any other object.
                 drawGuidePaths(painter);
@@ -1082,24 +1066,6 @@ void CanvasWidget::drawGrid(QPainter& painter) const {
     }
 }
 
-void CanvasWidget::drawChordPreview(QPainter& painter) const {
-    // Real-world testing pass, 2026-09-20, finding #15: only drawn while
-    // the Chord Generator panel is open or the Chord tool is active -
-    // either is enough - not unconditionally just because there's data.
-    if (project_ == nullptr || chordPreviewFrequenciesHz_.empty() ||
-        !(chordGeneratorPanelVisible_ || toolMode_ == ToolMode::ChordStamp)) {
-        return;
-    }
-    // A distinct amber/dashed style from drawGrid()'s own Frequency Grid
-    // lines (plain lightGray/solid by default) - see setChordPreview()'s
-    // own docs on why this stays a visually separate overlay.
-    painter.setPen(QPen(QColor(255, 180, 0), 2.0, Qt::DashLine));
-    for (const double frequencyHz : chordPreviewFrequenciesHz_) {
-        const double y = timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint{0.0, frequencyHz}).y();
-        painter.drawLine(QPointF(0.0, y), QPointF(rect().width(), y));
-    }
-}
-
 void CanvasWidget::drawOperationOverlays(QPainter& painter) const {
     const sound_mind::core::Layer* layer = findTopmostLayerWithContent(*project_);
     if (layer == nullptr) {
@@ -1248,7 +1214,7 @@ QRectF CanvasWidget::widgetRectFor(const sound_mind::core::TimeFrequencyRect& bo
 void CanvasWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton ||
         (toolMode_ != ToolMode::Paint && toolMode_ != ToolMode::Pick && toolMode_ != ToolMode::Select &&
-         toolMode_ != ToolMode::Path && toolMode_ != ToolMode::ChordStamp && toolMode_ != ToolMode::Text)) {
+         toolMode_ != ToolMode::Path && toolMode_ != ToolMode::Text)) {
         QWidget::mousePressEvent(event);
         return;
     }
@@ -1282,13 +1248,9 @@ void CanvasWidget::mousePressEvent(QMouseEvent* event) {
     } else if (toolMode_ == ToolMode::Path) {
         pathStrokeActive_ = true;
         emit pathStrokeStarted(*point);
-    } else if (toolMode_ == ToolMode::Text) {
+    } else {
         textBoxActive_ = true;
         emit textBoxStarted(*point);
-    } else {
-        // ChordStamp mode: a single press is the whole gesture - see
-        // chordStampRequested()'s own docs.
-        emit chordStampRequested(*point);
     }
 }
 

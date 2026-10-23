@@ -14,9 +14,8 @@ namespace sound_mind::core {
 
 /**
  * @brief A single note within a `SequenceOperation` - a pitch and a
- *        timing, per `docs/sound-mind-design.md`'s "Chords/Arpeggiator/
- *        Sequencer" ("A sequence is a written description of a series of
- *        notes or frequencies over time"). `v0.Y.40.1` Installment A.
+ *        timing. `v0.Y.40.1` Installment A; today MIDI import
+ *        (`midi_import.h`) is what creates them.
  *
  * Deliberately just pitch and timing, matching the design doc's own literal
  * definition of a note event - no per-note intensity/opacity/color of its
@@ -28,9 +27,8 @@ namespace sound_mind::core {
  * A raw Hz frequency, not a note name - `docs/sound-mind-design.md`'s own
  * "arbitrary frequencies, not just named pitches" requirement (Deferred
  * Decision #4) applies here at the representation level already: whatever
- * note-name-to-Hz mapping a future Chord Generator or notation parser uses
- * (Installments B/C) resolves to a plain Hz value before it ever reaches
- * this struct.
+ * note-name-to-Hz mapping a caller uses (MIDI import's note numbers,
+ * say) resolves to a plain Hz value before it ever reaches this struct.
  */
 struct NoteEvent {
     /// @brief When this note starts, in seconds from the project's start.
@@ -56,7 +54,6 @@ void from_json(const nlohmann::json& json, NoteEvent& note);
 /**
  * @brief A written series of notes, rendered as paint events through a
  *        shared tool configuration - logged non-destructively, see
- *        `docs/sound-mind-design.md`'s "Chords/Arpeggiator/Sequencer" and
  *        `docs/sound-mind-architecture.md`'s Core Data Model. `v0.Y.40.1`
  *        Installment A.
  *

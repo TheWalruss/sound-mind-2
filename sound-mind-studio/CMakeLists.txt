@@ -42,8 +42,6 @@ add_library(sound-mind-studio-lib
     src/branch_curve_session.cpp
     src/canvas_widget.cpp
     src/checklist_dialog.cpp
-    src/chord_generator_controller.cpp
-    src/chord_generator_panel.cpp
     src/color_conversion.cpp
     src/composer_panel.cpp
     src/configure_devices_panel.cpp
@@ -125,8 +123,6 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/branch_curve_session.h
     include/sound_mind/studio/canvas_widget.h
     include/sound_mind/studio/checklist_dialog.h
-    include/sound_mind/studio/chord_generator_controller.h
-    include/sound_mind/studio/chord_generator_panel.h
     include/sound_mind/studio/color_conversion.h
     include/sound_mind/studio/composer_panel.h
     include/sound_mind/studio/configure_devices_panel.h
