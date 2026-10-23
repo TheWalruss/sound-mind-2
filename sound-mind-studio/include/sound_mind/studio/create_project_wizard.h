@@ -41,10 +41,15 @@ class CreateProjectWizard : public QDialog {
 public:
     /// @brief Builds the dialog with every field defaulted to match
     ///        `sound_mind::core::ProjectSettings{}` (Advanced section
-    ///        collapsed), and Name/Location both empty.
+    ///        collapsed), and Name/Location both empty - except the sample
+    ///        rate, which follows the output device (`v0.1.49.1`, see
+    ///        `core::newProjectSampleRateHz()`), with a hint below it saying
+    ///        which it is.
     /// @param parent The owning widget, per Qt's normal parent-ownership
     ///        convention; may be `nullptr`.
-    explicit CreateProjectWizard(QWidget* parent = nullptr);
+    /// @param outputDeviceSampleRateHz The open output device's rate; `0`
+    ///        when unknown, which offers 48 kHz.
+    explicit CreateProjectWizard(QWidget* parent = nullptr, double outputDeviceSampleRateHz = 0.0);
 
     /**
      * @brief The settings the dialog's fields currently describe.

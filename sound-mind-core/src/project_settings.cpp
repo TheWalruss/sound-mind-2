@@ -49,6 +49,14 @@ void from_json(const nlohmann::json& json, ProjectSettings& settings) {
     settings.decimalSeparator = json.value("decimalSeparator", ProjectSettings{}.decimalSeparator);
 }
 
+std::uint32_t newProjectSampleRateHz(double deviceSampleRateHz) noexcept {
+    const double rounded = std::round(deviceSampleRateHz);
+    if (!(rounded >= static_cast<double>(kMinimumSampleRateHz) && rounded <= static_cast<double>(kMaximumSampleRateHz))) {
+        return kFallbackSampleRateHz;  // no device open, or a rate a project can't have.
+    }
+    return static_cast<std::uint32_t>(rounded);
+}
+
 sound_mind::codec::StreamCodecConfig streamCodecConfigFor(const ProjectSettings& settings) {
     sound_mind::codec::StreamCodecConfig config;
     config.sampleRateHz = settings.sampleRateHz;

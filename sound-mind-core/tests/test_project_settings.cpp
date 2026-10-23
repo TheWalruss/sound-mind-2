@@ -179,3 +179,17 @@ TEST_CASE("silentContentFor is genuinely silent, not full-scale", "[core][projec
         REQUIRE(value < -40.0f);
     }
 }
+
+// v0.1.49.1 - a new project's sample rate: the output device's, else 48 kHz.
+TEST_CASE("A new project's sample rate follows the output device, else 48 kHz", "[core][project_settings]") {
+    using sound_mind::core::kFallbackSampleRateHz;
+    using sound_mind::core::newProjectSampleRateHz;
+    CHECK(kFallbackSampleRateHz == 48000);
+    CHECK(newProjectSampleRateHz(44100.0) == 44100);
+    CHECK(newProjectSampleRateHz(47999.7) == 48000);  // a device reports a double.
+    CHECK(newProjectSampleRateHz(96000.0) == 96000);
+    CHECK(newProjectSampleRateHz(0.0) == kFallbackSampleRateHz);       // no device open.
+    CHECK(newProjectSampleRateHz(-1.0) == kFallbackSampleRateHz);
+    CHECK(newProjectSampleRateHz(4000.0) == kFallbackSampleRateHz);    // below the supported range.
+    CHECK(newProjectSampleRateHz(384000.0) == kFallbackSampleRateHz);  // above it.
+}

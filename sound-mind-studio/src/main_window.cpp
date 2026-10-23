@@ -1556,7 +1556,8 @@ void MainWindow::newProject() {
         return;
     }
 
-    CreateProjectWizard wizard(this);
+    // The output device's own rate, so the new project plays at the right speed (v0.1.49.1).
+    CreateProjectWizard wizard(this, playbackController_->outputSampleRateHz());
     if (wizard.exec() != QDialog::Accepted) {
         return;
     }

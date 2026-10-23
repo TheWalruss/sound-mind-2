@@ -6,6 +6,7 @@
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -14,7 +15,7 @@
 
 namespace sound_mind::studio {
 
-CreateProjectWizard::CreateProjectWizard(QWidget* parent) : QDialog(parent) {
+CreateProjectWizard::CreateProjectWizard(QWidget* parent, double outputDeviceSampleRateHz) : QDialog(parent) {
     setWindowTitle(tr("Create Project"));
 
     const sound_mind::core::ProjectSettings defaults;
@@ -64,10 +65,24 @@ CreateProjectWizard::CreateProjectWizard(QWidget* parent) : QDialog(parent) {
 
     sampleRateSpin_ = new IntegerField();
     sampleRateSpin_->setObjectName(QStringLiteral("sampleRateSpin"));
-    sampleRateSpin_->setRange(8000, 192000);
+    sampleRateSpin_->setRange(static_cast<int>(sound_mind::core::kMinimumSampleRateHz),
+                              static_cast<int>(sound_mind::core::kMaximumSampleRateHz));
     sampleRateSpin_->setSuffix(tr(" Hz"));
-    sampleRateSpin_->setValue(static_cast<int>(defaults.sampleRateHz));
+    // The output device's own rate, so playback runs at the right speed
+    // without changing system settings - else 48 kHz (v0.1.49.1).
+    const std::uint32_t sampleRateHz = sound_mind::core::newProjectSampleRateHz(outputDeviceSampleRateHz);
+    const bool matchesDevice =
+        outputDeviceSampleRateHz > 0.0 && static_cast<double>(sampleRateHz) == std::round(outputDeviceSampleRateHz);
+    sampleRateSpin_->setValue(static_cast<int>(sampleRateHz));
     advancedForm->addRow(tr("Sample Rate:"), sampleRateSpin_);
+    auto* sampleRateHint = new QLabel(
+        matchesDevice ? tr("Matches the output device, so playback runs at the right speed.")
+                      : tr("The output device's rate isn't known (or a project can't use it), so the most common "
+                           "rate is suggested. "
+                           "Playback runs at the right speed only if it matches your output device."));
+    sampleRateHint->setObjectName(QStringLiteral("sampleRateHintLabel"));
+    sampleRateHint->setWordWrap(true);
+    advancedForm->addRow(QString(), sampleRateHint);
 
     minFrequencySpin_ = new IntegerField();
     minFrequencySpin_->setObjectName(QStringLiteral("minFrequencySpin"));

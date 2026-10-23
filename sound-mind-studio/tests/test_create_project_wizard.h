@@ -7,6 +7,8 @@ class CreateProjectWizardTest : public QObject {
 
 private slots:
     void settingsMatchProjectSettingsDefaultsInitially();
+    void sampleRateFollowsTheOutputDevice();
+    void sampleRateFallsBackTo48kHzWhenTheDeviceIsUnknown();
     void okIsDisabledUntilNameAndLocationAreBothSet();
     void pathCombinesLocationAndName();
     void pathStripsAnAlreadyPresentSmprojExtensionFromName();

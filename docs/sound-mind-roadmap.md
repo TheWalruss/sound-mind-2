@@ -1199,7 +1199,8 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.82.3` | Remove the Pool codec (inserted 2026-10-22) | `0.1.46.1` | #271 |
 | `v0.Y.82.4` | Responsiveness and modularity pass (inserted 2026-10-22) | `0.1.47.1`-`0.1.47.4` | #272-#275 |
 | `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1`-`0.1.48.11` | #276-#286 |
-| - | Beta readiness check | *(after `v0.Y.82.5`)* | |
+| `v0.Y.83.1` | New projects match the output device's sample rate (inserted 2026-10-23) | `0.1.49.1` | #287 |
+| - | Beta readiness check | *(after `v0.Y.83.1`)* | |
 | `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
 | `v0.Y.84.1` | Light and dark mode | - | |
 | `v0.Y.85.1` | Color mapping choice | - | |
@@ -1498,7 +1499,18 @@ Steps 4 and 5 of the 2026-10-22 code scan, so changes from beta feedback stay ch
 - ✅ **Installment I - menu and toolbar building.** Settled in `v0.1.48.9`, Decision #284. This completes step 4.
 - ✅ **Installment J - the core filter parameter table.** Settled in `v0.1.48.10`, Decision #285. Filter JSON and MindWave resolution read one table.
 - ✅ **Installment K - the Filter Configuration panel from the table.** Settled in `v0.1.48.11`, Decision #286.
-- **Then - data-driven filter and tool parameters** (step 5): one parameter table generating JSON, panel widgets and MindWave bindings.
+- **Step 5 is settled for filters** (installments J-K). Tool parameters are left as future work. They have only five MindWave bindings, spread over the tool class hierarchy, and three are lone combos, so a table would be a larger redesign for little gain. Revisit if tools gain many more bindable parameters.
+
+#### `v0.Y.83.1` - New projects match the output device's sample rate (S) - inserted 2026-10-23
+
+- ✅ Settled in `v0.1.49.1`, Decision #287.
+  - **The problem** (user, 2026-10-23): their laptop's default output runs at 48 kHz, so projects made at the 44.1 kHz default played back too fast and too high. The Studio warned about it, but couldn't fix it.
+  - **The change:**
+    - The Create Project wizard's Sample Rate starts at the output device's rate.
+    - It falls back to 48 kHz when that rate is unknown or outside the 8-192 kHz range.
+    - A note under the field says which applies.
+  - **Not changed:** `ProjectSettings{}` keeps 44.1 kHz, and existing projects keep their own rate.
+- **Follow-up found, not yet scheduled:** the Record engine labels captured audio 44.1 kHz whatever rate the input device runs at, and neither recordings nor imports are resampled to the project's rate. See Decision #287.
 
 #### Then: Beta readiness check
 

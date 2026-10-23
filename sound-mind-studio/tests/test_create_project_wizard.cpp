@@ -3,6 +3,7 @@
 #include <filesystem>
 
 #include <QDialogButtonBox>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QtTest/QtTest>
@@ -29,7 +30,8 @@ void CreateProjectWizardTest::settingsMatchProjectSettingsDefaultsInitially() {
     const ProjectSettings settings = wizard.settings();
     const ProjectSettings defaults;
 
-    QCOMPARE(settings.sampleRateHz, defaults.sampleRateHz);
+    // Except the sample rate, which follows the output device (v0.1.49.1) -
+    // see the two tests below.
     QCOMPARE(settings.binCount, defaults.binCount);
     QCOMPARE(settings.minFrequencyHz, defaults.minFrequencyHz);
     QCOMPARE(settings.maxFrequencyHz, defaults.maxFrequencyHz);
@@ -179,4 +181,29 @@ void CreateProjectWizardTest::collapsingAdvancedShrinksTheDialogBackDown() {
     toggle->click();  // collapse again.
 
     QCOMPARE(wizard.sizeHint(), collapsedHint);
+}
+
+// v0.1.49.1 - a new project's sample rate matches the output device, so it
+// plays back at the right speed without changing system settings.
+void CreateProjectWizardTest::sampleRateFollowsTheOutputDevice() {
+    const CreateProjectWizard wizard(nullptr, 44100.0);
+    QCOMPARE(wizard.settings().sampleRateHz, std::uint32_t{44100});
+    auto* hint = wizard.findChild<QLabel*>(QStringLiteral("sampleRateHintLabel"));
+    QVERIFY(hint != nullptr);
+    QVERIFY(hint->text().contains(QStringLiteral("output device")));
+
+    const CreateProjectWizard wizard96(nullptr, 96000.0);
+    QCOMPARE(wizard96.settings().sampleRateHz, std::uint32_t{96000});
+}
+
+void CreateProjectWizardTest::sampleRateFallsBackTo48kHzWhenTheDeviceIsUnknown() {
+    const CreateProjectWizard wizard;  // no device rate known.
+    QCOMPARE(wizard.settings().sampleRateHz, sound_mind::core::kFallbackSampleRateHz);
+    QCOMPARE(sound_mind::core::kFallbackSampleRateHz, std::uint32_t{48000});
+    auto* hint = wizard.findChild<QLabel*>(QStringLiteral("sampleRateHintLabel"));
+    QVERIFY(hint != nullptr);
+    QVERIFY(!hint->text().isEmpty());
+
+    const CreateProjectWizard outOfRange(nullptr, 384000.0);  // beyond the field's range.
+    QCOMPARE(outOfRange.settings().sampleRateHz, sound_mind::core::kFallbackSampleRateHz);
 }

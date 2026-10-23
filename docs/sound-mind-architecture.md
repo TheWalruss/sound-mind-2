@@ -3282,6 +3282,24 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
         - every numeric parameter except the kernel size has a field with the core range, and a MindWave combo exactly when bindable;
         - editing a field sets its parameter and shows the value in its sibling;
         - the angle fields show a degree suffix.
+287. **New projects match the output device's sample rate.** Settled in `v0.1.49.1`.
+    - **Why:** `PlaybackEngine` doesn't resample. A project whose rate differs from the output device's plays faster or slower and shifted in pitch. `PlaybackController::ensureOutputReady()` already warned about this, and the user hit it on a 48 kHz laptop with the old 44.1 kHz default.
+    - **Core (`project_settings.h`):**
+      - `kMinimumSampleRateHz` (8 kHz) and `kMaximumSampleRateHz` (192 kHz): the wizard's existing range, now named;
+      - `kFallbackSampleRateHz` (48 kHz): today's most common output-device rate;
+      - `newProjectSampleRateHz(double deviceRate)`: the device's rate rounded to whole Hz when it's within range, otherwise the fallback.
+    - **`ProjectSettings{}` keeps 44.1 kHz.** Only the Studio's new-project path follows the device. Core tests, the CLI and existing projects are unaffected.
+    - **Studio:**
+      - `PlaybackController::outputSampleRateHz()` exposes the open device's rate. The device opens at startup, so the rate is known before the wizard appears.
+      - `CreateProjectWizard(parent, outputDeviceSampleRateHz)` starts its Sample Rate there and shows a `sampleRateHintLabel` saying whether it matches the device or fell back.
+      - `MainWindow::newProject()` passes the device's rate.
+    - **Found while doing this, not fixed here (flagged to the user):**
+      - `RecordEngine` opens the input at the device's own rate, but labels captured audio with the 44.1 kHz it was constructed with, `StreamCodecConfig{}.sampleRateHz`.
+      - Nothing in the codebase resamples. `encode()` uses the audio's own rate with the project's hop length, so a recording or an import at a different rate than the project lands with the wrong frequency mapping and timing.
+      - A fix would label captures with the device's real rate and resample captures and imports to the project's rate. JUCE's interpolators would do, with no new dependency.
+    - **Tests:**
+      - Core `[project_settings]`: a new project's rate follows the device, else 48 kHz, including rounding and out-of-range rates.
+      - Studio `CreateProjectWizardTest`: the rate follows the device, and falls back to 48 kHz when the device is unknown or out of range. `settingsMatchProjectSettingsDefaultsInitially` no longer compares the sample rate.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

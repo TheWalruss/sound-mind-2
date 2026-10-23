@@ -15,7 +15,7 @@ Click **New Project...** and fill in:
   automatically (see the User Guide's Importing Audio section).
 
 Everything else is under **Advanced** and fine to leave at its defaults for
-now. Click **OK** - the canvas opens, showing an empty dark-gray rectangle
+now - the Sample Rate already matches your output device. Click **OK** - the canvas opens, showing an empty dark-gray rectangle
 (your project's Background layer, with nothing imported into it yet).
 
 ## 2. Import something

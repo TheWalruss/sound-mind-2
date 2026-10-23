@@ -147,6 +147,31 @@ void to_json(nlohmann::json& json, const ProjectSettings& settings);
 /// @throws nlohmann::json::exception on malformed or missing required data.
 void from_json(const nlohmann::json& json, ProjectSettings& settings);
 
+/// @brief The lowest sample rate a project can have, Hz - the Create Project
+///        wizard's own range (`v0.1.49.1`).
+inline constexpr std::uint32_t kMinimumSampleRateHz = 8000;
+
+/// @brief The highest sample rate a project can have, Hz.
+inline constexpr std::uint32_t kMaximumSampleRateHz = 192000;
+
+/// @brief The sample rate a new project gets when the output device's own
+///        isn't known (`v0.1.49.1`): 48 kHz, today's most common output-device
+///        rate (Windows/macOS defaults, most built-in and USB audio, video).
+///        `ProjectSettings{}` itself keeps 44.1 kHz.
+inline constexpr std::uint32_t kFallbackSampleRateHz = 48000;
+
+/**
+ * @brief The sample rate to offer a new project (`v0.1.49.1`): the output
+ *        device's, so playback runs at the right speed without touching the
+ *        system's sound settings (the player doesn't resample).
+ * @param deviceSampleRateHz The open output device's rate, as the audio
+ *        driver reports it; `0` (or less) when no device is open.
+ * @return `deviceSampleRateHz` rounded to whole Hz, if it's within
+ *         [kMinimumSampleRateHz, kMaximumSampleRateHz]; otherwise
+ *         kFallbackSampleRateHz.
+ */
+[[nodiscard]] std::uint32_t newProjectSampleRateHz(double deviceSampleRateHz) noexcept;
+
 /**
  * @brief Builds the Stream codec configuration a project's own settings
  *        imply, for encoding new content into one of its layers.

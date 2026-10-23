@@ -197,6 +197,12 @@ public:
      */
     [[nodiscard]] QString ensureOutputReady(const QString& preferredDeviceName);
 
+    /// @brief The rate the open output device runs at (`v0.1.49.1`) - what a
+    ///        new project's sample rate should match, see
+    ///        `core::newProjectSampleRateHz()`.
+    /// @return Hz, or `0.0` if no device is open.
+    [[nodiscard]] double outputSampleRateHz() const noexcept { return engine_.deviceSampleRateHz(); }
+
     /// @brief The currently open output device's name.
     /// @return Empty if no device is open.
     [[nodiscard]] QString currentOutputDeviceName() const;

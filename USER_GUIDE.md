@@ -92,7 +92,10 @@ The Create Project wizard asks for:
 Click **Advanced** to also set:
 
 - **Sample Rate** - the audio sample rate new imports/recordings are
-  encoded at (Hz).
+  encoded at (Hz). It starts at the rate your output device runs at, so
+  playback plays at the right speed; if the device's rate isn't known, it
+  starts at 48000 Hz, the most common output rate. The note under the
+  field tells you which.
 - **Min Frequency** / **Max Frequency** - the frequency range the
   spectrogram covers. Content outside this range isn't represented.
 - **Bin Count** - how many frequency bins tall the spectrogram is - more

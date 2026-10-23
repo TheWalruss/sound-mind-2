@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.49.1] - 2026-10-23
+
+Roadmap slot `v0.Y.83.1` (new projects match the output device's sample rate).
+
+### Changed
+
+- **New projects match your output device's sample rate.** The Create Project wizard's Sample Rate (under Advanced) now starts at the rate your output device runs at, so playback plays at the right speed without changing your system's sound settings. If the device's rate isn't known, it starts at 48000 Hz, the most common output rate, instead of 44100 Hz. A note under the field says which applies. Existing projects keep their own rate.
+
 ## [0.1.48.11] - 2026-10-23
 
 Roadmap slot `v0.Y.82.5` (modularity), installment K.
