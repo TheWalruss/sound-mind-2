@@ -257,6 +257,10 @@ void MainWindow::buildFileMenu() {
 
     QAction* exportVideoAction = fileMenu->addAction(tr("Export &Video..."));
     connect(exportVideoAction, &QAction::triggered, this, &MainWindow::exportVideo);
+    // v0.1.52.1 - a copy of the canvas as an image file.
+    QAction* exportImageAction = fileMenu->addAction(tr("Export I&mage..."));
+    exportImageAction->setObjectName(QStringLiteral("exportImageAction"));
+    connect(exportImageAction, &QAction::triggered, this, &MainWindow::exportImage);
 }
 
 void MainWindow::buildEditMenu() {

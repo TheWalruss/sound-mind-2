@@ -6386,6 +6386,23 @@ void MainWindowTest::commitRecordingAsyncSavesTheTakeInTheBackground() {
     QVERIFY(topmostNonEqualizerLayer(*window.project()).baseRecipe().contains("source"));
 }
 
+// v0.1.52.1 - File -> Export Image...
+void MainWindowTest::exportImageWritesTheCanvasFromTheFileMenu() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.commitRecording(recordedTone(0.5f)));
+    QVERIFY(window.findChild<QAction*>(QStringLiteral("exportImageAction")) != nullptr);
+
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-mw-export-image.png";
+    std::filesystem::remove(path);
+    sound_mind::studio::ImageExportOptions options;  // full resolution.
+    window.exportImageAsync(path, options);
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isExportRunning(), 60000);
+    const QImage image(QString::fromStdWString(path.wstring()));
+    QCOMPARE(image.size(), sound_mind::studio::fullResolutionImageSize(*window.project(), false));
+    std::filesystem::remove(path);
+}
+
 void MainWindowTest::commitRecordingOverwritesTheChosenRecordedLayerUndoably() {
     TestMainWindow window;
     createFreshTestProject(window);

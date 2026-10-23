@@ -803,6 +803,18 @@ public slots:
      */
     void exportMacroVideo();
 
+    /// @brief File -> Export Image... (`v0.1.52.1`): asks where, in which
+    ///        format and at what size (full resolution by default) in an
+    ///        ImageExportDialog, then exports in the background - see
+    ///        exportImageAsync().
+    void exportImage();
+
+    /// @brief Exports the canvas as an image in the background - forwards
+    ///        to `ExportController::exportImageAsync()`.
+    /// @param path Destination; its extension picks the format.
+    /// @param options Size, view and quality.
+    void exportImageAsync(const std::filesystem::path& path, const ImageExportOptions& options);
+
     /**
      * @brief Cycles the layer with the given id through its own 3-way
      *        visibility state (Visible -> Muted -> Invisible) - the actual

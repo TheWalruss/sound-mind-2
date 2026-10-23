@@ -9,6 +9,7 @@ add_executable(sound-mind-studio-tests
     test_axis_labels.cpp
     test_project_change.cpp
     test_export_controller.cpp
+    test_image_export_dialog.cpp
     test_import_controller.cpp
     test_playback_preparer.cpp
     test_analysis_controller.cpp

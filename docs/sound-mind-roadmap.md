@@ -1199,11 +1199,11 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.82.3` | Remove the Pool codec (inserted 2026-10-22) | `0.1.46.1` | #271 |
 | `v0.Y.82.4` | Responsiveness and modularity pass (inserted 2026-10-22) | `0.1.47.1`-`0.1.47.4` | #272-#275 |
 | `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1`-`0.1.48.11` | #276-#286 |
-| `v0.Y.83.1` | New projects match the output device's sample rate (inserted 2026-10-23) | `0.1.49.1`-`0.1.49.3` | #287-#289 |
-| `v0.Y.83.2` | Remove the Chord Generator and Chord tool (inserted 2026-10-23) | `0.1.50.1` | #290 |
-| `v0.Y.83.3` | MindWaves panel: only relevant settings, grouped; useful slider ranges (inserted 2026-10-23) | `0.1.51.1` | #291 |
-| - | Beta readiness check | *(after `v0.Y.83.3`)* | |
-| `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
+| `v0.Y.82.6` | New projects match the output device's sample rate (inserted 2026-10-23) | `0.1.49.1`-`0.1.49.3` | #287-#289 |
+| `v0.Y.82.7` | Remove the Chord Generator and Chord tool (inserted 2026-10-23) | `0.1.50.1` | #290 |
+| `v0.Y.82.8` | MindWaves panel: only relevant settings, grouped; useful slider ranges (inserted 2026-10-23) | `0.1.51.1` | #291 |
+| - | Beta readiness check | *(after `v0.Y.82.8`)* | |
+| `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check; brought forward 2026-10-23) | `0.1.52.1` | #292 |
 | `v0.Y.84.1` | Light and dark mode | - | |
 | `v0.Y.85.1` | Color mapping choice | - | |
 | `v0.Y.86.1` | Composer Mode editing | - | |
@@ -1503,7 +1503,7 @@ Steps 4 and 5 of the 2026-10-22 code scan, so changes from beta feedback stay ch
 - ✅ **Installment K - the Filter Configuration panel from the table.** Settled in `v0.1.48.11`, Decision #286.
 - **Step 5 is settled for filters** (installments J-K). Tool parameters are left as future work. They have only five MindWave bindings, spread over the tool class hierarchy, and three are lone combos, so a table would be a larger redesign for little gain. Revisit if tools gain many more bindable parameters.
 
-#### `v0.Y.83.1` - New projects match the output device's sample rate (S) - inserted 2026-10-23
+#### `v0.Y.82.6` - New projects match the output device's sample rate (S) - inserted 2026-10-23
 
 - ✅ Settled in `v0.1.49.1`, Decision #287.
   - **The problem** (user, 2026-10-23): their laptop's default output runs at 48 kHz, so projects made at the 44.1 kHz default played back too fast and too high. The Studio warned about it, but couldn't fix it.
@@ -1518,13 +1518,13 @@ Steps 4 and 5 of the 2026-10-22 code scan, so changes from beta feedback stay ch
   - The codec converts any audio at another rate to the project's: in `encode()`, and on reading an import.
 - **Still open:** Loop Mode assumes the device runs at the project's rate. Converting there would have to happen in real time, in the audio callback. New projects match the device, so this only affects older projects at another rate. See Decision #289.
 
-#### `v0.Y.83.2` - Remove the Chord Generator and Chord tool (S) - inserted 2026-10-23
+#### `v0.Y.82.7` - Remove the Chord Generator and Chord tool (S) - inserted 2026-10-23
 
 - ✅ Settled in `v0.1.50.1`, Decision #290 (user, 2026-10-23: "Remove the 'Chords' configuration and tool. It's not very useful").
   - Removed: the Chord Generator panel (Chord Builder, Custom Notation, Chord Overlay), the Chord tool, their code, tests and documentation.
   - Kept: sequences themselves, which MIDI import creates and Pick edits.
 
-#### `v0.Y.83.3` - MindWaves panel: only relevant settings, grouped (S) - inserted 2026-10-23
+#### `v0.Y.82.8` - MindWaves panel: only relevant settings, grouped (S) - inserted 2026-10-23
 
 - ✅ Settled in `v0.1.51.1`, Decision #291 (user, 2026-10-23: "hide fields that are not relevant for the currently selected MindWave type... hide all the Warp settings when Enable Warp is unchecked"; and "check the slider ranges... Phase... Period").
   - Only the settings the chosen type and shape read are shown.
@@ -1560,7 +1560,8 @@ Design-document features the plan above didn't cover, found by a design-doc-vers
 
 #### `v0.Y.83.1` - Image export (S)
 
-- **File → Export Image...**: the composite canvas as PNG, JPEG, BMP, TGA or WebP (the formats image import reads), at the canvas's size.
+- ✅ Settled in `v0.1.52.1`, Decision #292, ahead of the readiness check (user, 2026-10-23: "add an 'export image' option... user-specified filename, format and dimension. 'Full resolution' should be the default image size").
+- **File → Export Image...**: the composite canvas as PNG, JPEG, BMP, TGA or WebP (the formats image import reads), at full resolution (the default) or a custom size.
 - In the coordinate system shown (flat or Sound Flower), matching the video export.
 - The design doc's "import and export sound and images of all common formats".
 

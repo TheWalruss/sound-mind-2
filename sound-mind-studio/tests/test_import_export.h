@@ -34,4 +34,11 @@ private slots:
     // v0.1.49.3 - audio at another rate than the project's.
     void audioAtAnotherRateSplitsByTheProjectsRealDuration();
     void audioAtAnotherRateFillsTheSameColumnsAsAtTheProjectsRate();
+
+    // Image export (v0.1.52.1).
+    void exportProjectImageNowWritesTheCanvasAtFullResolutionByDefault();
+    void exportProjectImageNowScalesToTheGivenSize();
+    void exportProjectImageNowAsASoundFlowerIsSquare();
+    void exportProjectImageNowPicksTheFormatFromTheExtension();
+    void exportProjectImageNowFailsForAnUnknownFormatOrNothingToExport();
 };

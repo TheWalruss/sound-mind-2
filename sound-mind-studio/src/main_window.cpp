@@ -68,6 +68,7 @@
 #include "sound_mind/studio/recording_controller.h"
 #include "sound_mind/studio/loop_controller.h"
 #include "sound_mind/studio/macro_controller.h"
+#include "sound_mind/studio/image_export_dialog.h"
 #include "sound_mind/studio/base_recipes.h"
 #include "sound_mind/studio/video_export_dialog.h"
 #include "sound_mind/studio/macro_manager_dialog.h"
@@ -1885,6 +1886,24 @@ void MainWindow::exportVideo() {
         return;
     }
     exportCompositeVideoAsync(dialog.outputPath(), dialog.options(), dialog.openWhenDone());
+}
+
+void MainWindow::exportImage() {
+    if (!project_) {
+        return;
+    }
+    std::filesystem::path suggested = suggestedVideoPath(tr("_export"));
+    suggested.replace_extension(".png");
+    ImageExportDialog dialog(suggested, canvas_->polarMode(), fullResolutionImageSize(*project_, false),
+                             fullResolutionImageSize(*project_, true), this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    exportImageAsync(dialog.outputPath(), dialog.options());
+}
+
+void MainWindow::exportImageAsync(const std::filesystem::path& path, const ImageExportOptions& options) {
+    exportController_->exportImageAsync(path, options);
 }
 
 void MainWindow::exportMacroVideo() {

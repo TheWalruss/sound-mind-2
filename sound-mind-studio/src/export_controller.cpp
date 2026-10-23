@@ -142,6 +142,36 @@ void ExportController::exportMacroVideoAsync(const std::filesystem::path& path, 
         tr("Exporting macro video..."));
 }
 
+void ExportController::exportImageAsync(const std::filesystem::path& path, const ImageExportOptions& options,
+                                        bool openWhenDone) {
+    if (refuseWhileRunning()) {
+        return;
+    }
+    const sound_mind::core::Project* project = context_.project();
+    // Muted layers are still seen, so they count here (unlike audio/video).
+    const bool anythingVisible =
+        project != nullptr && std::any_of(project->layers().begin(), project->layers().end(),
+                                          [](const sound_mind::core::Layer& layer) {
+                                              return layer.visible() && layer.content().has_value() &&
+                                                     !sound_mind::core::isFilterLayerType(layer.type());
+                                          });
+    if (!anythingVisible) {
+        context_.reportError(tr("Export Image Failed"), tr("Nothing to export - no visible layer has content."));
+        return;
+    }
+    start(
+        Kind::Image, path, openWhenDone,
+        [path, options, projectCopy = *project](sound_mind::core::CancellationToken& token) -> Result {
+            QString error;
+            if (!exportProjectImageNow(projectCopy, path, options, &error,
+                                       [&token]() { return token.cancellationRequested(); })) {
+                return {Outcome::Failed, error};
+            }
+            return {};
+        },
+        tr("Exporting image..."));
+}
+
 bool ExportController::exportAudioNow(const std::filesystem::path& path, QString* errorMessage) {
     const sound_mind::core::Project* project = context_.project();
     if (project == nullptr) {
@@ -213,7 +243,7 @@ void ExportController::start(Kind kind, const std::filesystem::path& path, bool 
 }
 
 void ExportController::showProgress() {
-    if (kind_ != Kind::Audio && statusBar_ != nullptr) {
+    if (kind_ != Kind::Audio && kind_ != Kind::Image && statusBar_ != nullptr) {
         statusBar_->showMessage(tr("Exporting %1... %2%")
                                     .arg(kind_ == Kind::Video ? tr("video") : tr("macro video"))
                                     .arg(static_cast<int>(std::lround(progress_->load() * 100.0))));
@@ -223,6 +253,7 @@ void ExportController::showProgress() {
 void ExportController::finish(Kind kind, const std::filesystem::path& path, bool openWhenDone, const Result& result) {
     const QString kindLabel = kind == Kind::Video    ? tr("video")
                               : kind == Kind::Audio ? tr("audio")
+                              : kind == Kind::Image ? tr("image")
                                                     : tr("macro video");
     switch (result.outcome) {
         case Outcome::Success:
@@ -243,6 +274,7 @@ void ExportController::finish(Kind kind, const std::filesystem::path& path, bool
                 statusBar_->showMessage(tr("%1 export cancelled.")
                                             .arg(kind == Kind::Video    ? tr("Video")
                                                  : kind == Kind::Audio ? tr("Audio")
+                                                 : kind == Kind::Image ? tr("Image")
                                                                        : tr("Macro video")),
                                         5000);
             }
@@ -254,6 +286,7 @@ void ExportController::finish(Kind kind, const std::filesystem::path& path, bool
             }
             context_.reportError(kind == Kind::Video    ? tr("Export Video Failed")
                                  : kind == Kind::Audio ? tr("Export Audio Failed")
+                                 : kind == Kind::Image ? tr("Export Image Failed")
                                                        : tr("Export Macro Video Failed"),
                                  result.error);
             break;

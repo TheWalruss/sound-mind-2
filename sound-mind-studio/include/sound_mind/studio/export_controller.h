@@ -15,6 +15,7 @@
 #include "sound_mind/core/macro_renderer.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/studio/background_job.h"
+#include "sound_mind/studio/import_export.h"
 
 class QPushButton;
 class QStatusBar;
@@ -102,6 +103,20 @@ public:
     void exportMacroVideoAsync(const std::filesystem::path& path, sound_mind::core::MacroId id,
                                const sound_mind::codec::VideoExportOptions& options = {}, bool openWhenDone = false);
 
+    /**
+     * @brief Starts exporting the canvas as an image (`v0.1.52.1`): every
+     *        visible layer as the canvas shows it, at the chosen size and
+     *        view, in the format the file's extension names - see
+     *        exportProjectImageNow(). Refuses (reportError) when no visible
+     *        layer has content; does nothing (a status message) while
+     *        another export runs. Cancel stops it between layers.
+     * @param path Destination path.
+     * @param options Size, view and quality.
+     * @param openWhenDone Open the image in the system's viewer when done.
+     */
+    void exportImageAsync(const std::filesystem::path& path, const ImageExportOptions& options,
+                          bool openWhenDone = false);
+
     /// @brief Exports the project's audio synchronously - headless use and
     ///        tests.
     /// @param path Destination; its extension picks the format.
@@ -131,7 +146,7 @@ public:
 
 private:
     /// @brief Which kind of export is running - for its status messages.
-    enum class Kind { Video, Audio, MacroVideo };
+    enum class Kind { Video, Audio, MacroVideo, Image };
     /// @brief How an export ended.
     enum class Outcome { Success, Cancelled, Failed };
     /// @brief What an export's background work reports.

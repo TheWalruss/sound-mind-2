@@ -2043,16 +2043,31 @@ and remembers your choices for next time:
 
 The status bar shows how far the export has got, as a percentage.
 
-Both run the audio through the master limiter first if it's on in
+**File → Export Image...** saves a copy of the canvas as an image:
+
+- **File** - with **Browse...**; the extension and the **Format** follow
+  each other: **PNG**, **JPEG**, **BMP**, **TGA** or **WebP** (the same
+  formats image import reads).
+- **Full resolution** (the default) - one pixel per canvas column and
+  frequency bin, shown as width x height. Or **Custom size**: a width and
+  height in pixels; with **Keep proportions** ticked, changing one changes
+  the other to keep the canvas's shape.
+- **As Sound Flower** - saves the [polar view](#sound-flower-polar-view) as
+  a square image; ticked when the canvas is showing it. Its full
+  resolution is a square twice the canvas's height.
+
+Every visible layer is included, filters applied, as the canvas shows it
+(a muted layer is still seen, so it's in the image too).
+
+Audio and video exports run the audio through the master limiter first if it's on in
 [Configure Devices](#configure-devices), so a mix that goes over full scale
 is turned down at its peaks instead of clipping. Loudness normalization is
 never applied to exports.
 
-Both kinds of export run in the background - you can keep working while
+Every kind of export runs in the background - you can keep working while
 one encodes, and a small **✕** button appears in the status bar to cancel
 it if you change your mind; cancelling removes whatever it had written so
-far rather than leaving a broken file behind. Only one export (of either
-kind) runs at a time - starting another while one is already in progress
+far rather than leaving a broken file behind. Only one export runs at a time - starting another while one is already in progress
 just shows a reminder to wait or cancel first.
 
 ## Saving and Project Files
@@ -2438,7 +2453,6 @@ built, in order. This section lists what isn't in the Studio today.
 
 These are scheduled after the Beta readiness check:
 
-- **Image export** - saving the canvas as a PNG, JPEG or other image.
 - **A light mode** - the Studio is dark only for now.
 - **A color mapping choice** - which of the two channels' amplitude and
   phase show as red, green and blue is fixed today.

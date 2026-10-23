@@ -11,4 +11,6 @@ private slots:
     void aSecondExportWhileOneRunsIsRefused();
     void cancellingDeletesThePartialFile();
     void aMacroThatCantBeRebuiltIsReported();
+    void anImageExportWritesTheFileAndSaysSo();
+    void anImageExportWithNothingVisibleIsReported();
 };

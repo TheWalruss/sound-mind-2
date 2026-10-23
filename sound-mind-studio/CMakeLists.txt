@@ -32,6 +32,7 @@ add_library(sound-mind-studio-lib
     src/axis_labels.cpp
     src/background_job.cpp
     src/export_controller.cpp
+    src/image_export_dialog.cpp
     src/import_controller.cpp
     src/playback_preparer.cpp
     src/analysis_controller.cpp
@@ -113,6 +114,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/background_job.h
     include/sound_mind/studio/export_controller.h
+    include/sound_mind/studio/image_export_dialog.h
     include/sound_mind/studio/import_controller.h
     include/sound_mind/studio/playback_preparer.h
     include/sound_mind/studio/analysis_controller.h

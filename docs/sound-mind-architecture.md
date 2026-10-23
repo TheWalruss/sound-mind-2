@@ -3387,6 +3387,29 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
         - the slider ranges and Phase's one-cycle limit.
       - Studio `MindWavesPanelTest`: the warp details are hidden until Warp is enabled.
       - The existing editor and panel cases pass unchanged.
+292. **Image export.** Settled in `v0.1.52.1` (roadmap `v0.Y.83.1`, brought forward).
+    - **`studio::renderProjectImage(project, ImageExportOptions, shouldCancel)` (`import_export.h`).**
+      - It composites with `compositeProject(..., respectMute = false)`, as the canvas does, so muted layers are seen. Filters are applied.
+      - It converts with `codec::toRgbImage()`, the canvas's own colours.
+      - It then either projects with `codec::rectToPolar()` at the final diameter (Sound Flower; a non-square size is centred on black), or scales with Qt's smooth, area-averaging transform to the requested size.
+      - `fullResolutionImageSize()` defines full resolution: canvas width by bin count, one pixel per column and bin. For a Sound Flower it's a square of twice the bin count, a radius of one pixel per bin.
+    - **`exportProjectImageNow()` writes the format the extension names.** `imageFormatForPath()` maps `.png`, `.jpg/.jpeg`, `.bmp`, `.tga` and `.webp`, the formats image import reads. It writes through Qt's image writers at quality 95 for JPEG/WebP. A failed write leaves no file.
+      - **TGA has its own writer.** Qt's TGA plugin only reads, so `writeTga()` writes uncompressed 24-bit, bottom-up BGR, with the TGA 2.0 footer. Qt's reader, which image import uses, rejects the file without that footer.
+    - **`ExportController::exportImageAsync()`** runs on the export `BackgroundJob`, with Cancel between layers and the same refuse-while-running and finish reporting. Its "anything to export" check counts muted layers, unlike audio and video, because they're still seen.
+    - **`ImageExportDialog` (new):**
+      - file with Browse...;
+      - format, following the extension both ways;
+      - **Full resolution** (default, showing W x H) or **Custom size** with Keep proportions;
+      - **As Sound Flower** (defaults to the canvas's view; its custom size is always square).
+
+      OK needs a file name with one of the five extensions.
+    - **`MainWindow`:** File → Export Image... (`exportImage()`) and `exportImageAsync()`. The suggested file is the project's name with `_export.png` beside it.
+    - **No new dependency.** Qt's existing image plugins write PNG, JPEG, BMP and WebP; the deploy step already ships them.
+    - **Tests:**
+      - Studio `ImportExportTest`, 5 cases: full resolution by default, scaling, a square Sound Flower, every format written and read back, and unknown formats or nothing to export.
+      - Studio `ExportControllerTest`, 2 cases: an image is written in the background; nothing visible is reported.
+      - Studio `ImageExportDialogTest`, 5 cases: full resolution is the default, a custom size keeps proportions, format and extension follow each other, a Sound Flower is square, and an unknown extension can't be accepted.
+      - `MainWindowTest`, 1 case: the File menu action exists and an export writes full resolution.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

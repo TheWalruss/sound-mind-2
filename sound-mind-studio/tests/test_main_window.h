@@ -323,6 +323,7 @@ private slots:
     void decimalSeparatorMenuSetsTheProjectSettingAndEveryNumericField();
     void imageModeFitsTheCanvasWithSquareCells();
     void commitRecordingAddsANamedRecordedLayer();
+    void exportImageWritesTheCanvasFromTheFileMenu();
     void commitRecordingAsyncSavesTheTakeInTheBackground();
     void commitRecordingOverwritesTheChosenRecordedLayerUndoably();
     void filterPreviewLoopsARenderOfThePanelConfiguration();

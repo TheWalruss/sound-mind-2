@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <utility>
 
+#include <QImage>
 #include <QPushButton>
 #include <QStatusBar>
 #include <QtTest/QtTest>
@@ -12,6 +13,7 @@
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/export_controller.h"
+#include "sound_mind/studio/import_export.h"
 
 using sound_mind::core::Project;
 using sound_mind::studio::ExportController;
@@ -116,4 +118,32 @@ void ExportControllerTest::aMacroThatCantBeRebuiltIsReported() {
     QVERIFY(!fixture.controller.isRunning());
     QCOMPARE(fixture.errors.size(), 1);
     QVERIFY(fixture.errors.front().contains(QStringLiteral("no such macro")));
+}
+
+// v0.1.52.1 - File -> Export Image..., in the background like the others.
+void ExportControllerTest::anImageExportWritesTheFileAndSaysSo() {
+    Project project = projectWithContent(64);
+    Fixture fixture(&project);
+    const auto path = tempPath("sound-mind-test-export-controller.png");
+    std::filesystem::remove(path);
+
+    sound_mind::studio::ImageExportOptions options;
+    options.width = 32;
+    options.height = 16;
+    fixture.controller.exportImageAsync(path, options);
+    QVERIFY(fixture.controller.isRunning());
+    QTRY_VERIFY_WITH_TIMEOUT(!fixture.controller.isRunning(), 60000);
+    QCOMPARE(QImage(QString::fromStdWString(path.wstring())).size(), QSize(32, 16));
+    QVERIFY(fixture.statusBar.currentMessage().contains(QStringLiteral("Exported image")));
+    QVERIFY(fixture.errors.isEmpty());
+    std::filesystem::remove(path);
+}
+
+void ExportControllerTest::anImageExportWithNothingVisibleIsReported() {
+    Project project = Project::createNew(sound_mind::core::ProjectSettings{});  // no content anywhere.
+    Fixture fixture(&project);
+    fixture.controller.exportImageAsync(tempPath("sound-mind-test-export-nothing.png"), {});
+    QVERIFY(!fixture.controller.isRunning());
+    QCOMPARE(fixture.errors.size(), 1);
+    QVERIFY(fixture.errors.front().contains(QStringLiteral("Nothing to export")));
 }

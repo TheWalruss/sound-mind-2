@@ -475,3 +475,82 @@ void ImportExportTest::audioAtAnotherRateFillsTheSameColumnsAsAtTheProjectsRate(
     QVERIFY(std::abs(static_cast<int>(layers.front().content()->frameCount) - 100) <= 1);
     QCOMPARE(layers.front().content()->config.sampleRateHz, std::uint32_t{48000});
 }
+
+namespace {
+
+/// A small project with one imported layer of content (8 columns x 512 bins).
+Project projectWithContent() {
+    const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-ie-image-src.wav";
+    writeTestWavFileWithFrameCount(wavPath, 4410);
+    Project project = Project::createNew(smallCanvasProjectSettings());
+    [[maybe_unused]] const int imported = sound_mind::studio::importAudioSnippetsInto(project, wavPath, {0});
+    std::filesystem::remove(wavPath);
+    return project;
+}
+
+QImage readBack(const std::filesystem::path& path) {
+    QImage image(QString::fromStdWString(path.wstring()));
+    std::filesystem::remove(path);
+    return image;
+}
+
+}  // namespace
+
+// v0.1.52.1 - File -> Export Image...
+void ImportExportTest::exportProjectImageNowWritesTheCanvasAtFullResolutionByDefault() {
+    const Project project = projectWithContent();
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-image-full.png";
+    QString error;
+    QVERIFY2(sound_mind::studio::exportProjectImageNow(project, path, {}, &error), qPrintable(error));
+    const QImage image = readBack(path);
+    QCOMPARE(image.size(), QSize(8, 512));  // one pixel per column and bin.
+    QCOMPARE(sound_mind::studio::fullResolutionImageSize(project, false), QSize(8, 512));
+}
+
+void ImportExportTest::exportProjectImageNowScalesToTheGivenSize() {
+    const Project project = projectWithContent();
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-image-scaled.png";
+    sound_mind::studio::ImageExportOptions options;
+    options.width = 40;
+    options.height = 30;
+    QVERIFY(sound_mind::studio::exportProjectImageNow(project, path, options));
+    QCOMPARE(readBack(path).size(), QSize(40, 30));
+}
+
+void ImportExportTest::exportProjectImageNowAsASoundFlowerIsSquare() {
+    const Project project = projectWithContent();
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-image-flower.png";
+    sound_mind::studio::ImageExportOptions options;
+    options.polar = true;
+    QVERIFY(sound_mind::studio::exportProjectImageNow(project, path, options));
+    QCOMPARE(readBack(path).size(), QSize(1024, 1024));  // a radius of one pixel per bin.
+    QCOMPARE(sound_mind::studio::fullResolutionImageSize(project, true), QSize(1024, 1024));
+}
+
+void ImportExportTest::exportProjectImageNowPicksTheFormatFromTheExtension() {
+    const Project project = projectWithContent();
+    for (const char* extension : {".jpg", ".bmp", ".tga", ".webp"}) {
+        const auto path = std::filesystem::temp_directory_path() /
+                          (std::string("sound-mind-test-ie-image-format") + extension);
+        QString error;
+        QVERIFY2(sound_mind::studio::exportProjectImageNow(project, path, {}, &error), qPrintable(error));
+        QVERIFY2(!readBack(path).isNull(), extension);
+    }
+    QCOMPARE(QString::fromLatin1(sound_mind::studio::imageFormatForPath("x.JPEG").value_or("")), QStringLiteral("JPEG"));
+    QVERIFY(!sound_mind::studio::imageFormatForPath("x.gif").has_value());
+}
+
+void ImportExportTest::exportProjectImageNowFailsForAnUnknownFormatOrNothingToExport() {
+    const Project project = projectWithContent();
+    QString error;
+    const auto gif = std::filesystem::temp_directory_path() / "sound-mind-test-ie-image.gif";
+    QVERIFY(!sound_mind::studio::exportProjectImageNow(project, gif, {}, &error));
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!std::filesystem::exists(gif));
+
+    const Project empty = Project::createNew(smallCanvasProjectSettings());
+    error.clear();
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-image-empty.png";
+    QVERIFY(!sound_mind::studio::exportProjectImageNow(empty, path, {}, &error));
+    QVERIFY(!error.isEmpty());
+}

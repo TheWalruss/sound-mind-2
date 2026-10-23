@@ -3,15 +3,23 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <vector>
+#include <string_view>
+#include <fstream>
+#include <string>
+#include <system_error>
 
 #include <QCoreApplication>
 #include <QImage>
+#include <QPainter>
 
 #include "sound_mind/codec/audio_file.h"
 #include "sound_mind/codec/audio_resample.h"
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/polar_projection.h"
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/compositor.h"
 #include "sound_mind/core/project_export.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/import_helpers.h"
@@ -370,6 +378,136 @@ bool exportProjectAudioNow(const sound_mind::core::Project& project, const std::
         }
         return false;
     }
+}
+
+QSize fullResolutionImageSize(const sound_mind::core::Project& project, bool polar) {
+    const auto& settings = project.settings();
+    if (polar) {
+        const int diameter = static_cast<int>(2 * settings.binCount);
+        return {diameter, diameter};
+    }
+    return {static_cast<int>(settings.canvasWidth), static_cast<int>(settings.binCount)};
+}
+
+std::optional<const char*> imageFormatForPath(const std::filesystem::path& path) {
+    const std::string extension = lowercasedExtension(path);
+    if (extension == ".png") {
+        return "PNG";
+    }
+    if (extension == ".jpg" || extension == ".jpeg") {
+        return "JPEG";
+    }
+    if (extension == ".bmp") {
+        return "BMP";
+    }
+    if (extension == ".tga") {
+        return "TGA";
+    }
+    if (extension == ".webp") {
+        return "WEBP";
+    }
+    return std::nullopt;
+}
+
+std::optional<QImage> renderProjectImage(const sound_mind::core::Project& project, const ImageExportOptions& options,
+                                         const std::function<bool()>& shouldCancel) {
+    // As the canvas shows it: muted layers are still seen.
+    const auto composite = sound_mind::core::compositeProject(project, shouldCancel, /*respectMute=*/false);
+    if (!composite.has_value()) {
+        return std::nullopt;
+    }
+    const sound_mind::codec::RgbImage rgb = sound_mind::codec::toRgbImage(*composite);
+    const QSize full = fullResolutionImageSize(project, options.polar);
+    const QSize size = options.width > 0 && options.height > 0
+                           ? QSize(static_cast<int>(options.width), static_cast<int>(options.height))
+                           : full;
+    if (options.polar) {
+        // The disk is drawn at its final size, not scaled afterwards.
+        const auto diameter = static_cast<std::uint32_t>(std::max(1, std::min(size.width(), size.height())));
+        QImage disk = toQImageView(sound_mind::codec::rectToPolar(rgb, diameter)).copy();
+        if (disk.size() != size) {
+            QImage framed(size, QImage::Format_RGB888);
+            framed.fill(Qt::black);
+            QPainter painter(&framed);
+            painter.drawImage((size.width() - disk.width()) / 2, (size.height() - disk.height()) / 2, disk);
+            painter.end();
+            return framed;
+        }
+        return disk;
+    }
+    QImage flat = toQImageView(rgb).copy();
+    if (flat.size() != size) {
+        flat = flat.scaled(size, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    }
+    return flat;
+}
+
+namespace {
+
+/// @brief Writes `image` as an uncompressed 24-bit TGA - Qt's own TGA
+///        plugin only reads, and image import reads TGA, so export writes
+///        it too.
+bool writeTga(const QImage& image, const std::filesystem::path& path) {
+    const QImage rgb = image.convertToFormat(QImage::Format_RGB888);
+    std::ofstream out(path, std::ios::binary);
+    if (!out) {
+        return false;
+    }
+    const auto width = static_cast<std::uint16_t>(rgb.width());
+    const auto height = static_cast<std::uint16_t>(rgb.height());
+    // Image type 2 (uncompressed true-colour), 24 bits, rows bottom-up.
+    const unsigned char header[18] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                                      static_cast<unsigned char>(width & 0xFF), static_cast<unsigned char>(width >> 8),
+                                      static_cast<unsigned char>(height & 0xFF), static_cast<unsigned char>(height >> 8),
+                                      24, 0};
+    out.write(reinterpret_cast<const char*>(header), sizeof(header));
+    std::vector<char> row(static_cast<std::size_t>(width) * 3);
+    for (int y = rgb.height() - 1; y >= 0; --y) {
+        const uchar* source = rgb.constScanLine(y);
+        for (int x = 0; x < rgb.width(); ++x) {
+            row[static_cast<std::size_t>(x) * 3 + 0] = static_cast<char>(source[x * 3 + 2]);  // TGA stores BGR.
+            row[static_cast<std::size_t>(x) * 3 + 1] = static_cast<char>(source[x * 3 + 1]);
+            row[static_cast<std::size_t>(x) * 3 + 2] = static_cast<char>(source[x * 3 + 0]);
+        }
+        out.write(row.data(), static_cast<std::streamsize>(row.size()));
+    }
+    // The TGA 2.0 footer (no extension or developer areas) - Qt's own TGA
+    // reader, which image import uses, wants it.
+    const char footer[26] = {0, 0, 0, 0, 0, 0, 0, 0, 'T', 'R', 'U', 'E', 'V', 'I', 'S', 'I', 'O',
+                             'N', '-', 'X', 'F', 'I', 'L', 'E', '.', 0};
+    out.write(footer, sizeof(footer));
+    return static_cast<bool>(out);
+}
+
+}  // namespace
+
+bool exportProjectImageNow(const sound_mind::core::Project& project, const std::filesystem::path& path,
+                           const ImageExportOptions& options, QString* errorMessage,
+                           const std::function<bool()>& shouldCancel) {
+    const auto fail = [errorMessage](const QString& message) {
+        if (errorMessage != nullptr) {
+            *errorMessage = message;
+        }
+        return false;
+    };
+    const auto format = imageFormatForPath(path);
+    if (!format.has_value()) {
+        return fail(tr("Choose a .png, .jpg, .bmp, .tga or .webp file name."));
+    }
+    const auto image = renderProjectImage(project, options, shouldCancel);
+    if (!image.has_value()) {
+        return fail(tr("Nothing to export - no visible layer has content."));
+    }
+    const QString file = QString::fromStdWString(path.wstring());
+    const bool written = std::string_view(*format) == "TGA"
+                             ? writeTga(*image, path)
+                             : image->save(file, *format, std::clamp(options.quality, 0, 100));
+    if (!written) {
+        std::error_code ignored;
+        std::filesystem::remove(path, ignored);
+        return fail(tr("Couldn't write \"%1\".").arg(file));
+    }
+    return true;
 }
 
 bool exportProjectVideoNow(const sound_mind::core::Project& project, const std::filesystem::path& path,

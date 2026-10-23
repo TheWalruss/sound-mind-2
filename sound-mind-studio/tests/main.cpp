@@ -37,6 +37,7 @@
 #include "test_axis_labels.h"
 #include "test_project_change.h"
 #include "test_export_controller.h"
+#include "test_image_export_dialog.h"
 #include "test_import_controller.h"
 #include "test_playback_preparer.h"
 #include "test_analysis_controller.h"
@@ -153,6 +154,7 @@ const std::array kTestClasses{
     SM_TEST_CLASS_ENTRY(BackgroundJobTest),
     SM_TEST_CLASS_ENTRY(ProjectChangeTest),
     SM_TEST_CLASS_ENTRY(ExportControllerTest),
+    SM_TEST_CLASS_ENTRY(ImageExportDialogTest),
     SM_TEST_CLASS_ENTRY(ImportControllerTest),
     SM_TEST_CLASS_ENTRY(PlaybackPreparerTest),
     SM_TEST_CLASS_ENTRY(AnalysisControllerTest),

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <optional>
@@ -7,6 +8,7 @@
 #include <vector>
 
 #include <QImage>
+#include <QSize>
 #include <QString>
 
 #include "sound_mind/core/layer.h"
@@ -309,5 +311,74 @@ std::optional<sound_mind::core::SourceId> attachImportSource(sound_mind::core::P
  */
 [[nodiscard]] bool exportProjectVideoNow(const sound_mind::core::Project& project, const std::filesystem::path& path,
                                           QString* errorMessage = nullptr);
+
+/// @brief How File -> Export Image... draws the canvas (`v0.1.52.1`).
+struct ImageExportOptions {
+    /// @brief The image's width in pixels; `0` (with `height`) is full
+    ///        resolution - see fullResolutionImageSize().
+    std::uint32_t width = 0;
+    /// @brief The image's height in pixels; `0` (with `width`) is full
+    ///        resolution.
+    std::uint32_t height = 0;
+    /// @brief Draw the canvas as the Sound Flower (polar) view, a disk in a
+    ///        square image, instead of the flat rectangle.
+    bool polar = false;
+    /// @brief JPEG/WebP quality, 0-100 (ignored by lossless formats).
+    int quality = 95;
+};
+
+/**
+ * @brief The size File -> Export Image... calls "full resolution": one
+ *        pixel per canvas column and frequency bin - the composite's own
+ *        size - or, as a Sound Flower, a square whose radius is one pixel
+ *        per bin.
+ * @param project The project.
+ * @param polar Whether as a Sound Flower.
+ * @return Width by height, in pixels.
+ */
+[[nodiscard]] QSize fullResolutionImageSize(const sound_mind::core::Project& project, bool polar);
+
+/**
+ * @brief The image format a file name asks for, by its extension.
+ * @param path The file.
+ * @return `"PNG"`, `"JPEG"` (`.jpg`/`.jpeg`), `"BMP"`, `"TGA"` or `"WEBP"`,
+ *         the formats image import reads too; `std::nullopt` for anything
+ *         else.
+ */
+[[nodiscard]] std::optional<const char*> imageFormatForPath(const std::filesystem::path& path);
+
+/**
+ * @brief Draws the project's canvas as an image (`v0.1.52.1`): every
+ *        visible layer composited as the canvas shows it (muted layers
+ *        included - they're still seen), in the canvas's colours, flat or
+ *        as a Sound Flower, at the asked-for size (smoothly scaled).
+ * @param project The project.
+ * @param options Size and view.
+ * @param shouldCancel Consulted between layers; may be empty.
+ * @return The image, or `std::nullopt` if no visible layer has content.
+ * @throws sound_mind::core::CompositeCancelled if `shouldCancel` says so.
+ * @note Thread-safe for a project no one is editing (it reads a copy-free
+ *       `const` project and builds its own QImage), so it can run on a
+ *       background job.
+ */
+[[nodiscard]] std::optional<QImage> renderProjectImage(const sound_mind::core::Project& project,
+                                                        const ImageExportOptions& options,
+                                                        const std::function<bool()>& shouldCancel = {});
+
+/**
+ * @brief Exports the project's canvas as an image file - renderProjectImage()
+ *        written in the format the file's extension names.
+ * @param project The project.
+ * @param path Destination; `.png`, `.jpg`/`.jpeg`, `.bmp`, `.tga` or `.webp`.
+ * @param options Size, view and quality.
+ * @param errorMessage Receives the reason on failure; may be null.
+ * @param shouldCancel Consulted between layers; may be empty.
+ * @return `true` once written; `false` for an unknown format, nothing to
+ *         export, or a write failure (no file is left behind).
+ * @throws sound_mind::core::CompositeCancelled if `shouldCancel` says so.
+ */
+[[nodiscard]] bool exportProjectImageNow(const sound_mind::core::Project& project, const std::filesystem::path& path,
+                                          const ImageExportOptions& options = {}, QString* errorMessage = nullptr,
+                                          const std::function<bool()>& shouldCancel = {});
 
 }  // namespace sound_mind::studio

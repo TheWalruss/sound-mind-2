@@ -6,9 +6,26 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.52.1] - 2026-10-23
+
+Roadmap slot `v0.Y.83.1`, brought forward from after the Beta readiness check.
+
+### Added
+
+- **File → Export Image...** saves a copy of the canvas as a PNG, JPEG, BMP, TGA or WebP image.
+  - You choose the file name and format.
+  - The size is **Full resolution** by default: one pixel per canvas column and frequency bin. You can also enter a custom width and height, keeping the canvas's proportions unless you untick that.
+  - **As Sound Flower** saves the polar view as a square image. It's ticked when the canvas is showing that view.
+  - Every visible layer is included, as the canvas shows it.
+  - The export runs in the background with a Cancel button, like audio and video export.
+
+### Changed
+
+- The three roadmap slots added on 2026-10-23 are renumbered `v0.Y.82.6`-`v0.Y.82.8` (sample rate, Chord removal, MindWaves panel). `v0.Y.83.1` already belonged to image export.
+
 ## [0.1.51.1] - 2026-10-23
 
-Roadmap slot `v0.Y.83.3`.
+Roadmap slot `v0.Y.82.8`.
 
 ### Changed
 
@@ -21,7 +38,7 @@ Roadmap slot `v0.Y.83.3`.
 
 ## [0.1.50.1] - 2026-10-23
 
-Roadmap slot `v0.Y.83.2`.
+Roadmap slot `v0.Y.82.7`.
 
 ### Removed
 
@@ -42,7 +59,7 @@ Roadmap slot `v0.Y.83.2`.
 
 ## [0.1.49.1] - 2026-10-23
 
-Roadmap slot `v0.Y.83.1` (new projects match the output device's sample rate).
+Roadmap slot `v0.Y.82.6` (new projects match the output device's sample rate).
 
 ### Changed
 
