@@ -48,4 +48,11 @@ private slots:
     void loadingAResonantMindWaveWithNoSourceIdSelectsThePlaceholder();
     void choosingNoiseShowsItsControlsAndEditsReachTheMindWave();
     void setMindWaveLoadsNoiseSettings();
+
+    // Only relevant settings shown, grouped, with an Advanced section (v0.1.51.1).
+    void relevantFieldsFollowTheTypeAndShape();
+    void irrelevantRowsAndEmptyGroupsAreHidden();
+    void changingTheShapeUpdatesWhichRowsShow();
+    void advancedSettingsAreCollapsedUntilToggled();
+    void slidersCoverAUsefulRangeAndPhaseIsOneCycle();
 };

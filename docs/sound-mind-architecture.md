@@ -3355,6 +3355,38 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Nothing the Chord Generator configured was saved in the project, so no file-format change is needed.
     - **Tool exclusivity is now among six tools:** Pan, Paint, Pick, Select, Path, Text. `MainWindowTest::setPanModeEnabledSelectsTheNeutralToolModeAndCanBeReachedDirectly` now switches from Text instead of Chord. `configureMenuContainsEveryConfigurationPanelsOwnToggle` and the show-raises-the-panel test no longer list the Chord panel.
     - **Earlier Decisions** describing the Chord Generator (the `v0.0.40.x` Chords/Arpeggiator/Sequencer installments, and finding #15's overlay gating) stay as history.
+291. **MindWaves panel: only relevant settings, grouped, with useful slider ranges.** Settled in `v0.1.51.1` (user, 2026-10-23).
+    - **`MindWaveEditor::relevantFields(const MindWave&)` (new, public, static) returns a `FieldRelevance`:** which shared and per-type settings the wave's type and shape read. It mirrors `MindWave::evaluate()` case by case. For example:
+      - Period isn't read by the non-oscillating envelopes, the Gaussian/Fractal noise shapes, Cellular, Domain-Warped Noise or Noise;
+      - Phase only by the periodic-style shapes;
+      - Seed and Noise Scale only by the random shapes;
+      - Reversed by every type but Spatial, which reads both axes directly.
+
+      `updateVisibleFields()` (renamed from `updateVisibleGroup()`) hides every other row with `QFormLayout::setRowVisible()`. It runs on every type, shape, noise-colour and axis change. Noise's Slope keeps its enabled state as well, so existing tests stay valid.
+    - **Layout.**
+      - The type's own group comes right under Generator Type.
+      - The shared settings follow, in an **Axis & Timing** group (Axis, Period) and a **Randomness** group (Seed, Noise Scale). Each group hides when none of its rows apply.
+      - An **Advanced** toggle (a `QToolButton`, closed by default) holds Phase, Noise Octaves, Noise Persistence, Reversed and Inverted.
+      - Object names are unchanged.
+    - **Slider ranges.**
+      - Phase is limited to [0, 2pi] for typing too, since anything beyond one cycle repeats a value inside it.
+      - Period has a logarithmic slider: 0.01-60 s on the Time axis, 1-512 bins on the Frequency axis. The slider follows the axis.
+      - Envelope Center and Ripples' Center X/Y: 0-60 s or 0-512 bins.
+      - Noise Scale, Steepness and Decay Rate: logarithmic, 0.01-100.
+      - Domain Warp Strength: 0-50.
+      - Typing still reaches the old wide ranges, through `NumericField::setSliderRange()` (Decision for `v0.1.40.8`).
+    - **Warp in `MindWavesPanel`.**
+      - Warp has its own **Warp** group. Strength and the source editor (now labelled "Warped by") sit in a `warpDetailsContainer`; `setWarpDetailsShown()` hides it, and keeps disabling it, while Warp is off.
+      - The Enable Warp checkbox is parented to its group from the start. Parentless, it kept a top-level default geometry until first laid out, and a click on an unshown panel missed it.
+    - **Tests:**
+      - Studio `MindWaveEditorTest`, 5 new cases:
+        - relevance per type and shape;
+        - irrelevant rows and empty groups are hidden;
+        - changing the shape updates the rows;
+        - Advanced is collapsed until toggled;
+        - the slider ranges and Phase's one-cycle limit.
+      - Studio `MindWavesPanelTest`: the warp details are hidden until Warp is enabled.
+      - The existing editor and panel cases pass unchanged.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

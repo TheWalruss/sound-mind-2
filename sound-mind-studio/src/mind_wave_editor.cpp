@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <numbers>
 #include <utility>
 
 #include <QCheckBox>
@@ -12,6 +13,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSignalBlocker>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QVariant>
 
@@ -108,6 +110,14 @@ QHBoxLayout* makeDialFieldRow(QWidget* dial, QWidget* spinBox) {
     return row;
 }
 
+/// @brief Where the time-axis sliders (Period, Envelope Center, Ripples'
+///        Center X) end, in seconds - a minute covers any useful cycle or
+///        position; longer values can still be typed (v0.1.51.1).
+constexpr double kTimeSliderMaximumSeconds = 60.0;
+/// @brief Where the frequency-axis sliders end, in bins - a typical
+///        project's own height.
+constexpr double kFrequencySliderMaximumBins = 512.0;
+
 /// @brief A wide-range, general-purpose double spin box - most of this
 /// editor's own fields have no natural bound (a period, a phase, a noise
 /// scale...), unlike FilterConfigurationPanel's own tightly-ranged fields
@@ -148,22 +158,50 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     populateCombo(generatorTypeCombo_, kGeneratorTypes);
     connect(generatorTypeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         wave_.setType(static_cast<GeneratorType>(generatorTypeCombo_->itemData(index).toInt()));
-        updateVisibleGroup();
+        updateVisibleFields();
         emitChanged();
     });
     topForm->addRow(tr("Generator Type:"), generatorTypeCombo_);
+
+    // The settings several types share, grouped by what they do (v0.1.51.1)
+    // and placed after the type's own group below; rows a type doesn't use
+    // are hidden - see updateVisibleFields().
+    axisGroup_ = new QGroupBox(tr("Axis & Timing"), this);
+    axisGroup_->setObjectName(QStringLiteral("axisGroup"));
+    auto* axisForm = new QFormLayout(axisGroup_);
+    randomnessGroup_ = new QGroupBox(tr("Randomness"), this);
+    randomnessGroup_->setObjectName(QStringLiteral("randomnessGroup"));
+    auto* randomnessForm = new QFormLayout(randomnessGroup_);
+    advancedToggle_ = new QToolButton(this);
+    advancedToggle_->setObjectName(QStringLiteral("advancedToggleButton"));
+    advancedToggle_->setText(tr("Advanced"));
+    advancedToggle_->setCheckable(true);
+    advancedToggle_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    advancedToggle_->setArrowType(Qt::RightArrow);
+    advancedToggle_->setAutoRaise(true);
+    advancedToggle_->setToolTip(tr("Phase, noise detail, and reversing or inverting the shape"));
+    advancedContainer_ = new QWidget(this);
+    advancedContainer_->setObjectName(QStringLiteral("advancedContainer"));
+    advancedContainer_->hide();
+    auto* advancedForm = new QFormLayout(advancedContainer_);
+    advancedForm->setContentsMargins(0, 0, 0, 0);
+    connect(advancedToggle_, &QToolButton::toggled, this, [this](bool open) {
+        advancedToggle_->setArrowType(open ? Qt::DownArrow : Qt::RightArrow);
+        advancedContainer_->setVisible(open);
+    });
 
     axisCombo_ = new QComboBox(this);
     axisCombo_->setObjectName(QStringLiteral("axisCombo"));
     populateCombo(axisCombo_, kAxes);
     connect(axisCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         wave_.setAxis(static_cast<MindWaveAxis>(axisCombo_->itemData(index).toInt()));
+        updateVisibleFields();  // the axis sets the sliders' units.
         emitChanged();
     });
-    topForm->addRow(tr("Axis:"), axisCombo_);
-    axisLabel_ = qobject_cast<QLabel*>(topForm->labelForField(axisCombo_));
+    axisForm->addRow(tr("Axis:"), axisCombo_);
 
     periodSpinBox_ = makeWideSpinBox(this, QStringLiteral("periodSpinBox"), 0.000001, 1'000'000.0);
+    periodSpinBox_->setLogarithmicSlider(true);  // its slider range follows the axis - see updateVisibleFields().
     periodSpinBox_->setToolTip(
         tr("Cycle length - seconds (Time axis) or bins (Frequency axis). Used by Periodic, Envelope's Decaying "
            "Oscillation, Stepped/Noise's Stepped, Spatial's Ripples/Checkerboard, and Fractal."));
@@ -171,15 +209,16 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
         wave_.setPeriod(value);
         emitChanged();
     });
-    topForm->addRow(tr("Period:"), periodSpinBox_);
+    axisForm->addRow(tr("Period:"), periodSpinBox_);
 
-    phaseSpinBox_ = makeWideSpinBox(this, QStringLiteral("phaseSpinBox"));
-    phaseSpinBox_->setToolTip(tr("Phase offset, in radians."));
+    // One cycle is the whole range: any phase beyond 2 pi repeats one within it.
+    phaseSpinBox_ = makeWideSpinBox(this, QStringLiteral("phaseSpinBox"), 0.0, 2.0 * std::numbers::pi);
+    phaseSpinBox_->setToolTip(tr("Phase offset, in radians - one cycle is 0 to 6.283 (2 pi)."));
     connect(phaseSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setPhaseRadians(value);
         emitChanged();
     });
-    topForm->addRow(tr("Phase (radians):"), phaseSpinBox_);
+    advancedForm->addRow(tr("Phase (radians):"), phaseSpinBox_);
 
     reversedCheckBox_ = new QCheckBox(tr("Reversed"), this);
     reversedCheckBox_->setObjectName(QStringLiteral("reversedCheckBox"));
@@ -189,7 +228,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
         wave_.setReversed(checked);
         emitChanged();
     });
-    topForm->addRow(QString(), reversedCheckBox_);
+    advancedForm->addRow(QString(), reversedCheckBox_);
 
     invertedCheckBox_ = new QCheckBox(tr("Inverted"), this);
     invertedCheckBox_->setObjectName(QStringLiteral("invertedCheckBox"));
@@ -198,7 +237,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
         wave_.setInverted(checked);
         emitChanged();
     });
-    topForm->addRow(QString(), invertedCheckBox_);
+    advancedForm->addRow(QString(), invertedCheckBox_);
 
     seedSpinBox_ = new IntegerField(this);
     seedSpinBox_->setObjectName(QStringLiteral("seedSpinBox"));
@@ -212,15 +251,17 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
         wave_.setSeed(static_cast<std::uint32_t>(value));
         emitChanged();
     });
-    topForm->addRow(tr("Seed:"), seedSpinBox_);
+    randomnessForm->addRow(tr("Seed:"), seedSpinBox_);
 
     noiseScaleSpinBox_ = makeWideSpinBox(this, QStringLiteral("noiseScaleSpinBox"), 0.000001, 1'000'000.0);
+    noiseScaleSpinBox_->setLogarithmicSlider(true);
+    noiseScaleSpinBox_->setSliderRange(0.01, 100.0);
     noiseScaleSpinBox_->setToolTip(tr("Lattice/cell size for every noise-based shape."));
     connect(noiseScaleSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setNoiseScale(value);
         emitChanged();
     });
-    topForm->addRow(tr("Noise Scale:"), noiseScaleSpinBox_);
+    randomnessForm->addRow(tr("Noise Scale:"), noiseScaleSpinBox_);
 
     noiseOctavesSpinBox_ = new IntegerField(this);
     noiseOctavesSpinBox_->setObjectName(QStringLiteral("noiseOctavesSpinBox"));
@@ -230,7 +271,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
         wave_.setNoiseOctaves(value);
         emitChanged();
     });
-    topForm->addRow(tr("Noise Octaves:"), noiseOctavesSpinBox_);
+    advancedForm->addRow(tr("Noise Octaves:"), noiseOctavesSpinBox_);
 
     noisePersistenceSpinBox_ = new NumericField(this);
     noisePersistenceSpinBox_->setObjectName(QStringLiteral("noisePersistenceSpinBox"));
@@ -242,7 +283,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
         wave_.setNoisePersistence(value);
         emitChanged();
     });
-    topForm->addRow(tr("Noise Persistence:"), noisePersistenceSpinBox_);
+    advancedForm->addRow(tr("Noise Persistence:"), noisePersistenceSpinBox_);
 
     root->addLayout(topForm);
 
@@ -254,6 +295,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     populateCombo(periodicWaveformCombo_, kPeriodicWaveforms);
     connect(periodicWaveformCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         wave_.setPeriodicWaveform(static_cast<PeriodicWaveform>(periodicWaveformCombo_->itemData(index).toInt()));
+        updateVisibleFields();
         emitChanged();
     });
     periodicForm->addRow(tr("Waveform:"), periodicWaveformCombo_);
@@ -262,7 +304,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     dutyCycleSpinBox_->setRange(0.0, 1.0);
     dutyCycleSpinBox_->setSingleStep(0.05);
     dutyCycleSpinBox_->setDecimals(2);
-    dutyCycleSpinBox_->setToolTip(tr("Pulse only - the default 0.5 makes Pulse identical to Square."));
+    dutyCycleSpinBox_->setToolTip(tr("The share of each cycle the pulse is high - 0.5 makes it a square wave."));
     connect(dutyCycleSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setDutyCycle(value);
         emitChanged();
@@ -278,6 +320,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     populateCombo(envelopeShapeCombo_, kEnvelopeShapes);
     connect(envelopeShapeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         wave_.setEnvelopeShape(static_cast<EnvelopeShape>(envelopeShapeCombo_->itemData(index).toInt()));
+        updateVisibleFields();
         emitChanged();
     });
     envelopeForm->addRow(tr("Shape:"), envelopeShapeCombo_);
@@ -288,14 +331,18 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     });
     envelopeForm->addRow(tr("Center:"), envelopeCenterSpinBox_);
     envelopeSteepnessSpinBox_ = makeWideSpinBox(envelopeGroup_, QStringLiteral("envelopeSteepnessSpinBox"));
-    envelopeSteepnessSpinBox_->setToolTip(tr("S-Curve only."));
+    envelopeSteepnessSpinBox_->setToolTip(tr("How sharp the S-Curve, Peak or Ramp is."));
+    envelopeSteepnessSpinBox_->setLogarithmicSlider(true);
+    envelopeSteepnessSpinBox_->setSliderRange(0.01, 100.0);
     connect(envelopeSteepnessSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setEnvelopeSteepness(value);
         emitChanged();
     });
     envelopeForm->addRow(tr("Steepness:"), envelopeSteepnessSpinBox_);
     decayRateSpinBox_ = makeWideSpinBox(envelopeGroup_, QStringLiteral("decayRateSpinBox"));
-    decayRateSpinBox_->setToolTip(tr("Exponential Decay and Decaying Oscillation only."));
+    decayRateSpinBox_->setToolTip(tr("How fast the decay falls off."));
+    decayRateSpinBox_->setLogarithmicSlider(true);
+    decayRateSpinBox_->setSliderRange(0.01, 100.0);
     connect(decayRateSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setDecayRate(value);
         emitChanged();
@@ -312,6 +359,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     connect(noiseColorCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         wave_.setNoiseColor(static_cast<sound_mind::core::NoiseColor>(noiseColorCombo_->itemData(index).toInt()));
         noiseSlopeSpinBox_->setEnabled(wave_.noiseColor() == sound_mind::core::NoiseColor::Custom);
+        updateVisibleFields();
         emitChanged();
     });
     noiseForm->addRow(tr("Color:"), noiseColorCombo_);
@@ -355,13 +403,14 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     populateCombo(steppedNoiseShapeCombo_, kSteppedNoiseShapes);
     connect(steppedNoiseShapeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         wave_.setSteppedNoiseShape(static_cast<SteppedNoiseShape>(steppedNoiseShapeCombo_->itemData(index).toInt()));
+        updateVisibleFields();
         emitChanged();
     });
     steppedNoiseForm->addRow(tr("Shape:"), steppedNoiseShapeCombo_);
     stepCountSpinBox_ = new IntegerField(steppedNoiseGroup_);
     stepCountSpinBox_->setObjectName(QStringLiteral("stepCountSpinBox"));
     stepCountSpinBox_->setRange(2, 64);
-    stepCountSpinBox_->setToolTip(tr("Stepped only."));
+    stepCountSpinBox_->setToolTip(tr("How many levels each cycle steps through."));
     connect(stepCountSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         wave_.setStepCount(value);
         emitChanged();
@@ -377,25 +426,29 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     populateCombo(spatialPatternCombo_, kSpatialPatterns);
     connect(spatialPatternCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         wave_.setSpatialPattern(static_cast<SpatialPattern>(spatialPatternCombo_->itemData(index).toInt()));
+        updateVisibleFields();
         emitChanged();
     });
     spatialForm->addRow(tr("Pattern:"), spatialPatternCombo_);
     spatialCenterXSpinBox_ = makeWideSpinBox(spatialGroup_, QStringLiteral("spatialCenterXSpinBox"));
-    spatialCenterXSpinBox_->setToolTip(tr("Ripples only - time-axis component, in seconds."));
+    spatialCenterXSpinBox_->setToolTip(tr("Where the ripples start on the time axis, in seconds."));
+    spatialCenterXSpinBox_->setSliderRange(0.0, kTimeSliderMaximumSeconds);
     connect(spatialCenterXSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setSpatialCenterX(value);
         emitChanged();
     });
     spatialForm->addRow(tr("Center X:"), spatialCenterXSpinBox_);
     spatialCenterYSpinBox_ = makeWideSpinBox(spatialGroup_, QStringLiteral("spatialCenterYSpinBox"));
-    spatialCenterYSpinBox_->setToolTip(tr("Ripples only - frequency-axis component, in bins."));
+    spatialCenterYSpinBox_->setToolTip(tr("Where the ripples start on the frequency axis, in bins."));
+    spatialCenterYSpinBox_->setSliderRange(0.0, kFrequencySliderMaximumBins);
     connect(spatialCenterYSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setSpatialCenterY(value);
         emitChanged();
     });
     spatialForm->addRow(tr("Center Y:"), spatialCenterYSpinBox_);
     domainWarpStrengthSpinBox_ = makeWideSpinBox(spatialGroup_, QStringLiteral("domainWarpStrengthSpinBox"));
-    domainWarpStrengthSpinBox_->setToolTip(tr("Domain-Warped Noise only."));
+    domainWarpStrengthSpinBox_->setToolTip(tr("How far the noise bends its own coordinates."));
+    domainWarpStrengthSpinBox_->setSliderRange(0.0, 50.0);
     connect(domainWarpStrengthSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setDomainWarpStrength(value);
         emitChanged();
@@ -566,6 +619,10 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
 
     root->addWidget(resonanceGroup_);
 
+    root->addWidget(axisGroup_);
+    root->addWidget(randomnessGroup_);
+    root->addWidget(advancedToggle_);
+    root->addWidget(advancedContainer_);
     root->addStretch();
 
     // Seeded from wave_'s own default stepGridValues() (present regardless
@@ -602,7 +659,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
         continuousCharacterDial_->setValue(wave_.continuousCharacter());
     }
 
-    updateVisibleGroup();
+    updateVisibleFields();
     updateContinuousPreview();
 }
 
@@ -611,12 +668,86 @@ void MindWaveEditor::emitChanged() {
     emit mindWaveChanged(wave_);
 }
 
-void MindWaveEditor::updateVisibleGroup() {
-    const GeneratorType type = wave_.type();
-    axisCombo_->setVisible(type != GeneratorType::Spatial);
-    if (axisLabel_ != nullptr) {
-        axisLabel_->setVisible(type != GeneratorType::Spatial);
+MindWaveEditor::FieldRelevance MindWaveEditor::relevantFields(const sound_mind::core::MindWave& wave) {
+    using sound_mind::core::NoiseColor;
+    FieldRelevance r;
+    const GeneratorType type = wave.type();
+    r.axis = type != GeneratorType::Spatial;
+    r.reversed = type != GeneratorType::Spatial;  // Spatial reads both axes directly.
+    switch (type) {
+        case GeneratorType::Periodic:
+            r.period = r.phase = true;
+            r.dutyCycle = wave.periodicWaveform() == PeriodicWaveform::Pulse;
+            break;
+        case GeneratorType::Envelope: {
+            const EnvelopeShape shape = wave.envelopeShape();
+            const bool decays = shape == EnvelopeShape::ExponentialDecay || shape == EnvelopeShape::DecayingOscillation;
+            r.decayRate = decays;
+            r.envelopeSteepness = !decays;
+            r.period = r.phase = shape == EnvelopeShape::DecayingOscillation;
+            break;
+        }
+        case GeneratorType::SteppedNoise:
+            if (wave.steppedNoiseShape() == SteppedNoiseShape::Stepped) {
+                r.period = r.phase = r.stepCount = true;
+            } else {
+                r.seed = r.noiseScale = true;
+                r.noiseDetail = wave.steppedNoiseShape() == SteppedNoiseShape::FractalNoise;
+            }
+            break;
+        case GeneratorType::Spatial:
+            switch (wave.spatialPattern()) {
+                case SpatialPattern::Ripples:
+                    r.period = r.phase = r.spatialCenter = true;
+                    break;
+                case SpatialPattern::Checkerboard:
+                    r.period = true;
+                    break;
+                case SpatialPattern::Cellular:
+                    r.seed = r.noiseScale = true;
+                    break;
+                case SpatialPattern::DomainWarpedNoise:
+                    r.seed = r.noiseScale = r.noiseDetail = r.domainWarpStrength = true;
+                    break;
+            }
+            break;
+        case GeneratorType::Fractal:
+            r.period = r.seed = true;
+            break;
+        case GeneratorType::Continuous:
+            r.period = r.phase = r.seed = r.noiseScale = r.noiseDetail = true;
+            break;
+        case GeneratorType::Noise:
+            r.seed = true;
+            r.noiseSlope = wave.noiseColor() == NoiseColor::Custom;
+            break;
+        case GeneratorType::Drawn:
+        case GeneratorType::StepGrid:
+        case GeneratorType::Resonance:
+            r.period = r.phase = true;
+            break;
     }
+    return r;
+}
+
+namespace {
+
+/// @brief Shows or hides `field`'s whole row (its label too) in the form it
+///        sits in.
+void setRowShown(QWidget* field, bool shown) {
+    auto* form = field->parentWidget() != nullptr ? qobject_cast<QFormLayout*>(field->parentWidget()->layout())
+                                                  : nullptr;
+    if (form != nullptr && form->indexOf(field) >= 0) {
+        form->setRowVisible(field, shown);
+    } else {
+        field->setVisible(shown);
+    }
+}
+
+}  // namespace
+
+void MindWaveEditor::updateVisibleFields() {
+    const GeneratorType type = wave_.type();
     periodicGroup_->setVisible(type == GeneratorType::Periodic);
     envelopeGroup_->setVisible(type == GeneratorType::Envelope);
     steppedNoiseGroup_->setVisible(type == GeneratorType::SteppedNoise);
@@ -627,6 +758,33 @@ void MindWaveEditor::updateVisibleGroup() {
     stepGridGroup_->setVisible(type == GeneratorType::StepGrid);
     continuousGroup_->setVisible(type == GeneratorType::Continuous);
     resonanceGroup_->setVisible(type == GeneratorType::Resonance);
+
+    const FieldRelevance r = relevantFields(wave_);
+    setRowShown(axisCombo_, r.axis);
+    setRowShown(periodSpinBox_, r.period);
+    axisGroup_->setVisible(r.axis || r.period);
+    setRowShown(seedSpinBox_, r.seed);
+    setRowShown(noiseScaleSpinBox_, r.noiseScale);
+    randomnessGroup_->setVisible(r.seed || r.noiseScale);
+    setRowShown(phaseSpinBox_, r.phase);
+    setRowShown(reversedCheckBox_, r.reversed);
+    setRowShown(noiseOctavesSpinBox_, r.noiseDetail);
+    setRowShown(noisePersistenceSpinBox_, r.noiseDetail);
+    setRowShown(dutyCycleSpinBox_, r.dutyCycle);
+    setRowShown(envelopeSteepnessSpinBox_, r.envelopeSteepness);
+    setRowShown(decayRateSpinBox_, r.decayRate);
+    setRowShown(stepCountSpinBox_, r.stepCount);
+    setRowShown(spatialCenterXSpinBox_, r.spatialCenter);
+    setRowShown(spatialCenterYSpinBox_, r.spatialCenter);
+    setRowShown(domainWarpStrengthSpinBox_, r.domainWarpStrength);
+    setRowShown(noiseSlopeSpinBox_, r.noiseSlope);
+
+    // The sliders cover a useful range in the axis' own units; typing can
+    // still go beyond it.
+    const bool frequencyAxis = wave_.axis() == MindWaveAxis::Frequency && type != GeneratorType::Spatial;
+    periodSpinBox_->setSliderRange(frequencyAxis ? 1.0 : 0.01,
+                                   frequencyAxis ? kFrequencySliderMaximumBins : kTimeSliderMaximumSeconds);
+    envelopeCenterSpinBox_->setSliderRange(0.0, frequencyAxis ? kFrequencySliderMaximumBins : kTimeSliderMaximumSeconds);
 }
 
 void MindWaveEditor::updateContinuousPreview() {
@@ -743,7 +901,7 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
         stepGridValueSpinBoxes_[i]->setValue(wave_.stepGridValues()[i]);
     }
 
-    updateVisibleGroup();
+    updateVisibleFields();
     updateContinuousPreview();
 }
 

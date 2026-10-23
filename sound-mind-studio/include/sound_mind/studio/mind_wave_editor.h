@@ -13,6 +13,7 @@ class QCheckBox;
 class QComboBox;
 class QGroupBox;
 class QLabel;
+class QToolButton;
 class QVBoxLayout;
 
 namespace sound_mind::studio {
@@ -79,6 +80,36 @@ class MindWaveEditor : public QWidget {
     Q_OBJECT
 
 public:
+    /**
+     * @brief Which settings a MindWave's type and shape actually read
+     *        (`v0.1.51.1`) - what the editor shows; everything else is
+     *        hidden. Inverted applies to every type, so it isn't listed.
+     */
+    struct FieldRelevance {
+        bool axis = false;                ///< Axis - every type but Spatial (which reads both).
+        bool period = false;              ///< Period.
+        bool phase = false;               ///< Phase.
+        bool reversed = false;            ///< Reversed - every type but Spatial.
+        bool seed = false;                ///< Seed - the random shapes.
+        bool noiseScale = false;          ///< Noise Scale.
+        bool noiseDetail = false;         ///< Noise Octaves and Persistence.
+        bool dutyCycle = false;           ///< Periodic's Duty Cycle - Pulse.
+        bool envelopeSteepness = false;   ///< Envelope Steepness - S-Curve, Peak, Ramp.
+        bool decayRate = false;           ///< Envelope Decay Rate - the two decays.
+        bool stepCount = false;           ///< Stepped's Step Count.
+        bool spatialCenter = false;       ///< Ripples' Center X/Y.
+        bool domainWarpStrength = false;  ///< Domain-Warped Noise's strength.
+        bool noiseSlope = false;          ///< Noise's Slope - Custom colour.
+    };
+
+    /**
+     * @brief The settings `wave`'s type and shape use - mirrors
+     *        `MindWave::evaluate()`, which reads only these.
+     * @param wave The MindWave.
+     * @return What to show; see FieldRelevance.
+     */
+    [[nodiscard]] static FieldRelevance relevantFields(const sound_mind::core::MindWave& wave);
+
     /// @brief Builds the editor with a fresh, default `MindWave` - see
     ///        `MindWave`'s own docs for what that default is.
     /// @param parent The owning widget, per Qt's normal parent-ownership
@@ -141,10 +172,12 @@ private:
     /// @brief Emits mindWaveChanged() with the current wave_.
     void emitChanged();
 
-    /// @brief Shows the one per-type group matching `wave_.type()` and
-    ///        hides every other one; hides the axis combo entirely for
-    ///        `GeneratorType::Spatial` - see this class's own docs.
-    void updateVisibleGroup();
+    /// @brief Shows the one per-type group matching `wave_.type()`, and only
+    ///        the rows relevantFields() says the current type and shape
+    ///        use; hides the Axis & Timing and Randomness groups when none
+    ///        of their rows apply; sets the axis-dependent slider ranges.
+    ///        Called whenever the type, a shape or the axis changes.
+    void updateVisibleFields();
 
     /// @brief Rebuilds `stepGridValueSpinBoxes_` to match `count` rows -
     ///        called whenever `stepGridCountSpinBox_` changes, or a loaded
@@ -170,7 +203,7 @@ private:
      *        `GeneratorType::Continuous` (the preview widget is hidden
      *        along with the rest of `continuousGroup_` then anyway, so
      *        leaving its last-drawn samples stale is harmless - see
-     *        `updateVisibleGroup()`'s own docs).
+     *        `updateVisibleFields()`'s own docs).
      *
      * Called from the tail of emitChanged() - covering every one of this
      * editor's own controls in one place, not just Shape/Skew/Character,
@@ -193,7 +226,15 @@ private:
     sound_mind::core::MindWave wave_;
 
     QComboBox* generatorTypeCombo_ = nullptr;
-    QLabel* axisLabel_ = nullptr;
+    /// @name The settings several types share (`v0.1.51.1`)
+    /// @{
+    QGroupBox* axisGroup_ = nullptr;         ///< Axis and Period.
+    QGroupBox* randomnessGroup_ = nullptr;   ///< Seed and Noise Scale.
+    QToolButton* advancedToggle_ = nullptr;  ///< Opens advancedContainer_.
+    /// @brief Phase, Reversed, Inverted, Noise Octaves and Persistence -
+    ///        hidden until advancedToggle_ is checked.
+    QWidget* advancedContainer_ = nullptr;
+    /// @}
     QComboBox* axisCombo_ = nullptr;
     NumericField* periodSpinBox_ = nullptr;
     NumericField* phaseSpinBox_ = nullptr;

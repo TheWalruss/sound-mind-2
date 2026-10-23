@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include <QCheckBox>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -208,38 +209,48 @@ MindWavesPanel::MindWavesPanel(QWidget* parent) : QDockWidget(tr("MindWaves"), p
     // One field distorts the coordinates another is sampled at - see
     // MindWave::hasWarpSource()'s own docs. A single 0-or-1 slot, so a
     // checkbox enables a single nested editor.
-    auto* warpHeaderRow = new QHBoxLayout();
-    warpEnabledCheckBox_ = new QCheckBox(tr("Enable Warp"));
+    // Warp, in its own group (v0.1.51.1): its strength and source MindWave
+    // only show while it's on - see setWarpDetailsShown().
+    auto* warpGroup = new QGroupBox(tr("Warp"));
+    warpGroup->setObjectName(QStringLiteral("warpGroup"));
+    auto* warpLayout = new QVBoxLayout(warpGroup);
+    warpEnabledCheckBox_ = new QCheckBox(tr("Enable Warp"), warpGroup);
     warpEnabledCheckBox_->setObjectName(QStringLiteral("warpEnabledCheckBox"));
+    warpEnabledCheckBox_->setToolTip(tr("Bend this MindWave's coordinates by a second MindWave"));
     connect(warpEnabledCheckBox_, &QCheckBox::toggled, this, [this](bool checked) {
         currentWarpEnabled_ = checked;
-        warpSourceEditor_->setEnabled(checked);
-        warpStrengthSpinBox_->setEnabled(checked);
+        setWarpDetailsShown(checked);
         emitCurrentMindWaveChanged();
     });
-    warpHeaderRow->addWidget(warpEnabledCheckBox_);
+    warpLayout->addWidget(warpEnabledCheckBox_, 0, Qt::AlignLeft);  // clickable only on its text and box.
 
-    warpHeaderRow->addWidget(new QLabel(tr("Strength:")));
+    warpDetails_ = new QWidget();
+    warpDetails_->setObjectName(QStringLiteral("warpDetailsContainer"));
+    auto* warpDetailsLayout = new QVBoxLayout(warpDetails_);
+    warpDetailsLayout->setContentsMargins(0, 0, 0, 0);
+    auto* warpStrengthRow = new QHBoxLayout();
+    warpStrengthRow->addWidget(new QLabel(tr("Strength:")));
     warpStrengthSpinBox_ = new NumericField();
     warpStrengthSpinBox_->setObjectName(QStringLiteral("warpStrengthSpinBox"));
     warpStrengthSpinBox_->setRange(-10.0, 10.0);
     warpStrengthSpinBox_->setSingleStep(0.1);
-    warpStrengthSpinBox_->setEnabled(false);
     connect(warpStrengthSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         currentWarpStrength_ = value;
         emitCurrentMindWaveChanged();
     });
-    warpHeaderRow->addWidget(warpStrengthSpinBox_, 1);
-    root->addLayout(warpHeaderRow);
-
+    warpStrengthRow->addWidget(warpStrengthSpinBox_, 1);
+    warpDetailsLayout->addLayout(warpStrengthRow);
+    warpDetailsLayout->addWidget(new QLabel(tr("Warped by:")));
     warpSourceEditor_ = new MindWaveEditor();
     warpSourceEditor_->setObjectName(QStringLiteral("warpSourceEditor"));
-    warpSourceEditor_->setEnabled(false);
     connect(warpSourceEditor_, &MindWaveEditor::mindWaveChanged, this, [this](const MindWave& wave) {
         currentWarpSource_ = wave;
         emitCurrentMindWaveChanged();
     });
-    root->addWidget(warpSourceEditor_, 1);
+    warpDetailsLayout->addWidget(warpSourceEditor_, 1);
+    warpLayout->addWidget(warpDetails_, 1);
+    setWarpDetailsShown(false);
+    root->addWidget(warpGroup, 1);
 
     connect(list_, &QListWidget::currentRowChanged, this, [this](int row) {
         if (row < 0 || row >= static_cast<int>(currentRows_.size())) {
@@ -281,9 +292,14 @@ void MindWavesPanel::loadWarpState(const MindWave& wave) {
     warpEnabledCheckBox_->setChecked(currentWarpEnabled_);
     const QSignalBlocker strengthBlocker(warpStrengthSpinBox_);
     warpStrengthSpinBox_->setValue(currentWarpStrength_);
-    warpStrengthSpinBox_->setEnabled(currentWarpEnabled_);
     warpSourceEditor_->setMindWave(currentWarpSource_);
-    warpSourceEditor_->setEnabled(currentWarpEnabled_);
+    setWarpDetailsShown(currentWarpEnabled_);
+}
+
+void MindWavesPanel::setWarpDetailsShown(bool shown) {
+    warpDetails_->setVisible(shown);
+    warpSourceEditor_->setEnabled(shown);
+    warpStrengthSpinBox_->setEnabled(shown);
 }
 
 void MindWavesPanel::emitCurrentMindWaveChanged() {
@@ -313,8 +329,7 @@ void MindWavesPanel::setMindWaves(const std::vector<RowData>& entries) {
             currentWarpEnabled_ = false;
             currentWarpSource_ = MindWave{};
             warpEnabledCheckBox_->setChecked(false);
-            warpSourceEditor_->setEnabled(false);
-            warpStrengthSpinBox_->setEnabled(false);
+            setWarpDetailsShown(false);
             emit selectionChanged(std::nullopt);
         }
     }
@@ -377,8 +392,7 @@ void MindWavesPanel::clearSelection() {
     currentWarpSource_ = MindWave{};
     mindWaveEditor_->setEnabled(false);
     warpEnabledCheckBox_->setChecked(false);
-    warpSourceEditor_->setEnabled(false);
-    warpStrengthSpinBox_->setEnabled(false);
+    setWarpDetailsShown(false);
     list_->clearSelection();
     list_->setCurrentRow(-1);
     emit selectionChanged(std::nullopt);

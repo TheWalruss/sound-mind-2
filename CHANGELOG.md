@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.51.1] - 2026-10-23
+
+Roadmap slot `v0.Y.83.3`.
+
+### Changed
+
+- **The MindWaves panel shows only what applies.** The editor shows just the settings the chosen generator type and shape actually use. Duty Cycle appears only for Pulse, Seed only for the random shapes, Decay Rate only for the decays, and so on. Shared settings are grouped under **Axis & Timing** (Axis, Period) and **Randomness** (Seed, Noise Scale). The rarely-needed ones (Phase, Noise Octaves, Noise Persistence, Reversed, Inverted) sit behind an **Advanced** toggle, closed by default.
+- **Warp has its own group,** and its Strength and source MindWave only appear once **Enable Warp** is checked.
+- **Slider ranges are useful now.**
+  - **Phase** is limited to one cycle (0 to 2π radians).
+  - **Period's** slider runs from 0.01 to 60 seconds on the Time axis, or 1 to 512 bins on the Frequency axis, on a logarithmic scale; longer periods can still be typed in.
+  - Noise Scale, Steepness, Decay Rate, the Ripples centre and Domain Warp Strength have sensible slider ranges too, with typing still unlimited.
+
 ## [0.1.50.1] - 2026-10-23
 
 Roadmap slot `v0.Y.83.2`.

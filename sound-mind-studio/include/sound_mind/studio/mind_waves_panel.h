@@ -208,6 +208,15 @@ private:
     ///        mindWaveChanged() with it - a no-op if nothing is selected.
     void emitCurrentMindWaveChanged();
 
+    /// @brief Shows (and enables) the warp's strength and source editor, or
+    ///        hides them while Warp is off (`v0.1.51.1`).
+    /// @param shown Whether Warp is on.
+    void setWarpDetailsShown(bool shown);
+
+    /// @brief Holds the warp's strength and source editor - see
+    ///        setWarpDetailsShown().
+    QWidget* warpDetails_ = nullptr;
+
     /// @brief Loads `wave`'s own warp source/strength into
     ///        currentWarpEnabled_/currentWarpSource_/currentWarpStrength_/
     ///        the checkbox/spin box/warpSourceEditor_ - the shared setup a

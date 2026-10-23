@@ -1,5 +1,7 @@
 #include "test_mind_wave_editor.h"
 
+#include <cmath>
+#include <numbers>
 #include <optional>
 
 #include <QCheckBox>
@@ -7,6 +9,7 @@
 #include <QGroupBox>
 #include <QLabel>
 #include <QSignalSpy>
+#include <QToolButton>
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/path.h"
@@ -547,4 +550,154 @@ void MindWaveEditorTest::setMindWaveLoadsNoiseSettings() {
     QVERIFY(editor.findChild<NumericField*>(QStringLiteral("noiseSlopeSpinBox"))->isEnabled());
     QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("noiseCellHeightSpinBox"))->value(), 8.0);
     QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("noiseGroup"))->isHidden());
+}
+
+namespace {
+
+MindWave waveOf(GeneratorType type) {
+    MindWave wave;
+    wave.setType(type);
+    return wave;
+}
+
+/// Whether `editor`'s field `name` is shown (not hidden by its own row).
+template <typename Widget>
+bool shown(const MindWaveEditor& editor, const char* name) {
+    auto* widget = editor.findChild<Widget*>(QString::fromLatin1(name));
+    return widget != nullptr && !widget->isHidden();
+}
+
+}  // namespace
+
+// v0.1.51.1 - which settings each type and shape actually reads.
+void MindWaveEditorTest::relevantFieldsFollowTheTypeAndShape() {
+    using Relevance = MindWaveEditor::FieldRelevance;
+    MindWave wave = waveOf(GeneratorType::Periodic);
+    wave.setPeriodicWaveform(PeriodicWaveform::Sine);
+    Relevance r = MindWaveEditor::relevantFields(wave);
+    QVERIFY(r.axis && r.period && r.phase && r.reversed);
+    QVERIFY(!r.seed && !r.noiseScale && !r.noiseDetail && !r.dutyCycle);
+    wave.setPeriodicWaveform(PeriodicWaveform::Pulse);
+    QVERIFY(MindWaveEditor::relevantFields(wave).dutyCycle);
+
+    wave = waveOf(GeneratorType::Envelope);
+    wave.setEnvelopeShape(EnvelopeShape::ExponentialDecay);
+    r = MindWaveEditor::relevantFields(wave);
+    QVERIFY(r.decayRate && !r.envelopeSteepness && !r.period && !r.phase);
+    wave.setEnvelopeShape(EnvelopeShape::DecayingOscillation);
+    r = MindWaveEditor::relevantFields(wave);
+    QVERIFY(r.decayRate && r.period && r.phase && !r.envelopeSteepness);
+    wave.setEnvelopeShape(EnvelopeShape::Peak);
+    r = MindWaveEditor::relevantFields(wave);
+    QVERIFY(r.envelopeSteepness && !r.decayRate);
+
+    wave = waveOf(GeneratorType::SteppedNoise);
+    wave.setSteppedNoiseShape(SteppedNoiseShape::Stepped);
+    r = MindWaveEditor::relevantFields(wave);
+    QVERIFY(r.stepCount && r.period && r.phase && !r.seed);
+    wave.setSteppedNoiseShape(SteppedNoiseShape::GaussianNoise);
+    r = MindWaveEditor::relevantFields(wave);
+    QVERIFY(r.seed && r.noiseScale && !r.noiseDetail && !r.period && !r.stepCount);
+    wave.setSteppedNoiseShape(SteppedNoiseShape::FractalNoise);
+    QVERIFY(MindWaveEditor::relevantFields(wave).noiseDetail);
+
+    wave = waveOf(GeneratorType::Spatial);
+    wave.setSpatialPattern(SpatialPattern::Ripples);
+    r = MindWaveEditor::relevantFields(wave);
+    QVERIFY(r.period && r.phase && r.spatialCenter && !r.axis && !r.reversed && !r.seed);
+    wave.setSpatialPattern(SpatialPattern::Checkerboard);
+    r = MindWaveEditor::relevantFields(wave);
+    QVERIFY(r.period && !r.phase && !r.spatialCenter);
+    wave.setSpatialPattern(SpatialPattern::DomainWarpedNoise);
+    r = MindWaveEditor::relevantFields(wave);
+    QVERIFY(r.seed && r.noiseScale && r.noiseDetail && r.domainWarpStrength && !r.period);
+
+    r = MindWaveEditor::relevantFields(waveOf(GeneratorType::Fractal));
+    QVERIFY(r.period && r.seed && !r.phase && !r.noiseScale);
+    r = MindWaveEditor::relevantFields(waveOf(GeneratorType::Continuous));
+    QVERIFY(r.period && r.phase && r.seed && r.noiseScale && r.noiseDetail);
+    r = MindWaveEditor::relevantFields(waveOf(GeneratorType::StepGrid));
+    QVERIFY(r.period && r.phase && !r.seed);
+
+    wave = waveOf(GeneratorType::Noise);
+    r = MindWaveEditor::relevantFields(wave);
+    QVERIFY(r.seed && r.axis && !r.period && !r.phase && !r.noiseScale);
+    wave.setNoiseColor(sound_mind::core::NoiseColor::Custom);
+    QVERIFY(MindWaveEditor::relevantFields(wave).noiseSlope);
+}
+
+void MindWaveEditorTest::irrelevantRowsAndEmptyGroupsAreHidden() {
+    MindWaveEditor editor;
+    MindWave sine = waveOf(GeneratorType::Periodic);
+    sine.setPeriodicWaveform(PeriodicWaveform::Sine);
+    editor.setMindWave(sine);
+    QVERIFY(shown<NumericField>(editor, "periodSpinBox"));
+    QVERIFY(!shown<NumericField>(editor, "dutyCycleSpinBox"));
+    QVERIFY(!shown<IntegerField>(editor, "seedSpinBox"));
+    QVERIFY(!shown<NumericField>(editor, "noiseScaleSpinBox"));
+    QVERIFY(editor.findChild<QGroupBox*>(QStringLiteral("randomnessGroup"))->isHidden());  // nothing random in it.
+
+    const MindWave noise = waveOf(GeneratorType::Noise);
+    editor.setMindWave(noise);
+    QVERIFY(!shown<NumericField>(editor, "periodSpinBox"));
+    QVERIFY(shown<IntegerField>(editor, "seedSpinBox"));
+    QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("randomnessGroup"))->isHidden());
+    QVERIFY(!shown<NumericField>(editor, "noiseSlopeSpinBox"));  // a named colour, not Custom.
+}
+
+void MindWaveEditorTest::changingTheShapeUpdatesWhichRowsShow() {
+    MindWaveEditor editor;
+    auto* waveform = editor.findChild<QComboBox*>(QStringLiteral("periodicWaveformCombo"));
+    waveform->setCurrentIndex(waveform->findData(static_cast<int>(PeriodicWaveform::Pulse)));
+    QVERIFY(shown<NumericField>(editor, "dutyCycleSpinBox"));
+    waveform->setCurrentIndex(waveform->findData(static_cast<int>(PeriodicWaveform::Sine)));
+    QVERIFY(!shown<NumericField>(editor, "dutyCycleSpinBox"));
+
+    auto* type = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
+    type->setCurrentIndex(type->findData(static_cast<int>(GeneratorType::Envelope)));
+    auto* shape = editor.findChild<QComboBox*>(QStringLiteral("envelopeShapeCombo"));
+    shape->setCurrentIndex(shape->findData(static_cast<int>(EnvelopeShape::SCurve)));
+    QVERIFY(shown<NumericField>(editor, "envelopeSteepnessSpinBox"));
+    QVERIFY(!shown<NumericField>(editor, "decayRateSpinBox"));
+    QVERIFY(!shown<NumericField>(editor, "periodSpinBox"));
+}
+
+void MindWaveEditorTest::advancedSettingsAreCollapsedUntilToggled() {
+    MindWaveEditor editor;  // a Periodic Sine: Phase, Reversed and Inverted apply.
+    auto* toggle = editor.findChild<QToolButton*>(QStringLiteral("advancedToggleButton"));
+    auto* advanced = editor.findChild<QWidget*>(QStringLiteral("advancedContainer"));
+    QVERIFY(toggle != nullptr && advanced != nullptr);
+    QVERIFY(advanced->isHidden());
+    auto* phase = editor.findChild<NumericField*>(QStringLiteral("phaseSpinBox"));
+    QVERIFY(advanced->isAncestorOf(phase));
+    QVERIFY(advanced->isAncestorOf(editor.findChild<QCheckBox*>(QStringLiteral("invertedCheckBox"))));
+
+    toggle->click();
+    QVERIFY(!advanced->isHidden());
+    QVERIFY(!phase->isHidden());
+    toggle->click();
+    QVERIFY(advanced->isHidden());
+}
+
+// v0.1.51.1 - sliders span a useful range; Phase is one cycle.
+void MindWaveEditorTest::slidersCoverAUsefulRangeAndPhaseIsOneCycle() {
+    MindWaveEditor editor;
+    auto* phase = editor.findChild<NumericField*>(QStringLiteral("phaseSpinBox"));
+    QCOMPARE(phase->minimum(), 0.0);
+    QVERIFY(std::abs(phase->maximum() - 2.0 * std::numbers::pi) < 1e-9);
+    phase->setValue(10.0);
+    QVERIFY(phase->value() <= phase->maximum());  // beyond one cycle isn't accepted.
+
+    auto* period = editor.findChild<NumericField*>(QStringLiteral("periodSpinBox"));
+    QCOMPARE(period->sliderMaximum(), 60.0);  // Time axis: a minute.
+    QVERIFY(period->maximum() > 1000.0);      // longer can still be typed.
+    period->setValue(300.0);
+    QCOMPARE(period->value(), 300.0);
+
+    auto* axis = editor.findChild<QComboBox*>(QStringLiteral("axisCombo"));
+    axis->setCurrentIndex(axis->findData(static_cast<int>(MindWaveAxis::Frequency)));
+    QCOMPARE(period->sliderMaximum(), 512.0);  // Frequency axis: bins.
+
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("noiseScaleSpinBox"))->sliderMaximum(), 100.0);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("decayRateSpinBox"))->sliderMaximum(), 100.0);
 }

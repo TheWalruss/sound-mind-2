@@ -654,14 +654,24 @@ shape instead of staying fixed.
   create a different project, or when you close this panel.
 - Selecting a MindWave shows its own editor: a **Generator Type** (Periodic,
   Envelope, Stepped/Noise, Spatial, Fractal, Drawn, Step Grid, Continuous,
-  Resonance, or Noise) and that type's own plain numeric parameters - a period, a
-  phase, a seed, and so on. This is a bare-bones, functional editor, not a
-  polished one yet - there are no dials or drawing tools here, just fields
-  to type numbers into. Every MindWave also has **Reversed** (run the
-  wave backwards, e.g. a decay becomes a build-up) and **Inverted** (flip
-  the result, so loud becomes quiet) checkboxes. Periodic offers a
-  **Rectified Sine** shape, and Envelope offers **Peak (Bell)** and
-  **Ramp**.
+  Resonance, or Noise), then that type's own settings, then the shared
+  ones it uses:
+  - **Axis & Timing** - which axis the wave runs along, and its
+    **Period**.
+  - **Randomness** - the **Seed** and **Noise Scale**, for the random
+    shapes.
+  - **Advanced** (click to open) - **Phase** (one cycle is 0 to 6.283
+    radians), **Noise Octaves** and **Noise Persistence**, and **Reversed**
+    (run the wave backwards, e.g. a decay becomes a build-up) and
+    **Inverted** (flip the result, so loud becomes quiet).
+
+  Only the settings the chosen type and shape actually use are shown -
+  for example **Duty Cycle** appears only for a Pulse wave, and the
+  Randomness group only for random shapes. Each slider covers a useful
+  range (Period up to a minute on the Time axis, or 512 bins on the
+  Frequency axis); type into the field for anything beyond it. Periodic
+  offers a **Rectified Sine** shape, and Envelope offers **Peak (Bell)**
+  and **Ramp**.
 - **Drawn** shapes come from a curve you draw yourself, rather than a
   formula: draw an ordinary stroke anywhere on the canvas, switch to Pick
   and select it, then choose **Edit → Picked Path Tools → Use Picked Path as
@@ -707,13 +717,13 @@ MindWave Shape**
   and forth, and **Custom slope** lets you dial anywhere from -2 (red)
   through 0 (white) to +2 (purple). The **Seed** picks which random values
   you get.
-- **Warp** lets one MindWave distort the position another is sampled at,
-  giving a wavier, less mechanically regular result than either shape
-  alone - check **Enable Warp** to reveal a **Strength** number field and a
-  small nested editor for the warp source (its own generator type and
-  parameters, edited the same way as a top-level MindWave). Higher
-  strength values push the distortion further; unchecking Enable Warp
-  removes it entirely.
+- **Warp**, in its own group below, lets one MindWave distort the position
+  another is sampled at, giving a wavier, less mechanically regular result
+  than either shape alone - check **Enable Warp** to reveal a **Strength**
+  number field and a nested editor for the warp source ("Warped by"), with
+  its own generator type and settings, edited the same way as a top-level
+  MindWave. Higher strength values push the distortion further; unchecking
+  Enable Warp hides these again and removes the warp entirely.
 - Back in the **Layers** panel, each row's opacity-MindWave combo lets you
   bind that layer's opacity to any MindWave in the library, or set it back
   to **None** for a plain, fixed opacity. A binding multiplies the layer's

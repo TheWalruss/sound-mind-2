@@ -1201,7 +1201,8 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1`-`0.1.48.11` | #276-#286 |
 | `v0.Y.83.1` | New projects match the output device's sample rate (inserted 2026-10-23) | `0.1.49.1`-`0.1.49.3` | #287-#289 |
 | `v0.Y.83.2` | Remove the Chord Generator and Chord tool (inserted 2026-10-23) | `0.1.50.1` | #290 |
-| - | Beta readiness check | *(after `v0.Y.83.2`)* | |
+| `v0.Y.83.3` | MindWaves panel: only relevant settings, grouped; useful slider ranges (inserted 2026-10-23) | `0.1.51.1` | #291 |
+| - | Beta readiness check | *(after `v0.Y.83.3`)* | |
 | `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
 | `v0.Y.84.1` | Light and dark mode | - | |
 | `v0.Y.85.1` | Color mapping choice | - | |
@@ -1522,6 +1523,14 @@ Steps 4 and 5 of the 2026-10-22 code scan, so changes from beta feedback stay ch
 - ✅ Settled in `v0.1.50.1`, Decision #290 (user, 2026-10-23: "Remove the 'Chords' configuration and tool. It's not very useful").
   - Removed: the Chord Generator panel (Chord Builder, Custom Notation, Chord Overlay), the Chord tool, their code, tests and documentation.
   - Kept: sequences themselves, which MIDI import creates and Pick edits.
+
+#### `v0.Y.83.3` - MindWaves panel: only relevant settings, grouped (S) - inserted 2026-10-23
+
+- ✅ Settled in `v0.1.51.1`, Decision #291 (user, 2026-10-23: "hide fields that are not relevant for the currently selected MindWave type... hide all the Warp settings when Enable Warp is unchecked"; and "check the slider ranges... Phase... Period").
+  - Only the settings the chosen type and shape read are shown.
+  - The shared settings are grouped under Axis & Timing and Randomness, and the rarely-used ones are behind Advanced.
+  - Warp is its own group, with its details hidden until it's enabled.
+  - Phase is one cycle, and the wide fields' sliders span useful ranges.
 
 #### Then: Beta readiness check
 

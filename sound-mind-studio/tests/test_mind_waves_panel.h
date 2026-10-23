@@ -35,6 +35,7 @@ private slots:
     void changingWarpStrengthEmitsWhileWarpIsEnabled();
     void selectingARowWithNoWarpSourceLeavesTheWarpControlsDisabled();
     void selectingARowWithAnExistingWarpSourcePopulatesTheCheckboxStrengthAndEditor();
+    void warpSettingsAreHiddenUntilWarpIsEnabled();
 
     // Resonant Instruments Installment E (v0.Y.59.1).
     void setAvailableResonanceProfilesForwardsToAllThreeEmbeddedEditors();

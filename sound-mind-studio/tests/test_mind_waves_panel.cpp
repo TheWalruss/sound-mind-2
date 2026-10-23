@@ -428,3 +428,24 @@ void MindWavesPanelTest::setAvailableResonanceProfilesForwardsToAllThreeEmbedded
         QCOMPARE(combo->itemText(0), QStringLiteral("Profile One"));
     }
 }
+
+// v0.1.51.1 - the warp's strength and source only show while Warp is on.
+void MindWavesPanelTest::warpSettingsAreHiddenUntilWarpIsEnabled() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    auto* details = panel.findChild<QWidget*>(QStringLiteral("warpDetailsContainer"));
+    QVERIFY(details != nullptr);
+    QVERIFY(details->isHidden());
+    QVERIFY(details->isAncestorOf(panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))));
+    QVERIFY(details->isAncestorOf(panel.findChild<NumericField*>(QStringLiteral("warpStrengthSpinBox"))));
+
+    auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("warpEnabledCheckBox"));
+    QTest::mouseClick(checkBox, Qt::LeftButton);
+    QVERIFY(!details->isHidden());
+    QTest::mouseClick(checkBox, Qt::LeftButton);
+    QVERIFY(details->isHidden());
+
+    panel.clearSelection();
+    QVERIFY(details->isHidden());
+}
