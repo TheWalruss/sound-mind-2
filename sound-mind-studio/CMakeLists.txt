@@ -71,6 +71,7 @@ add_library(sound-mind-studio-lib
     src/macro_player.cpp
     src/macro_recorder.cpp
     src/main_window.cpp
+    src/main_window_menus.cpp
     src/midi_configuration_panel.cpp
     src/midi_import.cpp
     src/midi_import_dialog.cpp

@@ -3310,6 +3310,38 @@ private:
     /// device. `v0.0.42.1`.
     void pollTestInputLevel();
 
+    /// @name Menus and toolbars (`v0.1.48.9`, main_window_menus.cpp)
+    /// Called once each, in this order, from the constructor, after the
+    /// panels and controllers they connect to exist.
+    /// @{
+
+    /// @brief The four zoom actions the View menu makes and the View
+    ///        toolbar reuses.
+    struct ZoomActions {
+        QAction* zoomIn = nullptr;      ///< View → Zoom → Zoom In.
+        QAction* zoomOut = nullptr;     ///< View → Zoom → Zoom Out.
+        QAction* fit = nullptr;         ///< View → Zoom → Fit to Window.
+        QAction* actualSize = nullptr;  ///< View → Zoom → Actual Size.
+    };
+
+    /// @brief The menu bar's top-right Input/Output and Macro dropdowns.
+    void buildCornerMenus();
+    /// @brief The File menu.
+    void buildFileMenu();
+    /// @brief The Edit menu and its submenus.
+    void buildEditMenu();
+    /// @brief The View menu.
+    /// @return Its zoom actions, for buildToolBars().
+    ZoomActions buildViewMenu();
+    /// @brief The Resource Browser toggle, the Help menu and the Landing
+    ///        Page's documentation links.
+    void buildHelpMenu();
+    /// @brief The Transport toolbar (Tool and Configure dropdowns, panel
+    ///        toggles) and the View toolbar.
+    /// @param zoomActions From buildViewMenu().
+    void buildToolBars(const ZoomActions& zoomActions);
+    /// @}
+
     /// @brief The current project's Loop engine - LoopController's.
     /// @return `nullptr` before the first project, or while constructing.
     [[nodiscard]] sound_mind::core::LoopEngine* loopEngine() const noexcept;

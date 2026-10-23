@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.48.9] - 2026-10-23
+
+Roadmap slot `v0.Y.82.5` (modularity), installment I.
+
+### Changed
+
+- Internal: building the menus, the menu bar's Input/Output and Macro dropdowns and the toolbars moved out of the main window's setup into its own source file, in six named steps. Nothing changes in the menus or toolbars.
+
 ## [0.1.48.8] - 2026-10-23
 
 Roadmap slot `v0.Y.82.5` (modularity), installment H.

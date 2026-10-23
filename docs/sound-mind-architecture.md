@@ -3220,6 +3220,22 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - another project forgets a recording in progress.
 
       Previously, no Studio test exercised the window's Macro glue directly.
+284. **Modularity pass, installment I: menu and toolbar building.** Settled in `v0.1.48.9`.
+    - **What moved.** About 750 lines of the `MainWindow` constructor moved unchanged into `main_window_menus.cpp`. They now form six private member functions, which the constructor calls once each, in the same order as before:
+      - `buildCornerMenus()`: the top-right Input/Output and Macro dropdowns;
+      - `buildFileMenu()`;
+      - `buildEditMenu()`;
+      - `buildViewMenu()`, which returns its four zoom actions as `ZoomActions`;
+      - `buildHelpMenu()`: the Resource Browser toggle, Help, and the Landing Page's documentation links;
+      - `buildToolBars(ZoomActions)`: Transport with the Tool and Configure dropdowns, then View.
+    - **Why member functions, not a controller.** The menus are where the window's actions are made and stored. Those actions are read back throughout `MainWindow`, for enable states, tool-mode exclusivity and project resets. A separate menu-builder object would need most of the window's members, so it would add coupling rather than remove it. Splitting the code by menu still makes each menu easy to find and change on its own.
+    - **Construction order is unchanged.** The toolbars are still added Transport first, which tests rely on through `findChild<QToolBar*>()`.
+    - **Size.** `main_window.cpp` is now about 3,980 lines, down from about 5,860 before step 4. The constructor is about 900 lines.
+    - **Tests:** no new class; the code was moved, not changed. The 23 `MainWindowTest` menu, toolbar, button and shortcut cases pass unchanged, as does the full suite.
+    - **Step 4 of the 2026-10-22 scan is complete.**
+      - Moved out of `MainWindow` into tested controllers: export, import, playback preparation, analysis, recording, Loop Mode and Macros.
+      - Moved into their own file: the menus and toolbars.
+      - Still in `MainWindow`: project lifecycle, device configuration and the panels' cross-wiring.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**
