@@ -16,6 +16,7 @@
 #include <QTimer>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/resonant_instrument.h"
@@ -60,7 +61,14 @@ std::filesystem::path scratchPath(const std::string& nameWithExtension) {
 struct Fixture {
     Project project = Project::createNew(testSettings());
     ResourceBrowserPanel panel;
-    ResourceBrowserController controller{&panel};
+    /// How many preview engines the controller has made - none touch a real
+    /// device (v0.1.52.3).
+    int enginesMade = 0;
+    ResourceBrowserController controller{&panel, [this]() {
+                                             ++enginesMade;
+                                             return std::make_unique<sound_mind::core::PlaybackEngine>(
+                                                 sound_mind::core::AudioDeviceMode::None);
+                                         }};
 
     Fixture() {
         controller.setProject(&project);
@@ -745,4 +753,35 @@ void ResourceBrowserControllerTest::
     fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
 
     QVERIFY(!fixture.panel.findChild<QLabel*>(QStringLiteral("inspectorRasterLabel"))->isHidden());
+}
+
+// v0.1.52.3 - a preview opens an audio device only while it plays, and
+// through the window's factory (so tests and the chosen output device are
+// respected), instead of holding the default device open all the time.
+void ResourceBrowserControllerTest::aPreviewOpensTheAudioDeviceOnlyWhilePlaying() {
+    Fixture fixture;
+    QCOMPARE(fixture.enginesMade, 0);
+    QVERIFY(!fixture.controller.isPreviewOpen());
+
+    sound_mind::core::Clip clip;
+    clip.frameCount = 4;
+    clip.binCount = fixture.project.settings().binCount;
+    clip.leftMagnitudeDb.assign(clip.frameCount * clip.binCount, -20.0f);
+    clip.rightMagnitudeDb.assign(clip.frameCount * clip.binCount, -20.0f);
+    clip.sharedPhaseRadians.assign(clip.frameCount * clip.binCount, 0.0f);
+    fixture.project.addMindShot("My Shot", clip);
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::MindShot);
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+    QCOMPARE(fixture.enginesMade, 0);  // selecting isn't playing.
+
+    QTest::mouseClick(fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton")), Qt::LeftButton);
+    QCOMPARE(fixture.enginesMade, 1);
+    QVERIFY(fixture.controller.isPreviewOpen());
+
+    QTest::mouseClick(fixture.panel.findChild<QPushButton*>(QStringLiteral("stopButton")), Qt::LeftButton);
+    QVERIFY(!fixture.controller.isPreviewOpen());  // the device is let go.
+
+    QTest::mouseClick(fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton")), Qt::LeftButton);
+    QCOMPARE(fixture.enginesMade, 2);
 }

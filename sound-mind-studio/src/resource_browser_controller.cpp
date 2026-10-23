@@ -1,5 +1,7 @@
 #include "sound_mind/studio/resource_browser_controller.h"
 
+#include <utility>
+
 #include <algorithm>
 #include <filesystem>
 #include <functional>
@@ -264,8 +266,9 @@ std::optional<sound_mind::core::PortableResourceType> portableTypeFor(ResourceCa
 
 }  // namespace
 
-ResourceBrowserController::ResourceBrowserController(ResourceBrowserPanel* panel, QObject* parent)
-    : QObject(parent), panel_(panel) {
+ResourceBrowserController::ResourceBrowserController(ResourceBrowserPanel* panel,
+                                                     PreviewEngineFactory makePreviewEngine, QObject* parent)
+    : QObject(parent), panel_(panel), makePreviewEngine_(std::move(makePreviewEngine)) {
     connect(panel_, &ResourceBrowserPanel::categoryChanged, this, [this](ResourceCategory) { handleCategoryChanged(); });
     connect(panel_, &ResourceBrowserPanel::entrySelected, this, &ResourceBrowserController::handleEntrySelected);
     connect(panel_, &ResourceBrowserPanel::exportRequested, this, &ResourceBrowserController::handleExportRequested);
@@ -293,7 +296,7 @@ void ResourceBrowserController::setProject(Project* project) {
     project_ = project;
     browsedProject_ = std::nullopt;
     browsedProjectPath_ = std::nullopt;
-    previewEngine_.stop();
+    releasePreview();
 }
 
 const Project* ResourceBrowserController::activeProject() const {
@@ -550,13 +553,13 @@ void ResourceBrowserController::refreshInspector() {
 }
 
 void ResourceBrowserController::handleCategoryChanged() {
-    previewEngine_.stop();
+    releasePreview();
     panel_->setImportFromFileEnabled(portableTypeFor(panel_->selectedCategory()).has_value());
     refreshEntries();
 }
 
 void ResourceBrowserController::handleEntrySelected(std::optional<std::uint64_t>) {
-    previewEngine_.stop();
+    releasePreview();
     refreshInspector();
 }
 
@@ -977,7 +980,7 @@ bool ResourceBrowserController::browseOtherProjectAt(const std::filesystem::path
         return false;
     }
 
-    previewEngine_.stop();
+    releasePreview();
     refreshPanel();
     return true;
 }
@@ -1029,7 +1032,7 @@ void ResourceBrowserController::handleBrowseOtherProjectRequested() {
 void ResourceBrowserController::handleReturnToCurrentProjectRequested() {
     browsedProject_ = std::nullopt;
     browsedProjectPath_ = std::nullopt;
-    previewEngine_.stop();
+    releasePreview();
     refreshPanel();
 }
 
@@ -1045,13 +1048,19 @@ void ResourceBrowserController::handlePlayRequested() {
             return;
         }
     }
-    previewEngine_.loadAudio(currentPreviewAudio_);
-    previewEngine_.play();
+    if (!makePreviewEngine_) {
+        return;  // no audio previews here.
+    }
+    if (!previewEngine_) {
+        previewEngine_ = makePreviewEngine_();  // the device opens only while a preview plays.
+    }
+    previewEngine_->loadAudio(currentPreviewAudio_);
+    previewEngine_->play();
     panel_->setPlaying(true);
 }
 
 void ResourceBrowserController::handleStopRequested() {
-    previewEngine_.stop();
+    releasePreview();
     panel_->setPlaying(false);
 }
 

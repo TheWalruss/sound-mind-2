@@ -1166,8 +1166,9 @@ or on the start screen) is the one place audio devices are chosen.
 - **Refresh Devices** looks for newly connected devices.
 - **Input** - the device for Recording and Loop Mode. **Gain** (0-200%,
   100% unchanged) boosts or cuts it. **Test** shows a live level meter.
-- **Output** - the device for Playback and Loop Mode, with its own **Gain**.
-  **Test** plays a short tone.
+- **Output** - the device for Playback, Loop Mode and every preview (Tool
+  Configuration, the Resource Browser, a filter's Loop Preview), with its own
+  **Gain**. **Test** plays a short tone.
 - **Master limiter** (on by default) keeps the output at or below its ceiling
   (default -1 dBFS, settable from -24 to 0), turning loud moments down
   smoothly instead of distorting. It applies to Playback, to what you hear

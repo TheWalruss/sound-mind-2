@@ -1725,6 +1725,30 @@ public slots:
     ///        `ToolConfigurationPanel::stopPreviewRequested()`.
     void stopToolConfigurationPreview();
 
+    /// @brief Whether the Tool Configuration preview holds an engine (and
+    ///        so a device) - only while it plays (`v0.1.52.3`).
+    /// @return `true` from previewToolConfiguration() until stopped.
+    [[nodiscard]] bool isToolConfigurationPreviewOpen() const noexcept {
+        return toolConfigurationPreviewEngine_ != nullptr;
+    }
+
+    /// @brief Whether that preview's engine has a real device open - never
+    ///        in tests, where the window has no devices.
+    /// @return `true` if a real output device is open for it.
+    [[nodiscard]] bool toolConfigurationPreviewUsesARealDevice() const noexcept {
+        return toolConfigurationPreviewEngine_ != nullptr && toolConfigurationPreviewEngine_->isDeviceAvailable();
+    }
+
+    /**
+     * @brief Makes a playback engine for a preview (`v0.1.52.3`): in this
+     *        window's device mode (no device in tests), on the output
+     *        chosen in Configure Devices. The tool, filter and Resource
+     *        Browser previews each make one only while they play, so the
+     *        Studio holds just Playback's own output open while idle.
+     * @return The engine.
+     */
+    [[nodiscard]] std::unique_ptr<sound_mind::core::PlaybackEngine> makePreviewEngine() const;
+
     /**
      * @brief Starts or stops the filter preview - the Filter Configuration
      *        panel's "Loop Preview" button (Pre-Beta Plan `v0.Y.76.1`).
@@ -3692,7 +3716,7 @@ private:
     /// @brief Dedicated to `toolConfigurationPanel_`'s own audio preview
     ///        playback - see `previewToolConfiguration()`'s own docs on
     ///        why this is a separate engine instance.
-    sound_mind::core::PlaybackEngine toolConfigurationPreviewEngine_{sound_mind::core::AudioDeviceMode::Real};
+    std::unique_ptr<sound_mind::core::PlaybackEngine> toolConfigurationPreviewEngine_;
 
     /// @brief The transport toolbar's "Record Macro" checkable toggle -
     /// `v0.Y.49.1` (Macro Mode) Installment A. Checked while

@@ -3410,6 +3410,21 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Studio `ExportControllerTest`, 2 cases: an image is written in the background; nothing visible is reported.
       - Studio `ImageExportDialogTest`, 5 cases: full resolution is the default, a custom size keeps proportions, format and extension follow each other, a Sound Flower is square, and an unknown extension can't be accepted.
       - `MainWindowTest`, 1 case: the File menu action exists and an export writes full resolution.
+293. **Preview engines open an audio device only while they play, through one factory.** Settled in `v0.1.52.3` (user, 2026-10-23: "the audiodg.exe process is taking up practically a full CPU" while tests ran).
+    - **The cause.**
+      - `MainWindow::toolConfigurationPreviewEngine_` and `ResourceBrowserController::previewEngine_` were `PlaybackEngine` members hard-wired to `AudioDeviceMode::Real`. `PlaybackEngine` opens its device in its constructor and keeps the callback running for its lifetime.
+      - So every `MainWindow`, including each of `MainWindowTest`'s 287 windows, opened and later closed two real output streams, ignoring the window's own device mode.
+      - The Studio also held three output streams open while idle (Playback, plus these two). Windows' audio engine (`audiodg.exe`) mixes every open stream, silent or not.
+    - **`MainWindow::makePreviewEngine()`** makes a preview engine in the window's `audioDeviceMode_`. Outside test mode, it also applies the output device chosen in Configure Devices. The previews used to ignore that choice, which was a bug of its own.
+      - The tool preview creates its engine on Preview and releases it on Stop.
+      - The filter loop preview, already created on first use, now also comes from the factory.
+    - **`ResourceBrowserController`** takes a `PreviewEngineFactory` in its constructor, called on Play. `releasePreview()` replaces every former `previewEngine_.stop()`. An empty factory disables audio previews.
+    - **Result.** An idle Studio holds only `PlaybackController`'s output open; it stays open so Play starts instantly and the wizard can read the device's rate (Decision #287). Tests open no real device except core's own deliberate device test.
+    - **Not changed.** A preview that ends by itself keeps its engine until the next Stop, a new selection, or another project. That's acceptable, since it's idle once played out.
+    - **Tests:**
+      - Studio `ResourceBrowserControllerTest::aPreviewOpensTheAudioDeviceOnlyWhilePlaying`: the factory is called only on Play, Stop releases the engine, and a second Play makes a new one.
+      - `MainWindowTest::toolPreviewOpensItsEngineOnlyWhilePlayingInTheWindowsDeviceMode`: no engine before Preview, a no-device engine during it, none after Stop.
+      - The Resource Browser test fixture now passes a no-device factory, so the existing cases open no real device either.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

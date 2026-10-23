@@ -766,7 +766,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // The Resource Browser panel's own Project reads/mutations
     // (docs/sound-mind-roadmap.md's v0.Y.57.1 Installment C) - see its own
     // class docs.
-    resourceBrowserController_ = new ResourceBrowserController(resourceBrowserPanel_, this);
+    resourceBrowserController_ =
+        new ResourceBrowserController(resourceBrowserPanel_, [this]() { return makePreviewEngine(); }, this);
     connect(resourceBrowserController_, &ResourceBrowserController::resourcesChanged, this, [this]() {
         commitHistory(tr("Changed resources"));
         applyProjectChange(ProjectChange::resources());
@@ -2817,13 +2818,24 @@ void MainWindow::previewToolConfiguration() {
     if (audio.frameCount() == 0) {
         return;
     }
-    toolConfigurationPreviewEngine_.loadAudio(audio);
-    toolConfigurationPreviewEngine_.play();
+    if (!toolConfigurationPreviewEngine_) {
+        toolConfigurationPreviewEngine_ = makePreviewEngine();  // open only while previewing.
+    }
+    toolConfigurationPreviewEngine_->loadAudio(audio);
+    toolConfigurationPreviewEngine_->play();
     toolConfigurationPanel_->setPreviewPlaying(true);
 }
 
+std::unique_ptr<sound_mind::core::PlaybackEngine> MainWindow::makePreviewEngine() const {
+    auto engine = std::make_unique<sound_mind::core::PlaybackEngine>(audioDeviceMode_);
+    if (audioDeviceMode_ != sound_mind::core::AudioDeviceMode::None && !configuredOutputDeviceName_.isEmpty()) {
+        engine->setPreferredOutputDevice(configuredOutputDeviceName_.toStdString());
+    }
+    return engine;
+}
+
 void MainWindow::stopToolConfigurationPreview() {
-    toolConfigurationPreviewEngine_.stop();
+    toolConfigurationPreviewEngine_.reset();  // lets the device go.
     toolConfigurationPanel_->setPreviewPlaying(false);
 }
 
@@ -3857,7 +3869,7 @@ void MainWindow::setFilterPreviewEnabled(bool enabled) {
         selection.has_value() ? std::optional<sound_mind::core::TimeFrequencyRect>(selection->bounds) : std::nullopt,
         canvasSeconds);
     if (!filterPreviewEngine_) {
-        filterPreviewEngine_ = std::make_unique<sound_mind::core::PlaybackEngine>(audioDeviceMode_);
+        filterPreviewEngine_ = makePreviewEngine();
     }
     filterPreviewEngine_->stop();
     filterPreviewActive_ = true;

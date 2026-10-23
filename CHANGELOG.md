@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.52.3] - 2026-10-23
+
+### Fixed
+
+- **Less work for Windows' audio engine.** The Tool Configuration **Preview** and the Resource Browser's **Play** each used to hold an audio output open all the time, even when silent, so the Studio kept three streams open (counting Playback's). Windows' audio engine (`audiodg.exe`) processes every open stream. Each preview now opens its output only while it plays, so an idle Studio holds just Playback's.
+- **Previews play through your chosen output device.** The Tool Configuration Preview, the Resource Browser's Play and the filter's Loop Preview now use the output picked in Configure Devices, not always the system default.
+- The test suite no longer opens real audio devices for every main-window test.
+
 ## [0.1.52.2] - 2026-10-23
 
 ### Changed

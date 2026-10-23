@@ -45,4 +45,5 @@ private slots:
     void playingAToolPresetPreviewSynthesizesAndDecodesAudio();
     void playingAResonanceProfilePreviewSynthesizesAndDecodesAudio();
     void resonanceProfileWithAnEmptySpectrumOffersNoPlayButton();
+    void aPreviewOpensTheAudioDeviceOnlyWhilePlaying();
 };

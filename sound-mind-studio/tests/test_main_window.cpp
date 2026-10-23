@@ -6403,6 +6403,19 @@ void MainWindowTest::exportImageWritesTheCanvasFromTheFileMenu() {
     std::filesystem::remove(path);
 }
 
+// v0.1.52.3 - the Tool Configuration preview opens an engine only while it
+// plays, in the window's own device mode - never a real device in tests.
+void MainWindowTest::toolPreviewOpensItsEngineOnlyWhilePlayingInTheWindowsDeviceMode() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(!window.isToolConfigurationPreviewOpen());
+    window.previewToolConfiguration();
+    QVERIFY(window.isToolConfigurationPreviewOpen());
+    QVERIFY(!window.toolConfigurationPreviewUsesARealDevice());
+    window.stopToolConfigurationPreview();
+    QVERIFY(!window.isToolConfigurationPreviewOpen());
+}
+
 void MainWindowTest::commitRecordingOverwritesTheChosenRecordedLayerUndoably() {
     TestMainWindow window;
     createFreshTestProject(window);

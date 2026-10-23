@@ -1,5 +1,9 @@
 #pragma once
 
+#include <memory>
+
+#include <functional>
+
 #include <filesystem>
 #include <optional>
 #include <vector>
@@ -53,14 +57,28 @@ class ResourceBrowserController : public QObject {
     Q_OBJECT
 
 public:
+    /// @brief Makes a preview's playback engine - see the constructor.
+    using PreviewEngineFactory = std::function<std::unique_ptr<sound_mind::core::PlaybackEngine>()>;
+
     /**
      * @param panel Non-owning; refreshed after any mutation, and the
      *        source of every user action this controller handles. Must
      *        outlive this controller.
+     * @param makePreviewEngine Makes the engine a preview plays through
+     *        (`v0.1.52.3`): called on Play, and the engine is let go on
+     *        Stop, so no audio device is held open while nothing plays. The
+     *        window's factory opens the output chosen in Configure Devices,
+     *        or no device at all in tests. Empty disables audio previews.
      * @param parent The owning object, per Qt's normal parent-ownership
      *        convention; may be `nullptr`.
      */
-    explicit ResourceBrowserController(ResourceBrowserPanel* panel, QObject* parent = nullptr);
+    explicit ResourceBrowserController(ResourceBrowserPanel* panel, PreviewEngineFactory makePreviewEngine = {},
+                                       QObject* parent = nullptr);
+
+    /// @brief Whether a preview currently holds an audio engine (and so, in
+    ///        the Studio, an audio device).
+    /// @return `true` from Play until Stop.
+    [[nodiscard]] bool isPreviewOpen() const noexcept { return previewEngine_ != nullptr; }
 
     /// @brief Sets which project this controller browses/mutates by
     ///        default, and stops browsing any other project (its own
@@ -319,7 +337,12 @@ private:
     /// @brief Dedicated to this panel's own audio preview playback - see
     ///        the class's own docs on why this is a separate engine
     ///        instance.
-    sound_mind::core::PlaybackEngine previewEngine_{sound_mind::core::AudioDeviceMode::Real};
+    std::unique_ptr<sound_mind::core::PlaybackEngine> previewEngine_;
+    /// @brief See the constructor's `makePreviewEngine`.
+    PreviewEngineFactory makePreviewEngine_;
+
+    /// @brief Stops any preview and lets its engine (and device) go.
+    void releasePreview() noexcept { previewEngine_.reset(); }
 
     /// @brief One entry added to the in-progress Toolkit draft via "Add to
     ///        Toolkit" - `docs/sound-mind-roadmap.md`'s `v0.Y.57.1`

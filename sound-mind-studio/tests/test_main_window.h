@@ -324,6 +324,7 @@ private slots:
     void imageModeFitsTheCanvasWithSquareCells();
     void commitRecordingAddsANamedRecordedLayer();
     void exportImageWritesTheCanvasFromTheFileMenu();
+    void toolPreviewOpensItsEngineOnlyWhilePlayingInTheWindowsDeviceMode();
     void commitRecordingAsyncSavesTheTakeInTheBackground();
     void commitRecordingOverwritesTheChosenRecordedLayerUndoably();
     void filterPreviewLoopsARenderOfThePanelConfiguration();
