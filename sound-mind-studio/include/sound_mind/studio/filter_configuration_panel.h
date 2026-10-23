@@ -3,10 +3,12 @@
 #include <functional>
 #include <optional>
 #include <utility>
+#include <string_view>
 #include <vector>
 
 #include <QDockWidget>
 #include <QString>
+#include <QStringList>
 
 #include "sound_mind/core/convolution_kernel.h"
 #include "sound_mind/core/filter_configuration.h"
@@ -16,6 +18,7 @@
 
 class QCheckBox;
 class QComboBox;
+class QFormLayout;
 class QGridLayout;
 class QGroupBox;
 class QLabel;
@@ -180,6 +183,18 @@ class FilterConfigurationPanel : public QDockWidget {
     Q_OBJECT
 
 public:
+    /**
+     * @brief The object-name stems of the fields that edit `parameter`
+     *        (`v0.1.48.10`): each field is `<stem>SpinBox`, beside a
+     *        `<stem>MindWaveCombo` when a MindWave can drive it. Usually
+     *        one; two for the Speckle Add/Dynamic Speckle shared parameters;
+     *        none for the Convolve kernel size, which has its own field
+     *        (`convolveKernelSizeSpinBox`).
+     * @param parameter The parameter.
+     * @return Its fields' stems, in the panel's order.
+     */
+    [[nodiscard]] static QStringList parameterFieldStems(sound_mind::core::FilterParameter parameter);
+
     /// @brief Builds the panel with a fresh, fully transparent default
     ///        `FilterConfiguration` - see `FilterConfiguration`'s own docs.
     /// @param parent The owning widget, per Qt's normal parent-ownership
@@ -460,25 +475,61 @@ private:
     QCheckBox* equalizerPreviewCheckBox_ = nullptr;
 
     QGroupBox* uniformBlurGroup_ = nullptr;
-    NumericField* blurSigmaSpinBox_ = nullptr;
-    QComboBox* blurSigmaMindWaveCombo_ = nullptr;
 
     QGroupBox* edgePreservingBlurGroup_ = nullptr;
-    IntegerField* medianSizeSpinBox_ = nullptr;
-    QComboBox* medianSizeMindWaveCombo_ = nullptr;
 
     QGroupBox* directionalBlurGroup_ = nullptr;
-    IntegerField* directionalBlurLengthSpinBox_ = nullptr;
-    QComboBox* directionalBlurLengthMindWaveCombo_ = nullptr;
-    NumericField* directionalBlurAngleSpinBox_ = nullptr;
-    QComboBox* directionalBlurAngleMindWaveCombo_ = nullptr;
 
     QGroupBox* sharpenGroup_ = nullptr;
-    NumericField* sharpenAmountSpinBox_ = nullptr;
-    QComboBox* sharpenAmountMindWaveCombo_ = nullptr;
 
     /// @brief See setAvailableMindWaves()'s own docs.
     std::vector<std::pair<sound_mind::core::MindWaveId, QString>> availableMindWaves_;
+
+    /// @brief One numeric field and its MindWave combo (`v0.1.48.10`) -
+    ///        built from the parameter tables by makeParameterField().
+    struct ParameterField {
+        sound_mind::core::FilterParameter parameter;  ///< What it edits.
+        NumericField* real = nullptr;                 ///< The field, for a real-valued parameter.
+        IntegerField* whole = nullptr;                ///< The field, for an integer parameter.
+        QComboBox* mindWaveCombo = nullptr;           ///< Its MindWave combo; null if unbindable.
+    };
+
+    /// @brief Every numeric field, in construction order - see ParameterField.
+    std::vector<ParameterField> parameterFields_;
+
+    /**
+     * @brief Makes the field (and MindWave combo, if bindable) for one row of
+     *        the panel's field table, wired to parameterEdited() and
+     *        parameterMindWaveChosen(), and records it in parameterFields_.
+     * @param group The group box it belongs to.
+     * @param stem Its object-name stem - a row of the panel's field table.
+     * @return The new field.
+     * @throws std::logic_error if `stem` isn't in the table (a programming error).
+     */
+    ParameterField makeParameterField(QWidget* group, std::string_view stem);
+
+    /// @brief Adds `field` (beside its MindWave combo, if any) to `form`.
+    /// @param form The group's form.
+    /// @param label The row's label.
+    /// @param field From makeParameterField().
+    void addParameterRow(QFormLayout* form, const QString& label, const ParameterField& field);
+
+    /// @brief A numeric field changed: updates config_, shows the value in
+    ///        any other field for the same parameter, and emits.
+    /// @param parameter The parameter.
+    /// @param value Its new value.
+    /// @param source The field that changed.
+    void parameterEdited(sound_mind::core::FilterParameter parameter, double value, QWidget* source);
+
+    /// @brief A MindWave combo changed: updates the binding, shows it in any
+    ///        other combo for the same parameter, and emits.
+    /// @param parameter The parameter.
+    /// @param source The combo that changed.
+    /// @param index Its new index.
+    void parameterMindWaveChosen(sound_mind::core::FilterParameter parameter, QComboBox* source, int index);
+
+    /// @brief Shows config_'s values in every numeric field, signals blocked.
+    void refreshParameterFields();
 
     // --- v0.Y.36.1 Installment A: Noise & distortion - each of the eight
     // gained MindWave-binding combos in v0.Y.38.1, see this class's own
@@ -487,56 +538,27 @@ private:
     // spin boxes already are; grainSize has no combo of its own).
 
     QGroupBox* speckleAddGroup_ = nullptr;
-    NumericField* speckleAddDensitySpinBox_ = nullptr;
-    QComboBox* speckleAddDensityMindWaveCombo_ = nullptr;
-    NumericField* speckleAddIntensitySpinBox_ = nullptr;
-    QComboBox* speckleAddIntensityMindWaveCombo_ = nullptr;
 
     QGroupBox* speckleRemoveGroup_ = nullptr;
-    NumericField* speckleThresholdSpinBox_ = nullptr;
-    QComboBox* speckleThresholdMindWaveCombo_ = nullptr;
 
     QGroupBox* denoiseGroup_ = nullptr;
-    NumericField* noiseFloorSpinBox_ = nullptr;
-    QComboBox* noiseFloorMindWaveCombo_ = nullptr;
-    NumericField* reductionSpinBox_ = nullptr;
-    QComboBox* reductionMindWaveCombo_ = nullptr;
 
     QGroupBox* bitDepthCrushGroup_ = nullptr;
-    NumericField* crushAmountSpinBox_ = nullptr;
-    QComboBox* crushAmountMindWaveCombo_ = nullptr;
 
     QGroupBox* granularNoiseGroup_ = nullptr;
-    IntegerField* grainSizeSpinBox_ = nullptr;
-    NumericField* grainAmountSpinBox_ = nullptr;
-    QComboBox* grainAmountMindWaveCombo_ = nullptr;
 
     QGroupBox* dynamicSpeckleGroup_ = nullptr;
-    NumericField* dynamicSpeckleDensitySpinBox_ = nullptr;
-    QComboBox* dynamicSpeckleDensityMindWaveCombo_ = nullptr;
-    NumericField* dynamicSpeckleIntensitySpinBox_ = nullptr;
-    QComboBox* dynamicSpeckleIntensityMindWaveCombo_ = nullptr;
 
     QGroupBox* feedbackDistortionGroup_ = nullptr;
-    NumericField* feedbackAmountSpinBox_ = nullptr;
-    QComboBox* feedbackAmountMindWaveCombo_ = nullptr;
 
     QGroupBox* spectralWavefoldGroup_ = nullptr;
-    NumericField* foldGainSpinBox_ = nullptr;
-    QComboBox* foldGainMindWaveCombo_ = nullptr;
 
     // --- v0.Y.36.1 Installment C: Geometric - all three parameters gained
     // MindWave-binding combos in v0.Y.38.1.
 
     QGroupBox* displaceGroup_ = nullptr;
-    NumericField* displaceDistanceSpinBox_ = nullptr;
-    QComboBox* displaceDistanceMindWaveCombo_ = nullptr;
-    NumericField* displaceAngleSpinBox_ = nullptr;
-    QComboBox* displaceAngleMindWaveCombo_ = nullptr;
 
     QGroupBox* channelCycleGroup_ = nullptr;
-    NumericField* channelCycleAngleSpinBox_ = nullptr;
-    QComboBox* channelCycleAngleMindWaveCombo_ = nullptr;
 
     QGroupBox* toneCurveGroup_ = nullptr;
     ToneCurveEditor* toneCurveEditor_ = nullptr;
@@ -547,8 +569,6 @@ private:
     // own kernel size/normalize flag remain deliberately unbound.
 
     QGroupBox* channelBalanceGroup_ = nullptr;
-    NumericField* channelBalanceSpinBox_ = nullptr;
-    QComboBox* channelBalanceMindWaveCombo_ = nullptr;
 
     QGroupBox* invertGroup_ = nullptr;
 
@@ -559,8 +579,6 @@ private:
     QGridLayout* convolveKernelGridLayout_ = nullptr;
     std::vector<NumericField*> convolveKernelSpinBoxes_;
     QCheckBox* convolveNormalizeCheckBox_ = nullptr;
-    NumericField* convolveAmountSpinBox_ = nullptr;
-    QComboBox* convolveAmountMindWaveCombo_ = nullptr;
     QPushButton* convolveSaveKernelButton_ = nullptr;
     QComboBox* convolveLoadKernelCombo_ = nullptr;
     /// @brief See setAvailableConvolutionKernels()'s own docs.
@@ -580,13 +598,6 @@ private:
     // unbound, see this class's own docs.
 
     QGroupBox* spectralReverbGroup_ = nullptr;
-    IntegerField* reverbPreDelaySpinBox_ = nullptr;
-    IntegerField* reverbDecaySpinBox_ = nullptr;
-    NumericField* reverbRoomSizeSpinBox_ = nullptr;
-    NumericField* reverbDiffusionSpinBox_ = nullptr;
-    NumericField* reverbAbsorptionSpinBox_ = nullptr;
-    NumericField* reverbMixSpinBox_ = nullptr;
-    QComboBox* reverbMixMindWaveCombo_ = nullptr;
 
     // --- Downsample - real-world testing pass, 2026-09-20, finding #18.
     // downsampleBlockSize gets a MindWave-binding combo, unlike
@@ -596,8 +607,6 @@ private:
 
     QGroupBox* downsampleGroup_ = nullptr;
     QComboBox* downsampleModeCombo_ = nullptr;
-    IntegerField* downsampleBlockSizeSpinBox_ = nullptr;
-    QComboBox* downsampleBlockSizeMindWaveCombo_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

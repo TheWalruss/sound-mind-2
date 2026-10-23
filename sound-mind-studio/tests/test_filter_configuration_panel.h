@@ -106,4 +106,7 @@ private slots:
     void noiseFloorHasItsOwnIntensityUnitCombo();
     void previewButtonEmitsPreviewToggled();
     void setPreviewPlayingSyncsTheButtonWithoutEmitting();
+    void everyNumericParameterHasAFieldBuiltFromTheTable();
+    void editingAFieldSetsItsParameterAndShowsItInItsSibling();
+    void angleFieldsShowADegreeSuffix();
 };

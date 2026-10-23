@@ -1198,7 +1198,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.82.2` | Video export overhaul, modelled on the legacy Studio (inserted 2026-10-22) | `0.1.45.1` | #270 |
 | `v0.Y.82.3` | Remove the Pool codec (inserted 2026-10-22) | `0.1.46.1` | #271 |
 | `v0.Y.82.4` | Responsiveness and modularity pass (inserted 2026-10-22) | `0.1.47.1`-`0.1.47.4` | #272-#275 |
-| `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1`-`0.1.48.10` | #276-#285 |
+| `v0.Y.82.5` | Modularity: change notification, MainWindow decomposition, parameter tables (inserted 2026-10-22) | `0.1.48.1`-`0.1.48.11` | #276-#286 |
 | - | Beta readiness check | *(after `v0.Y.82.5`)* | |
 | `v0.Y.83.1` | Image export (added 2026-10-22, after the readiness check) | - | |
 | `v0.Y.84.1` | Light and dark mode | - | |
@@ -1497,6 +1497,7 @@ Steps 4 and 5 of the 2026-10-22 code scan, so changes from beta feedback stay ch
 - ✅ **Installment H - `MacroController`.** Settled in `v0.1.48.8`, Decision #283.
 - ✅ **Installment I - menu and toolbar building.** Settled in `v0.1.48.9`, Decision #284. This completes step 4.
 - ✅ **Installment J - the core filter parameter table.** Settled in `v0.1.48.10`, Decision #285. Filter JSON and MindWave resolution read one table.
+- ✅ **Installment K - the Filter Configuration panel from the table.** Settled in `v0.1.48.11`, Decision #286.
 - **Then - data-driven filter and tool parameters** (step 5): one parameter table generating JSON, panel widgets and MindWave bindings.
 
 #### Then: Beta readiness check

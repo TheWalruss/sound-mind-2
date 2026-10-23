@@ -3260,6 +3260,28 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - resolution follows the table.
 
       The 50 existing `[filter_configuration]` cases pass unchanged.
+286. **Modularity pass, installment K: the Filter Configuration panel built from the parameter table.** Settled in `v0.1.48.11`.
+    - **One helper builds every field.** `FilterConfigurationPanel::makeParameterField(group, stem)` makes the `NumericField`/`IntegerField` for one parameter, plus its MindWave combo when the parameter is bindable. The range and integer-ness come from the core table (Decision #285). `addParameterRow()` places it in the group's form. This replaces 29 hand-written field blocks; the source file drops from 1,346 lines to about 1,000.
+    - **A Studio-side table, `kParameterFieldLooks`,** holds only presentation, one row per field:
+      - the object-name stem (`<stem>SpinBox`, `<stem>MindWaveCombo`, unchanged from before);
+      - its parameter;
+      - step, decimals, unit suffix and tooltip.
+
+      Speckle Add and Dynamic Speckle each keep their own Density and Intensity rows on the shared parameters.
+    - **Generic handlers.**
+      - `parameterEdited()` and `parameterMindWaveChosen()` replace the per-field lambdas. They also show the change in any sibling field or combo for the same parameter, which replaces the four hand-written Speckle cross-syncs.
+      - `refreshParameterFields()` and the MindWave-combo rebuild walk `parameterFields_`.
+    - **Exceptions that stay hand-built:**
+      - Convolve's kernel size, because changing it also resets the kernel;
+      - Noise Floor's dB/percent unit selector, which is attached to the generated field.
+    - **`parameterFieldStems(FilterParameter)` (public, static)** lists the fields for a parameter. Tests use it, and it documents the mapping.
+    - **Adding a numeric filter parameter** now needs, on the panel side, one `kParameterFieldLooks` row and one `addParameterRow()` call in its group.
+    - **Tests:**
+      - The 83 existing `FilterConfigurationPanelTest` cases pass unchanged. They find every field by object name.
+      - 3 new cases:
+        - every numeric parameter except the kernel size has a field with the core range, and a MindWave combo exactly when bindable;
+        - editing a field sets its parameter and shows the value in its sibling;
+        - the angle fields show a degree suffix.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

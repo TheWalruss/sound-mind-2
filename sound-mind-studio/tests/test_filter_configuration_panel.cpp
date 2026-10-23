@@ -1505,3 +1505,62 @@ void FilterConfigurationPanelTest::setPreviewPlayingSyncsTheButtonWithoutEmittin
     QVERIFY(!button->isChecked());
     QCOMPARE(spy.count(), 0);
 }
+
+// v0.1.48.10 - the panel's numeric fields are built from the parameter
+// tables: every parameter appears, with the core table's range, and a
+// MindWave combo exactly when one can drive it.
+void FilterConfigurationPanelTest::everyNumericParameterHasAFieldBuiltFromTheTable() {
+    FilterConfigurationPanel panel;
+    for (const auto& spec : sound_mind::core::filterParameterSpecs()) {
+        const QStringList stems = FilterConfigurationPanel::parameterFieldStems(spec.parameter);
+        if (spec.parameter == sound_mind::core::FilterParameter::ConvolveKernelSize) {
+            QVERIFY(stems.isEmpty());  // its own field - changing it resets the kernel.
+            continue;
+        }
+        QVERIFY2(!stems.isEmpty(), spec.key);
+        for (const QString& stem : stems) {
+            const QString name = stem + QStringLiteral("SpinBox");
+            if (spec.integer) {
+                auto* field = panel.findChild<IntegerField*>(name);
+                QVERIFY2(field != nullptr, qPrintable(name));
+                QCOMPARE(field->minimum(), static_cast<int>(spec.minimum));
+                QCOMPARE(field->maximum(), static_cast<int>(spec.maximum));
+            } else {
+                auto* field = panel.findChild<NumericField*>(name);
+                QVERIFY2(field != nullptr, qPrintable(name));
+                QCOMPARE(field->minimum(), spec.minimum);
+                QCOMPARE(field->maximum(), spec.maximum);
+            }
+            const bool hasCombo = panel.findChild<QComboBox*>(stem + QStringLiteral("MindWaveCombo")) != nullptr;
+            QCOMPARE(hasCombo, spec.mindWaveKey != nullptr);
+        }
+    }
+}
+
+void FilterConfigurationPanelTest::editingAFieldSetsItsParameterAndShowsItInItsSibling() {
+    FilterConfigurationPanel panel;
+    QSignalSpy changed(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+    auto* reverbDecay = panel.findChild<IntegerField*>(QStringLiteral("reverbDecaySpinBox"));
+    QVERIFY(reverbDecay != nullptr);
+    reverbDecay->setValue(321);
+    QCOMPARE(panel.filterConfiguration().reverbDecayFrames(), 321);
+    QCOMPARE(changed.count(), 1);
+
+    // Speckle Add and Dynamic Speckle edit the same density.
+    QCOMPARE(FilterConfigurationPanel::parameterFieldStems(sound_mind::core::FilterParameter::SpeckleDensity).size(),
+             2);
+    auto* addDensity = panel.findChild<NumericField*>(QStringLiteral("speckleAddDensitySpinBox"));
+    auto* dynamicDensity = panel.findChild<NumericField*>(QStringLiteral("dynamicSpeckleDensitySpinBox"));
+    addDensity->setValue(0.42);
+    QCOMPARE(dynamicDensity->value(), 0.42);
+    QCOMPARE(panel.filterConfiguration().speckleDensity(), 0.42f);
+}
+
+void FilterConfigurationPanelTest::angleFieldsShowADegreeSuffix() {
+    FilterConfigurationPanel panel;
+    for (const char* name : {"directionalBlurAngleSpinBox", "displaceAngleSpinBox", "channelCycleAngleSpinBox"}) {
+        auto* field = panel.findChild<NumericField*>(QString::fromLatin1(name));
+        QVERIFY2(field != nullptr, name);
+        QCOMPARE(field->suffix(), QString(QChar(0x00B0)));
+    }
+}
